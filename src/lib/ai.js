@@ -39,6 +39,9 @@ export const callAI = async ({ settings, system, messages, json = false }) => {
   if (settings.aiProvider === 'openai') {
     return callOpenAI({ settings, system, messages, json })
   }
+  if (settings.aiProvider === 'openrouter') {
+    return callOpenRouter({ settings, system, messages, json })
+  }
   return mockReply(messages, json)
 }
 
@@ -82,6 +85,28 @@ async function callOpenAI({ settings, system, messages, json }) {
     body: JSON.stringify(body),
   })
   if (!res.ok) throw new Error(`OpenAI error: ${res.status} ${await res.text()}`)
+  const data = await res.json()
+  const text = data.choices?.[0]?.message?.content || ''
+  return json ? safeJSON(text) : text
+}
+
+async function callOpenRouter({ settings, system, messages, json }) {
+  const model = settings.aiModel || 'anthropic/claude-opus-4'
+  const body = {
+    model,
+    messages: [{ role: 'system', content: json ? `${system}\n\nReturn ONLY a valid JSON object — no commentary, no markdown fences.` : system }, ...messages],
+  }
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${settings.aiKey}`,
+      'HTTP-Referer': 'https://scholarai.app',
+      'X-Title': 'ScholarAI',
+    },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error(`OpenRouter error: ${res.status} ${await res.text()}`)
   const data = await res.json()
   const text = data.choices?.[0]?.message?.content || ''
   return json ? safeJSON(text) : text

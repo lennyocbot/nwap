@@ -57,34 +57,58 @@ export default function Settings() {
 
       <Section title="AI" icon="sparkle">
         <Field label="Provider">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {[
-              { k: 'anthropic', label: 'Anthropic (Claude)' },
-              { k: 'openai',    label: 'OpenAI' },
-              { k: 'mock',      label: 'Offline demo' },
+              { k: 'openrouter', label: 'OpenRouter' },
+              { k: 'anthropic',  label: 'Anthropic' },
+              { k: 'openai',     label: 'OpenAI' },
+              { k: 'mock',       label: 'Offline demo' },
             ].map((p) => (
-              <button key={p.k} onClick={() => setSettings({ aiProvider: p.k })}
-                className={cx('btn-soft', state.settings.aiProvider === p.k && 'ring-2 ring-brand-400')}>{p.label}</button>
+              <button key={p.k}
+                onClick={() => setSettings({ aiProvider: p.k, aiModel: defaultModel(p.k) })}
+                className={cx('btn-soft', state.settings.aiProvider === p.k && 'ring-2 ring-brand-400')}>
+                {p.label}
+              </button>
             ))}
           </div>
         </Field>
         <Field label="Model">
-          <input className="input" value={state.settings.aiModel} onChange={(e) => setSettings({ aiModel: e.target.value })}
-            placeholder={state.settings.aiProvider === 'anthropic' ? 'claude-opus-4-7' : 'gpt-4o-mini'} />
+          <input className="input font-mono" value={state.settings.aiModel}
+            onChange={(e) => setSettings({ aiModel: e.target.value })}
+            placeholder={defaultModel(state.settings.aiProvider)} />
           <div className="text-xs text-ink-500 mt-1">
-            Default Anthropic model: <code>claude-opus-4-7</code>. Other suggestions: <code>claude-sonnet-4-6</code>, <code>claude-haiku-4-5-20251001</code>.
+            {state.settings.aiProvider === 'openrouter' && (
+              <>
+                Any model slug from openrouter.ai/models. Popular picks:{' '}
+                {['anthropic/claude-opus-4', 'anthropic/claude-sonnet-4-5', 'openai/gpt-4o', 'google/gemini-2.5-pro', 'meta-llama/llama-3.3-70b-instruct', 'deepseek/deepseek-r1'].map((m) => (
+                  <button key={m} className="font-mono underline text-brand-600 mr-2"
+                    onClick={() => setSettings({ aiModel: m })}>{m}</button>
+                ))}
+              </>
+            )}
+            {state.settings.aiProvider === 'anthropic' && (
+              <>Suggestions: {['claude-opus-4-7', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'].map((m) => (
+                <button key={m} className="font-mono underline text-brand-600 mr-2" onClick={() => setSettings({ aiModel: m })}>{m}</button>
+              ))}</>
+            )}
+            {state.settings.aiProvider === 'openai' && (
+              <>Suggestions: {['gpt-4o', 'gpt-4o-mini', 'o3-mini'].map((m) => (
+                <button key={m} className="font-mono underline text-brand-600 mr-2" onClick={() => setSettings({ aiModel: m })}>{m}</button>
+              ))}</>
+            )}
           </div>
         </Field>
-        <Field label="API key">
+        <Field label={state.settings.aiProvider === 'openrouter' ? 'OpenRouter API key' : 'API key'}>
           <div className="flex gap-2">
             <input className="input font-mono" type={showKey ? 'text' : 'password'}
               value={state.settings.aiKey} onChange={(e) => setSettings({ aiKey: e.target.value })}
-              placeholder={state.settings.aiProvider === 'anthropic' ? 'sk-ant-…' : 'sk-…'} />
+              placeholder={state.settings.aiProvider === 'openrouter' ? 'sk-or-v1-…' : state.settings.aiProvider === 'anthropic' ? 'sk-ant-…' : 'sk-…'} />
             <button className="btn-ghost" onClick={() => setShowKey((v) => !v)}>{showKey ? 'Hide' : 'Show'}</button>
           </div>
           <div className="text-xs text-ink-500 mt-1">
-            Stored only on this device. Requests go directly from your browser to the provider.
-            For Anthropic, this uses <code>anthropic-dangerous-direct-browser-access</code>.
+            {state.settings.aiProvider === 'openrouter'
+              ? 'Get a free key at openrouter.ai — pay-as-you-go, access to hundreds of models.'
+              : 'Stored only on this device. Requests go directly from your browser to the provider.'}
           </div>
         </Field>
       </Section>
@@ -145,4 +169,13 @@ function Field({ label, children }) {
       {children}
     </div>
   )
+}
+
+function defaultModel(provider) {
+  switch (provider) {
+    case 'anthropic':  return 'claude-opus-4-7'
+    case 'openai':     return 'gpt-4o-mini'
+    case 'openrouter': return 'anthropic/claude-sonnet-4-5'
+    default:           return ''
+  }
 }
