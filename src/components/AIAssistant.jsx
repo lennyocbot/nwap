@@ -11,8 +11,8 @@ const STARTERS = [
   { label: 'Explain a concept', prompt: 'Explain [topic] clearly with an example and a quick understanding check.' },
 ]
 
-// Maps a tool call to a human-readable description for the action card.
-function describeAction(tool, input, subjects) {
+// Maps an action to a human-readable description for the action card.
+function describeAction(tool, input, subjects, assignments) {
   const subjectName = (id) => subjects.find((s) => s.id === id)?.name || id
   switch (tool) {
     case 'create_assignment': {
@@ -21,8 +21,10 @@ function describeAction(tool, input, subjects) {
       const pri = input.priority ? ` · ${input.priority} priority` : ''
       return { verb: 'Create assignment', detail: `"${input.title}"  —  due ${due}${subj}${pri}` }
     }
-    case 'mark_assignment_done':
-      return { verb: 'Mark as done', detail: `Assignment ID: ${input.id}` }
+    case 'mark_assignment_done': {
+      const a = assignments?.find((x) => x.id === input.id)
+      return { verb: 'Mark as done', detail: a ? `"${a.title}"` : `ID: ${input.id}` }
+    }
     case 'create_event': {
       const date = input.startDate ? new Date(input.startDate).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : '—'
       return { verb: 'Add calendar event', detail: `"${input.title}"  —  ${date}` }
@@ -93,9 +95,8 @@ export default function AIAssistant({ floating = true }) {
     try {
       const reply = await callAI({
         settings: state.settings,
-        system: buildSystemPrompt(state, contextNote),
+        system: buildSystemPrompt(state, contextNote, { withActions: true }),
         messages: newMsgs.map(({ role, content }) => ({ role, content })),
-        state,
       })
       if (reply?._action) {
         setPendingAction({ ...reply, messagesSnapshot: newMsgs })
@@ -232,7 +233,7 @@ export default function AIAssistant({ floating = true }) {
         {err && <div className="text-sm text-accent-rose">{err}</div>}
 
         {pendingAction && (() => {
-          const { verb, detail } = describeAction(pendingAction.tool, pendingAction.input, state.subjects)
+          const { verb, detail } = describeAction(pendingAction.tool, pendingAction.input, state.subjects, state.assignments)
           return (
             <div className="flex gap-3">
               <div className="w-8 h-8 rounded-2xl bg-gradient-to-br from-brand-500 to-violet-500 flex items-center justify-center text-white shrink-0">

@@ -1,7 +1,7 @@
 // Lightweight AI client supporting Anthropic Claude, OpenAI, and a built-in offline mock.
 // The user provides their own API key in Settings — it is stored only on-device.
 
-export const buildSystemPrompt = (state, contextNote) => {
+export const buildSystemPrompt = (state, contextNote, { withActions = false } = {}) => {
   const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
   const subjects = state.subjects.map((s) => `- [${s.id}] ${s.name}${s.teacher ? ` (${s.teacher})` : ''}`).join('\n')
   const upcoming = state.assignments
@@ -12,133 +12,82 @@ export const buildSystemPrompt = (state, contextNote) => {
       return `- [${a.id}] ${a.title} [${subj}] due ${new Date(a.due).toLocaleString()} (${a.priority})`
     })
     .join('\n')
+
+  const actionInstructions = withActions ? `
+
+ACTIONS — you can write directly into the student's app. When asked to create or change data, respond with ONLY a raw JSON object and absolutely nothing else (no explanation, no markdown fences, no extra text before or after):
+
+Create assignment:
+{"_action":"create_assignment","title":"...","subjectId":"SUBJECT_ID_or_null","due":"YYYY-MM-DDTHH:MM:SS","priority":"high|medium|low","estMinutes":60,"notes":""}
+
+Mark assignment done:
+{"_action":"mark_assignment_done","id":"ASSIGNMENT_ID"}
+
+Add calendar event:
+{"_action":"create_event","title":"...","startDate":"YYYY-MM-DDTHH:MM:SS","description":""}
+
+Add goal:
+{"_action":"add_goal","title":"...","subjectId":"SUBJECT_ID_or_null","deadline":"YYYY-MM-DD_or_null"}
+
+Create note:
+{"_action":"create_note","title":"...","content":"markdown content","subjectId":"SUBJECT_ID_or_null"}
+
+Rules for actions:
+- Use the subject IDs in brackets from the subjects list above (e.g. if you see "- [abc123] Mathematics", use "abc123" as the subjectId)
+- Use assignment IDs in brackets from the upcoming work list above for mark_assignment_done
+- Output ONLY the JSON — no other text whatsoever
+- For all other requests (questions, plans in text, explanations), respond normally in markdown` : ''
+
   return `You are ScholarAI, a warm, focused study assistant for ${state.user.name || 'the student'}.
 You help with notes, study planning, revision, and explaining concepts clearly.
 Prefer concise, structured answers with examples. Use markdown.
 
 Today is ${today}.
 
-IMPORTANT — you have tools that write directly into the student's app. When the student asks you to create an assignment, add an event, add a goal, create a note, or mark something as done, you MUST call the appropriate tool. Do not describe doing it in text — call the tool so it actually happens. Only respond in text for questions, explanations, and study help.
-
 Student profile:
 - Name: ${state.user.name || 'Student'}
 - School: ${state.user.school || '—'}
 - Year: ${state.user.year || '—'}
 
-Subjects (use the bracketed IDs when calling tools):
+Subjects (use the bracketed IDs when creating assignments or goals):
 ${subjects || '— none yet —'}
 
-Upcoming work (use the bracketed IDs when calling mark_assignment_done):
+Upcoming work (use the bracketed IDs when marking done):
 ${upcoming || '— nothing pending —'}
-
+${actionInstructions}
 ${contextNote ? `\nContext for this conversation:\n${contextNote}\n` : ''}`
 }
 
-// Returns tool definitions in both provider formats.
-// Only used for non-JSON (chat) calls — skipped for structured JSON helpers.
-function buildTools(state) {
-  const subjectEnum = state.subjects.map((s) => s.id)
-
-  const defs = [
-    {
-      name: 'create_assignment',
-      description: 'Create a new assignment and save it to the student\'s assignments list.',
-      params: {
-        type: 'object',
-        properties: {
-          title: { type: 'string', description: 'Assignment title' },
-          subjectId: { type: 'string', description: 'Subject ID from the subjects list', enum: subjectEnum.length ? subjectEnum : undefined },
-          due: { type: 'string', description: 'Due date as ISO 8601 string (e.g. 2026-05-01T09:00:00)' },
-          priority: { type: 'string', enum: ['high', 'medium', 'low'], description: 'Priority level' },
-          estMinutes: { type: 'number', description: 'Estimated time in minutes' },
-          notes: { type: 'string', description: 'Extra notes about the assignment' },
-        },
-        required: ['title', 'due'],
-      },
-    },
-    {
-      name: 'mark_assignment_done',
-      description: 'Mark an existing assignment as done.',
-      params: {
-        type: 'object',
-        properties: {
-          id: { type: 'string', description: 'Assignment ID from the upcoming work list' },
-        },
-        required: ['id'],
-      },
-    },
-    {
-      name: 'create_event',
-      description: 'Add a calendar event.',
-      params: {
-        type: 'object',
-        properties: {
-          title: { type: 'string', description: 'Event title' },
-          startDate: { type: 'string', description: 'Start date as ISO 8601 string' },
-          description: { type: 'string', description: 'Optional description' },
-        },
-        required: ['title', 'startDate'],
-      },
-    },
-    {
-      name: 'add_goal',
-      description: 'Add a new goal to the student\'s goals list.',
-      params: {
-        type: 'object',
-        properties: {
-          title: { type: 'string', description: 'Goal title' },
-          subjectId: { type: 'string', description: 'Subject ID if goal is subject-specific' },
-          deadline: { type: 'string', description: 'Target deadline as ISO 8601 string' },
-        },
-        required: ['title'],
-      },
-    },
-    {
-      name: 'create_note',
-      description: 'Create a new note.',
-      params: {
-        type: 'object',
-        properties: {
-          title: { type: 'string', description: 'Note title' },
-          content: { type: 'string', description: 'Note content in markdown' },
-          subjectId: { type: 'string', description: 'Subject ID if note is subject-specific' },
-        },
-        required: ['title'],
-      },
-    },
-  ]
-
-  return {
-    anthropic: defs.map((d) => ({
-      name: d.name,
-      description: d.description,
-      input_schema: d.params,
-    })),
-    openai: defs.map((d) => ({
-      type: 'function',
-      function: { name: d.name, description: d.description, parameters: d.params },
-    })),
-  }
-}
-
-export const callAI = async ({ settings, system, messages, json = false, state = null }) => {
+export const callAI = async ({ settings, system, messages, json = false }) => {
+  let result
   if (settings.aiProvider === 'mock' || !settings.aiKey) {
-    return mockReply(messages, json)
+    result = mockReply(messages, json)
+  } else if (settings.aiProvider === 'anthropic') {
+    result = await callAnthropic({ settings, system, messages, json })
+  } else if (settings.aiProvider === 'openai') {
+    result = await callOpenAI({ settings, system, messages, json })
+  } else if (settings.aiProvider === 'openrouter') {
+    result = await callOpenRouter({ settings, system, messages, json })
+  } else {
+    result = mockReply(messages, json)
   }
-  if (settings.aiProvider === 'anthropic') {
-    return callAnthropic({ settings, system, messages, json, state })
+
+  // Detect JSON action responses (chat mode only — never interfere with json: true helpers)
+  if (typeof result === 'string' && !json) {
+    const trimmed = result.trim()
+    if (trimmed.startsWith('{')) {
+      const parsed = safeJSON(trimmed)
+      if (parsed?._action) {
+        const { _action: tool, ...input } = parsed
+        return { _action: true, tool, input }
+      }
+    }
   }
-  if (settings.aiProvider === 'openai') {
-    return callOpenAI({ settings, system, messages, json, state })
-  }
-  if (settings.aiProvider === 'openrouter') {
-    return callOpenRouter({ settings, system, messages, json, state })
-  }
-  return mockReply(messages, json)
+
+  return result
 }
 
-async function callAnthropic({ settings, system, messages, json, state }) {
-  const tools = (!json && state) ? buildTools(state).anthropic : undefined
+async function callAnthropic({ settings, system, messages, json }) {
   const body = {
     model: settings.aiModel || 'claude-opus-4-7',
     max_tokens: 2048,
@@ -146,7 +95,6 @@ async function callAnthropic({ settings, system, messages, json, state }) {
       ? `${system}\n\nReturn ONLY a valid JSON object — no commentary, no markdown fences.`
       : system,
     messages: messages.map((m) => ({ role: m.role, content: m.content })),
-    ...(tools ? { tools } : {}),
   }
 
   const controller = new AbortController()
@@ -165,13 +113,6 @@ async function callAnthropic({ settings, system, messages, json, state }) {
     })
     if (!res.ok) throw new Error(`Anthropic error: ${res.status} ${await res.text()}`)
     const data = await res.json()
-
-    // Detect tool_use blocks
-    const toolBlock = (data.content || []).find((c) => c.type === 'tool_use')
-    if (toolBlock && !json) {
-      return { _action: true, tool: toolBlock.name, input: toolBlock.input, id: toolBlock.id }
-    }
-
     const text = (data.content || []).map((c) => c.text || '').join('')
     return json ? safeJSON(text) : text
   } catch (e) {
@@ -182,13 +123,11 @@ async function callAnthropic({ settings, system, messages, json, state }) {
   }
 }
 
-async function callOpenAI({ settings, system, messages, json, state }) {
-  const tools = (!json && state) ? buildTools(state).openai : undefined
+async function callOpenAI({ settings, system, messages, json }) {
   const body = {
     model: settings.aiModel || 'gpt-4o-mini',
     messages: [{ role: 'system', content: system }, ...messages],
     response_format: json ? { type: 'json_object' } : undefined,
-    ...(tools ? { tools } : {}),
   }
 
   const controller = new AbortController()
@@ -205,15 +144,7 @@ async function callOpenAI({ settings, system, messages, json, state }) {
     })
     if (!res.ok) throw new Error(`OpenAI error: ${res.status} ${await res.text()}`)
     const data = await res.json()
-
-    // Detect tool_calls
-    const msg = data.choices?.[0]?.message
-    if (msg?.tool_calls?.length && !json) {
-      const call = msg.tool_calls[0]
-      return { _action: true, tool: call.function.name, input: safeJSON(call.function.arguments) || {}, id: call.id }
-    }
-
-    const text = msg?.content || ''
+    const text = data.choices?.[0]?.message?.content || ''
     return json ? safeJSON(text) : text
   } catch (e) {
     if (e.name === 'AbortError') throw new Error('Request timed out after 60 seconds.')
@@ -223,13 +154,11 @@ async function callOpenAI({ settings, system, messages, json, state }) {
   }
 }
 
-async function callOpenRouter({ settings, system, messages, json, state }) {
+async function callOpenRouter({ settings, system, messages, json }) {
   const model = settings.aiModel || 'anthropic/claude-opus-4'
-  const tools = (!json && state) ? buildTools(state).openai : undefined
   const body = {
     model,
     messages: [{ role: 'system', content: json ? `${system}\n\nReturn ONLY a valid JSON object — no commentary, no markdown fences.` : system }, ...messages],
-    ...(tools ? { tools } : {}),
   }
 
   const controller = new AbortController()
@@ -248,15 +177,7 @@ async function callOpenRouter({ settings, system, messages, json, state }) {
     })
     if (!res.ok) throw new Error(`OpenRouter error: ${res.status} ${await res.text()}`)
     const data = await res.json()
-
-    // Detect tool_calls (OpenAI-compatible format)
-    const msg = data.choices?.[0]?.message
-    if (msg?.tool_calls?.length && !json) {
-      const call = msg.tool_calls[0]
-      return { _action: true, tool: call.function.name, input: safeJSON(call.function.arguments) || {}, id: call.id }
-    }
-
-    const text = msg?.content || ''
+    const text = data.choices?.[0]?.message?.content || ''
     return json ? safeJSON(text) : text
   } catch (e) {
     if (e.name === 'AbortError') throw new Error('Request timed out after 60 seconds.')
