@@ -2,18 +2,21 @@
 // The user provides their own API key in Settings — it is stored only on-device.
 
 export const buildSystemPrompt = (state, contextNote) => {
-  const subjects = state.subjects.map((s) => `- ${s.name}${s.teacher ? ` (${s.teacher})` : ''}`).join('\n')
+  const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const subjects = state.subjects.map((s) => `- [${s.id}] ${s.name}${s.teacher ? ` (${s.teacher})` : ''}`).join('\n')
   const upcoming = state.assignments
     .filter((a) => a.status !== 'done')
     .slice(0, 8)
     .map((a) => {
       const subj = state.subjects.find((s) => s.id === a.subjectId)?.name || 'General'
-      return `- ${a.title} [${subj}] due ${new Date(a.due).toLocaleString()} (${a.priority})`
+      return `- [${a.id}] ${a.title} [${subj}] due ${new Date(a.due).toLocaleString()} (${a.priority})`
     })
     .join('\n')
   return `You are ScholarAI, a warm, focused study assistant for ${state.user.name || 'the student'}.
 You help with notes, study planning, revision, and explaining concepts clearly.
 Prefer concise, structured answers with examples. Use markdown.
+
+Today is ${today}.
 
 Student profile:
 - Name: ${state.user.name || 'Student'}
@@ -27,6 +30,45 @@ Upcoming work:
 ${upcoming || '— nothing pending —'}
 
 ${contextNote ? `\nContext for this conversation:\n${contextNote}\n` : ''}`
+}
+
+// Dedicated intent classifier — uses a minimal JSON-only prompt so the model
+// can't drift into prose. Returns an action object or null.
+export const detectAction = async ({ settings, state, message }) => {
+  if (!settings.aiKey || settings.aiProvider === 'mock') return null
+
+  const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const subjects = state.subjects.map((s) => `${s.id}=${s.name}`).join(', ') || 'none'
+  const pending = state.assignments
+    .filter((a) => a.status !== 'done')
+    .slice(0, 8)
+    .map((a) => `${a.id}=${a.title}`)
+    .join(', ') || 'none'
+
+  const system = `Today is ${today}.
+Subjects (id=name): ${subjects}
+Pending assignments (id=title): ${pending}
+
+You are a JSON action classifier for a student planner app. Output ONLY valid JSON — no explanation, no markdown, nothing else.
+
+If the user's message is asking to CREATE, ADD, SCHEDULE, or MARK DONE something in their planner, output one of:
+{"action":"create_assignment","title":"...","subjectId":"ID_or_null","due":"YYYY-MM-DDTHH:MM:SS","priority":"high|medium|low","estMinutes":60,"notes":""}
+{"action":"mark_assignment_done","id":"ASSIGNMENT_ID_from_list"}
+{"action":"create_event","title":"...","startDate":"YYYY-MM-DDTHH:MM:SS","description":""}
+{"action":"add_goal","title":"...","subjectId":"ID_or_null","deadline":"YYYY-MM-DD_or_null"}
+{"action":"create_note","title":"...","content":"","subjectId":"ID_or_null"}
+
+If the message is a question, request for help, study plan as text, or anything that is NOT a direct instruction to create/modify data, output:
+{"action":null}`
+
+  try {
+    const data = await callAI({ settings, system, messages: [{ role: 'user', content: message }], json: true })
+    if (!data?.action) return null
+    const { action, ...input } = data
+    return { _action: true, tool: action, input }
+  } catch {
+    return null
+  }
 }
 
 export const callAI = async ({ settings, system, messages, json = false }) => {
@@ -54,20 +96,31 @@ async function callAnthropic({ settings, system, messages, json }) {
       : system,
     messages: messages.map((m) => ({ role: m.role, content: m.content })),
   }
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': settings.aiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error(`Anthropic error: ${res.status} ${await res.text()}`)
-  const data = await res.json()
-  const text = (data.content || []).map((c) => c.text || '').join('')
-  return json ? safeJSON(text) : text
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 60_000)
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': settings.aiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) throw new Error(`Anthropic error: ${res.status} ${await res.text()}`)
+    const data = await res.json()
+    const text = (data.content || []).map((c) => c.text || '').join('')
+    return json ? safeJSON(text) : text
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('Request timed out after 60 seconds.')
+    throw e
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 async function callOpenAI({ settings, system, messages, json }) {
@@ -76,18 +129,29 @@ async function callOpenAI({ settings, system, messages, json }) {
     messages: [{ role: 'system', content: system }, ...messages],
     response_format: json ? { type: 'json_object' } : undefined,
   }
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${settings.aiKey}`,
-    },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error(`OpenAI error: ${res.status} ${await res.text()}`)
-  const data = await res.json()
-  const text = data.choices?.[0]?.message?.content || ''
-  return json ? safeJSON(text) : text
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 60_000)
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${settings.aiKey}`,
+      },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) throw new Error(`OpenAI error: ${res.status} ${await res.text()}`)
+    const data = await res.json()
+    const text = data.choices?.[0]?.message?.content || ''
+    return json ? safeJSON(text) : text
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('Request timed out after 60 seconds.')
+    throw e
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 async function callOpenRouter({ settings, system, messages, json }) {
@@ -96,23 +160,35 @@ async function callOpenRouter({ settings, system, messages, json }) {
     model,
     messages: [{ role: 'system', content: json ? `${system}\n\nReturn ONLY a valid JSON object — no commentary, no markdown fences.` : system }, ...messages],
   }
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${settings.aiKey}`,
-      'HTTP-Referer': 'https://scholarai.app',
-      'X-Title': 'ScholarAI',
-    },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error(`OpenRouter error: ${res.status} ${await res.text()}`)
-  const data = await res.json()
-  const text = data.choices?.[0]?.message?.content || ''
-  return json ? safeJSON(text) : text
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 60_000)
+  try {
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${settings.aiKey}`,
+        'HTTP-Referer': 'https://scholarai.app',
+        'X-Title': 'ScholarAI',
+      },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) throw new Error(`OpenRouter error: ${res.status} ${await res.text()}`)
+    const data = await res.json()
+    const text = data.choices?.[0]?.message?.content || ''
+    return json ? safeJSON(text) : text
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('Request timed out after 60 seconds.')
+    throw e
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 function safeJSON(text) {
+  if (typeof text !== 'string') return text
   try { return JSON.parse(text) } catch {}
   const m = text.match(/\{[\s\S]*\}/)
   if (m) { try { return JSON.parse(m[0]) } catch {} }
