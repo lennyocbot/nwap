@@ -1,7 +1,7 @@
 // Lightweight AI client supporting Anthropic Claude, OpenAI, and a built-in offline mock.
 // The user provides their own API key in Settings — it is stored only on-device.
 
-export const buildSystemPrompt = (state, contextNote, { withActions = false } = {}) => {
+export const buildSystemPrompt = (state, contextNote) => {
   const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
   const subjects = state.subjects.map((s) => `- [${s.id}] ${s.name}${s.teacher ? ` (${s.teacher})` : ''}`).join('\n')
   const upcoming = state.assignments
@@ -12,32 +12,6 @@ export const buildSystemPrompt = (state, contextNote, { withActions = false } = 
       return `- [${a.id}] ${a.title} [${subj}] due ${new Date(a.due).toLocaleString()} (${a.priority})`
     })
     .join('\n')
-
-  const actionInstructions = withActions ? `
-
-ACTIONS — you can write directly into the student's app. When asked to create or change data, respond with ONLY a raw JSON object and absolutely nothing else (no explanation, no markdown fences, no extra text before or after):
-
-Create assignment:
-{"_action":"create_assignment","title":"...","subjectId":"SUBJECT_ID_or_null","due":"YYYY-MM-DDTHH:MM:SS","priority":"high|medium|low","estMinutes":60,"notes":""}
-
-Mark assignment done:
-{"_action":"mark_assignment_done","id":"ASSIGNMENT_ID"}
-
-Add calendar event:
-{"_action":"create_event","title":"...","startDate":"YYYY-MM-DDTHH:MM:SS","description":""}
-
-Add goal:
-{"_action":"add_goal","title":"...","subjectId":"SUBJECT_ID_or_null","deadline":"YYYY-MM-DD_or_null"}
-
-Create note:
-{"_action":"create_note","title":"...","content":"markdown content","subjectId":"SUBJECT_ID_or_null"}
-
-Rules for actions:
-- Use the subject IDs in brackets from the subjects list above (e.g. if you see "- [abc123] Mathematics", use "abc123" as the subjectId)
-- Use assignment IDs in brackets from the upcoming work list above for mark_assignment_done
-- Output ONLY the JSON — no other text whatsoever
-- For all other requests (questions, plans in text, explanations), respond normally in markdown` : ''
-
   return `You are ScholarAI, a warm, focused study assistant for ${state.user.name || 'the student'}.
 You help with notes, study planning, revision, and explaining concepts clearly.
 Prefer concise, structured answers with examples. Use markdown.
@@ -49,42 +23,68 @@ Student profile:
 - School: ${state.user.school || '—'}
 - Year: ${state.user.year || '—'}
 
-Subjects (use the bracketed IDs when creating assignments or goals):
+Subjects:
 ${subjects || '— none yet —'}
 
-Upcoming work (use the bracketed IDs when marking done):
+Upcoming work:
 ${upcoming || '— nothing pending —'}
-${actionInstructions}
+
 ${contextNote ? `\nContext for this conversation:\n${contextNote}\n` : ''}`
 }
 
+// Dedicated intent classifier — uses a minimal JSON-only prompt so the model
+// can't drift into prose. Returns an action object or null.
+export const detectAction = async ({ settings, state, message }) => {
+  if (!settings.aiKey || settings.aiProvider === 'mock') return null
+
+  const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const subjects = state.subjects.map((s) => `${s.id}=${s.name}`).join(', ') || 'none'
+  const pending = state.assignments
+    .filter((a) => a.status !== 'done')
+    .slice(0, 8)
+    .map((a) => `${a.id}=${a.title}`)
+    .join(', ') || 'none'
+
+  const system = `Today is ${today}.
+Subjects (id=name): ${subjects}
+Pending assignments (id=title): ${pending}
+
+You are a JSON action classifier for a student planner app. Output ONLY valid JSON — no explanation, no markdown, nothing else.
+
+If the user's message is asking to CREATE, ADD, SCHEDULE, or MARK DONE something in their planner, output one of:
+{"action":"create_assignment","title":"...","subjectId":"ID_or_null","due":"YYYY-MM-DDTHH:MM:SS","priority":"high|medium|low","estMinutes":60,"notes":""}
+{"action":"mark_assignment_done","id":"ASSIGNMENT_ID_from_list"}
+{"action":"create_event","title":"...","startDate":"YYYY-MM-DDTHH:MM:SS","description":""}
+{"action":"add_goal","title":"...","subjectId":"ID_or_null","deadline":"YYYY-MM-DD_or_null"}
+{"action":"create_note","title":"...","content":"","subjectId":"ID_or_null"}
+
+If the message is a question, request for help, study plan as text, or anything that is NOT a direct instruction to create/modify data, output:
+{"action":null}`
+
+  try {
+    const data = await callAI({ settings, system, messages: [{ role: 'user', content: message }], json: true })
+    if (!data?.action) return null
+    const { action, ...input } = data
+    return { _action: true, tool: action, input }
+  } catch {
+    return null
+  }
+}
+
 export const callAI = async ({ settings, system, messages, json = false }) => {
-  let result
   if (settings.aiProvider === 'mock' || !settings.aiKey) {
-    result = mockReply(messages, json)
-  } else if (settings.aiProvider === 'anthropic') {
-    result = await callAnthropic({ settings, system, messages, json })
-  } else if (settings.aiProvider === 'openai') {
-    result = await callOpenAI({ settings, system, messages, json })
-  } else if (settings.aiProvider === 'openrouter') {
-    result = await callOpenRouter({ settings, system, messages, json })
-  } else {
-    result = mockReply(messages, json)
+    return mockReply(messages, json)
   }
-
-  // Detect JSON action responses (chat mode only — never interfere with json: true helpers)
-  if (typeof result === 'string' && !json) {
-    const trimmed = result.trim()
-    if (trimmed.startsWith('{')) {
-      const parsed = safeJSON(trimmed)
-      if (parsed?._action) {
-        const { _action: tool, ...input } = parsed
-        return { _action: true, tool, input }
-      }
-    }
+  if (settings.aiProvider === 'anthropic') {
+    return callAnthropic({ settings, system, messages, json })
   }
-
-  return result
+  if (settings.aiProvider === 'openai') {
+    return callOpenAI({ settings, system, messages, json })
+  }
+  if (settings.aiProvider === 'openrouter') {
+    return callOpenRouter({ settings, system, messages, json })
+  }
+  return mockReply(messages, json)
 }
 
 async function callAnthropic({ settings, system, messages, json }) {

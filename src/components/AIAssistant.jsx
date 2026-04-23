@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../context/AppContext.jsx'
-import { buildSystemPrompt, callAI } from '../lib/ai.js'
+import { buildSystemPrompt, callAI, detectAction } from '../lib/ai.js'
 import { Icon } from './Icons.jsx'
 import Markdown from './Markdown.jsx'
 
@@ -93,16 +93,19 @@ export default function AIAssistant({ floating = true }) {
     setInput('')
     setBusy(true)
     try {
+      // Stage 1: dedicated JSON-only intent classifier — cannot drift into prose
+      const action = await detectAction({ settings: state.settings, state, message: content })
+      if (action) {
+        setPendingAction({ ...action, messagesSnapshot: newMsgs })
+        return
+      }
+      // Stage 2: regular chat response (no action instructions needed)
       const reply = await callAI({
         settings: state.settings,
-        system: buildSystemPrompt(state, contextNote, { withActions: true }),
+        system: buildSystemPrompt(state, contextNote),
         messages: newMsgs.map(({ role, content }) => ({ role, content })),
       })
-      if (reply?._action) {
-        setPendingAction({ ...reply, messagesSnapshot: newMsgs })
-      } else {
-        addMsg(newMsgs, 'assistant', reply)
-      }
+      addMsg(newMsgs, 'assistant', reply)
     } catch (e) {
       setErr(e.message || 'Something went wrong')
     } finally {
