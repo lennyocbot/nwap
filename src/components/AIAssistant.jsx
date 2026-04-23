@@ -11,12 +11,41 @@ const STARTERS = [
   { label: 'Explain a concept', prompt: 'Explain [topic] clearly with an example and a quick understanding check.' },
 ]
 
+// Maps a tool call to a human-readable description for the action card.
+function describeAction(tool, input, subjects) {
+  const subjectName = (id) => subjects.find((s) => s.id === id)?.name || id
+  switch (tool) {
+    case 'create_assignment': {
+      const due = input.due ? new Date(input.due).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : '—'
+      const subj = input.subjectId ? ` · ${subjectName(input.subjectId)}` : ''
+      const pri = input.priority ? ` · ${input.priority} priority` : ''
+      return { verb: 'Create assignment', detail: `"${input.title}"  —  due ${due}${subj}${pri}` }
+    }
+    case 'mark_assignment_done':
+      return { verb: 'Mark as done', detail: `Assignment ID: ${input.id}` }
+    case 'create_event': {
+      const date = input.startDate ? new Date(input.startDate).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : '—'
+      return { verb: 'Add calendar event', detail: `"${input.title}"  —  ${date}` }
+    }
+    case 'add_goal': {
+      const deadline = input.deadline ? ` · by ${new Date(input.deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : ''
+      const subj = input.subjectId ? ` · ${subjectName(input.subjectId)}` : ''
+      return { verb: 'Add goal', detail: `"${input.title}"${subj}${deadline}` }
+    }
+    case 'create_note':
+      return { verb: 'Create note', detail: `"${input.title}"${input.subjectId ? ` · ${subjectName(input.subjectId)}` : ''}` }
+    default:
+      return { verb: tool, detail: JSON.stringify(input) }
+  }
+}
+
 export default function AIAssistant({ floating = true }) {
-  const { state, aiPanel, closeAI, openAI, add, update } = useApp()
+  const { state, aiPanel, closeAI, openAI, add, update, showToast } = useApp()
   const [chatId, setChatId] = useState(state.chats[0]?.id)
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  const [pendingAction, setPendingAction] = useState(null)
   const scrollRef = useRef(null)
 
   const chat = state.chats.find((c) => c.id === chatId) || state.chats[0]
@@ -24,7 +53,7 @@ export default function AIAssistant({ floating = true }) {
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-  }, [messages.length, aiPanel.open])
+  }, [messages.length, aiPanel.open, pendingAction])
 
   const contextNote = useMemo(() => {
     const c = aiPanel.context
@@ -45,10 +74,17 @@ export default function AIAssistant({ floating = true }) {
     setChatId(c.id)
   }
 
+  const addMsg = (msgs, role, content) => {
+    const updated = [...msgs, { role, content, at: Date.now() }]
+    update('chats', { id: chat.id, messages: updated })
+    return updated
+  }
+
   const send = async (text) => {
     const content = (text ?? input).trim()
     if (!content || busy) return
     setErr('')
+    setPendingAction(null)
     const newMsgs = [...messages, { role: 'user', content, at: Date.now() }]
     const title = chat.title === 'New chat' ? content.slice(0, 40) : chat.title
     update('chats', { id: chat.id, messages: newMsgs, title })
@@ -59,13 +95,83 @@ export default function AIAssistant({ floating = true }) {
         settings: state.settings,
         system: buildSystemPrompt(state, contextNote),
         messages: newMsgs.map(({ role, content }) => ({ role, content })),
+        state,
       })
-      update('chats', { id: chat.id, messages: [...newMsgs, { role: 'assistant', content: reply, at: Date.now() }] })
+      if (reply?._action) {
+        setPendingAction({ ...reply, messagesSnapshot: newMsgs })
+      } else {
+        addMsg(newMsgs, 'assistant', reply)
+      }
     } catch (e) {
       setErr(e.message || 'Something went wrong')
     } finally {
       setBusy(false)
     }
+  }
+
+  const applyAction = () => {
+    if (!pendingAction) return
+    const { tool, input: inp } = pendingAction
+    try {
+      switch (tool) {
+        case 'create_assignment':
+          add('assignments', {
+            title: inp.title,
+            subjectId: inp.subjectId || null,
+            due: inp.due,
+            priority: inp.priority || 'medium',
+            status: 'todo',
+            estMinutes: inp.estMinutes || 60,
+            notes: inp.notes || '',
+          })
+          break
+        case 'mark_assignment_done':
+          update('assignments', { id: inp.id, status: 'done' })
+          break
+        case 'create_event':
+          add('events', {
+            title: inp.title,
+            startDate: inp.startDate,
+            endDate: inp.startDate,
+            description: inp.description || '',
+          })
+          break
+        case 'add_goal':
+          add('goals', {
+            title: inp.title,
+            subjectId: inp.subjectId || null,
+            deadline: inp.deadline || null,
+            milestones: [],
+          })
+          break
+        case 'create_note':
+          add('notes', {
+            title: inp.title,
+            content: inp.content || '',
+            subjectId: inp.subjectId || null,
+            tags: [],
+            pinned: false,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          })
+          break
+        default:
+          showToast(`Unknown action: ${tool}`, 'error')
+          return
+      }
+      addMsg(pendingAction.messagesSnapshot, 'assistant', '✓ Done — I\'ve saved that to your app.')
+      showToast('Action applied', 'success')
+    } catch (e) {
+      showToast(e.message || 'Failed to apply action', 'error')
+    } finally {
+      setPendingAction(null)
+    }
+  }
+
+  const dismissAction = () => {
+    if (!pendingAction) return
+    addMsg(pendingAction.messagesSnapshot, 'assistant', 'No problem — I\'ll leave that. Let me know if you need anything else.')
+    setPendingAction(null)
   }
 
   const body = (
@@ -91,7 +197,7 @@ export default function AIAssistant({ floating = true }) {
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 space-y-4">
-        {messages.length === 0 && (
+        {messages.length === 0 && !pendingAction && (
           <div>
             <div className="text-sm text-ink-500 mb-3">Try a starter</div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -124,6 +230,30 @@ export default function AIAssistant({ floating = true }) {
         ))}
         {busy && <div className="text-sm text-ink-500 animate-pulse-soft">Thinking…</div>}
         {err && <div className="text-sm text-accent-rose">{err}</div>}
+
+        {pendingAction && (() => {
+          const { verb, detail } = describeAction(pendingAction.tool, pendingAction.input, state.subjects)
+          return (
+            <div className="flex gap-3">
+              <div className="w-8 h-8 rounded-2xl bg-gradient-to-br from-brand-500 to-violet-500 flex items-center justify-center text-white shrink-0">
+                <Icon.sparkle className="w-4 h-4" />
+              </div>
+              <div className="flex-1 card border-brand-300 dark:border-brand-700 p-4 rounded-3xl rounded-bl-md">
+                <div className="text-xs font-semibold text-brand-600 dark:text-brand-400 mb-1 uppercase tracking-wide">ScholarAI wants to:</div>
+                <div className="font-medium text-ink-900 dark:text-ink-50 text-sm">{verb}</div>
+                <div className="text-xs text-ink-500 mt-0.5 mb-3">{detail}</div>
+                <div className="flex gap-2">
+                  <button className="btn-primary text-xs py-1.5 px-4" onClick={applyAction}>
+                    <Icon.check className="w-3.5 h-3.5" /> Apply
+                  </button>
+                  <button className="btn-ghost text-xs py-1.5 px-4" onClick={dismissAction}>
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
       </div>
 
       <div className="p-4 border-t border-ink-100 dark:border-ink-800">

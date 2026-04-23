@@ -113,7 +113,7 @@ export default function Journal() {
 
         {entry && (
           <div className="flex justify-end">
-            <button className="btn-ghost text-rose-600" onClick={() => remove('journal', entry.id)}><Icon.trash className="w-4 h-4" /> Delete entry</button>
+            <button className="btn-ghost text-rose-600" onClick={() => { if (window.confirm('Delete this journal entry? This cannot be undone.')) remove('journal', entry.id) }}><Icon.trash className="w-4 h-4" /> Delete entry</button>
           </div>
         )}
 
