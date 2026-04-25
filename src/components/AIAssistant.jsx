@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../context/AppContext.jsx'
 import { buildSystemPrompt, callAI } from '../lib/ai.js'
-import { applyAgentActions, buildAgentSystemPrompt, classifyAssistantIntent, planDeterministicAction } from '../lib/agent.js'
+import { applyAgentActions, buildAgentSystemPrompt, classifyAssistantIntent } from '../lib/agent.js'
 import { Icon } from './Icons.jsx'
 import Markdown from './Markdown.jsx'
 
@@ -57,26 +57,33 @@ export default function AIAssistant({ floating = true }) {
     setBusy(true)
     try {
       let reply
-      const deterministic = planDeterministicAction({ text: content, state, messages: newMsgs })
-      if (deterministic) {
-        const applied = applyAgentActions({ actions: deterministic.actions, state, dispatch })
-        reply = deterministic.reply
-        if (applied.length) showToast(`AI ${applied[0]}`, 'success')
-      } else if (classifyAssistantIntent(content) === 'action') {
-        const canUseServerKey = state.settings.useServerProxy !== false && !['localhost', '127.0.0.1'].includes(window.location.hostname)
-        if (!state.settings.aiKey && state.settings.aiProvider !== 'mock' && !canUseServerKey) {
-          reply = 'I can change your planner, but first add your OpenRouter key in Settings -> AI or set OPENROUTER_API_KEY in Netlify.'
-        } else {
-          const plan = await callAI({
+      const canUseServerKey = state.settings.useServerProxy !== false && !['localhost', '127.0.0.1'].includes(window.location.hostname)
+      const hasUsableAI = state.settings.aiProvider === 'mock' || state.settings.aiKey || canUseServerKey
+
+      if (hasUsableAI) {
+        const plan = await callAI({
+          settings: state.settings,
+          system: buildAgentSystemPrompt(state, contextNote),
+          json: true,
+          messages: newMsgs.map(({ role, content }) => ({ role, content })),
+        })
+        const applied = applyAgentActions({ actions: plan?.actions || [], state, dispatch })
+
+        if (applied.length) {
+          reply = `Done: ${applied.join(', ')}.`
+          if (plan?.reply && !/added|created|updated|moved|deleted/i.test(plan.reply)) reply += `\n\n${plan.reply}`
+          showToast(`AI ${applied[0]}`, 'success')
+        } else if (plan?.handoffToChat && classifyAssistantIntent(content) === 'chat') {
+          reply = await callAI({
             settings: state.settings,
-            system: buildAgentSystemPrompt(state),
-            json: true,
-            messages: [{ role: 'user', content }],
+            system: buildSystemPrompt(state, contextNote),
+            messages: newMsgs.map(({ role, content }) => ({ role, content })),
           })
-          const applied = applyAgentActions({ actions: plan?.actions || [], state, dispatch })
-          reply = plan?.reply || (applied.length ? `Done: ${applied.join(', ')}.` : 'I did not make changes because that did not look like a concrete app action.')
-          if (applied.length) showToast(`AI ${applied[0]}`, 'success')
+        } else {
+          reply = plan?.reply || 'I need one more detail before I can use a tool to change the app.'
         }
+      } else if (classifyAssistantIntent(content) === 'action') {
+        reply = 'I can use tools to change your planner, but first add your OpenRouter key in Settings -> AI or set OPENROUTER_API_KEY in Netlify.'
       } else {
         reply = await callAI({
           settings: state.settings,
@@ -99,7 +106,7 @@ export default function AIAssistant({ floating = true }) {
           <Icon.sparkle className="w-4 h-4" />
         </div>
         <div className="font-display font-semibold">ScholarAI</div>
-        <span className="chip">{state.settings.aiKey ? state.settings.aiProvider : 'demo mode'}</span>
+        <span className="chip">{state.settings.aiKey || state.settings.useServerProxy !== false ? state.settings.aiProvider : 'demo mode'}</span>
         <div className="flex-1" />
         <select
           className="input !py-1.5 max-w-[180px]"
@@ -168,7 +175,7 @@ export default function AIAssistant({ floating = true }) {
         </div>
         {!state.settings.aiKey && (
           <div className="text-xs text-ink-500 mt-2">
-            Running in offline demo. Add your Anthropic or OpenAI key in Settings → AI for real replies.
+            Add an OpenRouter key in Settings, AI, or set OPENROUTER_API_KEY in Netlify for real tool use.
           </div>
         )}
       </div>
