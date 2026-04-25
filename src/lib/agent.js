@@ -29,6 +29,7 @@ export function buildAgentSystemPrompt(state, contextNote) {
 
   return `You are ScholarAI's app operator with tools. You are smarter than brittle keyword matching, so interpret typos, follow-up answers, natural dates, and chat history.
 Return JSON only with shape {"reply":"short human message","actions":[...],"handoffToChat":false}.
+Today is ${new Date().toISOString().slice(0, 10)}.
 
 Rules:
 - If the user asks you to change the app, return one or more actions. These are real tool calls.
@@ -42,7 +43,9 @@ Rules:
 Supported action objects:
 {"type":"create_assignment","payload":{"title":"...","subjectId":"existing subject id or null","due":"ISO date","priority":"low|medium|high","status":"todo|doing|done","estMinutes":60,"notes":"..."}}
 {"type":"create_note","payload":{"title":"...","content":"markdown","subjectId":"existing subject id or null","tags":["tag"],"pinned":false}}
+{"type":"create_calendar_event","payload":{"title":"...","date":"ISO date","color":"brand","notes":"..."}}
 {"type":"create_timetable_slot","payload":{"day":1,"start":"09:00","end":"10:00","subjectId":"existing subject id or null","room":""}}
+{"type":"create_revision_session","payload":{"date":"YYYY-MM-DD","minutes":25,"subjectId":"existing subject id or null","at":"ISO date"}}
 {"type":"create_deck","payload":{"name":"...","subjectId":"existing subject id or null","color":"brand"}}
 {"type":"create_flashcards","payload":{"deckName":"...","subjectId":"existing subject id or null","cards":[{"front":"...","back":"..."}]}}
 {"type":"update_assignment","payload":{"id":"existing assignment id","patch":{"status":"doing"}}}
@@ -89,6 +92,18 @@ export function applyAgentActions({ actions, state, dispatch }) {
       applied.push(`created note "${item.title}"`)
     }
 
+    if (action.type === 'create_calendar_event') {
+      const item = {
+        id: uid(),
+        title: payload.title || 'New event',
+        date: safeDate(payload.date, 1),
+        color: payload.color || 'brand',
+        notes: payload.notes || ''
+      }
+      dispatch({ type: 'add', key: 'events', item })
+      applied.push(`created event "${item.title}"`)
+    }
+
     if (action.type === 'create_timetable_slot') {
       const item = {
         id: uid(),
@@ -100,6 +115,19 @@ export function applyAgentActions({ actions, state, dispatch }) {
       }
       dispatch({ type: 'add', key: 'timetable', item })
       applied.push(`scheduled ${item.start}-${item.end}`)
+    }
+
+    if (action.type === 'create_revision_session') {
+      const date = payload.date || new Date().toISOString().slice(0, 10)
+      const item = {
+        id: uid(),
+        date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : safeISODate(date),
+        minutes: Number(payload.minutes) || 25,
+        subjectId: validSubject(state, payload.subjectId),
+        at: payload.at ? new Date(payload.at).getTime() : Date.now()
+      }
+      dispatch({ type: 'add', key: 'studySessions', item })
+      applied.push(`logged ${item.minutes}m revision`)
     }
 
     if (action.type === 'create_deck') {
@@ -164,4 +192,10 @@ function safeDate(value, fallbackDays) {
 
 function timeOr(value, fallback) {
   return /^\d{2}:\d{2}$/.test(value || '') ? value : fallback
+}
+
+function safeISODate(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return new Date().toISOString().slice(0, 10)
+  return date.toISOString().slice(0, 10)
 }

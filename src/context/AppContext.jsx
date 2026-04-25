@@ -24,7 +24,7 @@ const reducer = (state, action) => {
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, null, loadState)
   const [route, setRoute] = useState({ name: 'dashboard', params: {} })
-  const [aiPanel, setAiPanel] = useState({ open: false, context: null })
+  const [aiPanel, setAiPanel] = useState({ open: false, context: null, initialPrompt: null, requestId: null })
   const [toast, setToast] = useState(null)
   const [account, setAccount] = useState({ user: null, ready: false, sync: hasSupabase ? 'Not signed in' : 'Supabase not configured' })
   const cloudLoadedRef = useRef(false)
@@ -114,8 +114,13 @@ export function AppProvider({ children }) {
   const setUser = useCallback((patch) => dispatch({ type: 'set', key: 'user', value: { ...state.user, ...patch } }), [state.user])
 
   const navigate = useCallback((name, params = {}) => setRoute({ name, params }), [])
-  const openAI = useCallback((context = null) => setAiPanel({ open: true, context }), [])
-  const closeAI = useCallback(() => setAiPanel({ open: false, context: null }), [])
+  const openAI = useCallback((context = null, initialPrompt = null) => {
+    setAiPanel({ open: true, context, initialPrompt, requestId: uid() })
+  }, [])
+  const closeAI = useCallback(() => setAiPanel({ open: false, context: null, initialPrompt: null, requestId: null }), [])
+  const clearAIPrompt = useCallback(() => {
+    setAiPanel((current) => ({ ...current, initialPrompt: null }))
+  }, [])
 
   const showToast = useCallback((msg, kind = 'info') => {
     setToast({ msg, kind, id: uid() })
@@ -150,11 +155,11 @@ export function AppProvider({ children }) {
   const value = useMemo(() => ({
     state, dispatch, add, update, remove, set, merge, replaceAll, setSettings, setUser,
     route, navigate,
-    aiPanel, openAI, closeAI,
+    aiPanel, openAI, closeAI, clearAIPrompt,
     account, signIn, signOut,
     toast, showToast,
     reset,
-  }), [state, add, update, remove, set, merge, replaceAll, setSettings, setUser, route, navigate, aiPanel, openAI, closeAI, account, signIn, signOut, toast, showToast, reset])
+  }), [state, add, update, remove, set, merge, replaceAll, setSettings, setUser, route, navigate, aiPanel, openAI, closeAI, clearAIPrompt, account, signIn, signOut, toast, showToast, reset])
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>
 }

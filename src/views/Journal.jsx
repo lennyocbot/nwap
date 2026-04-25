@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../context/AppContext.jsx'
 import { Icon } from '../components/Icons.jsx'
 import { cx, todayISO } from '../lib/utils.js'
@@ -6,11 +6,11 @@ import { callAI, buildSystemPrompt } from '../lib/ai.js'
 import Markdown from '../components/Markdown.jsx'
 
 const moods = [
-  { key: 1, emoji: '😞', label: 'Low' },
-  { key: 2, emoji: '😕', label: 'Meh' },
-  { key: 3, emoji: '😐', label: 'Okay' },
-  { key: 4, emoji: '🙂', label: 'Good' },
-  { key: 5, emoji: '😄', label: 'Great' },
+  { key: 1, emoji: ':(', label: 'Low' },
+  { key: 2, emoji: ':/', label: 'Meh' },
+  { key: 3, emoji: ':|', label: 'Okay' },
+  { key: 4, emoji: ':)', label: 'Good' },
+  { key: 5, emoji: ':D', label: 'Great' },
 ]
 
 export default function Journal() {
@@ -19,13 +19,24 @@ export default function Journal() {
   const [date, setDate] = useState(today)
   const [weekly, setWeekly] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [savedAt, setSavedAt] = useState(null)
+  const saveTimer = useRef(null)
 
   const entry = state.journal.find((j) => j.date === date)
   const ensureEntry = () => entry || add('journal', { date, mood: 3, content: '', gratitude: '', tomorrow: '' })
   const patch = (p) => {
     const e = ensureEntry()
     update('journal', { id: e.id, ...p })
+    setSaving(true)
+    clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => {
+      setSaving(false)
+      setSavedAt(new Date())
+    }, 300)
   }
+
+  useEffect(() => () => clearTimeout(saveTimer.current), [])
 
   const list = useMemo(() => state.journal.slice().sort((a, b) => b.date.localeCompare(a.date)), [state.journal])
 
@@ -63,7 +74,7 @@ export default function Journal() {
                 <span className="text-xl">{moods.find((m) => m.key === j.mood)?.emoji}</span>
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-sm">{new Date(j.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</div>
-                  <div className="text-xs text-ink-500 line-clamp-1">{j.content || '—'}</div>
+                  <div className="text-xs text-ink-500 line-clamp-1">{j.content || '-'}</div>
                 </div>
               </button>
             </li>
@@ -78,6 +89,9 @@ export default function Journal() {
             {new Date(date).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
           </div>
           <div className="flex-1" />
+          <div className="text-xs text-ink-500 mr-2">
+            {saving ? 'Saving...' : savedAt ? `Saved ${savedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Autosaves'}
+          </div>
           <button className="btn-soft" onClick={runWeeklyReview} disabled={busy}><Icon.sparkle className="w-4 h-4" /> Weekly AI review</button>
         </div>
 
@@ -98,7 +112,7 @@ export default function Journal() {
         <div>
           <div className="text-xs text-ink-500 mb-1">How was today?</div>
           <textarea className="input min-h-[140px]" value={entry?.content || ''} onChange={(e) => patch({ content: e.target.value })}
-            placeholder="Write freely — the AI weekly review will look back on this." />
+            placeholder="Write freely - the AI weekly review will look back on this." />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
@@ -117,7 +131,7 @@ export default function Journal() {
           </div>
         )}
 
-        {busy && <div className="text-sm text-ink-500 animate-pulse-soft">Reflecting on your week…</div>}
+        {busy && <div className="text-sm text-ink-500 animate-pulse-soft">Reflecting on your week...</div>}
         {weekly && (
           <div className="p-4 rounded-2xl bg-ink-50 dark:bg-ink-800">
             <div className="font-display font-semibold mb-2">Weekly review</div>

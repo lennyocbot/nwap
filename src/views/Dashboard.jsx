@@ -23,6 +23,8 @@ export default function Dashboard() {
     .slice(0, 5)
 
   const dueCards = state.flashcards.filter((f) => f.due <= Date.now()).length
+  const nextWork = upcoming[0]
+  const nextWorkLate = nextWork ? daysUntil(nextWork.due) < 0 : false
 
   const stats = useMemo(() => {
     const today = todayISO()
@@ -50,26 +52,39 @@ export default function Dashboard() {
 
   const quickNote = () => {
     const n = add('notes', {
-      title: 'Quick note', content: '', tags: [], subjectId: null, pinned: false,
+      title: 'Untitled note', content: '', tags: [], subjectId: null, pinned: false,
       createdAt: Date.now(), updatedAt: Date.now(),
     })
     navigate('notes', { id: n.id })
   }
 
+  const planDay = () => {
+    const today = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
+    openAI(null, [
+      `Plan my study day for ${today}.`,
+      'Use my timetable, due assignments, revision queue, weak topics, and recent study time.',
+      'Give me a realistic schedule with start times, focus blocks, breaks, and the single most important task.',
+    ].join('\n'))
+  }
+
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Hero */}
-      <section className="card p-5 md:p-7 bg-gradient-to-br from-brand-600 via-brand-500 to-violet-500 text-white border-transparent">
+      <section className={cx(
+        'card p-5 md:p-7 text-white border-transparent',
+        nextWorkLate
+          ? 'bg-gradient-to-br from-rose-700 via-rose-600 to-amber-600'
+          : 'bg-gradient-to-br from-brand-600 via-brand-500 to-violet-500'
+      )}>
         <div className="flex items-start gap-4">
           <div className="flex-1">
             <div className="text-white/80 text-sm">Good {greet()}, {state.user.name || 'Student'}</div>
             <h2 className="font-display text-2xl md:text-3xl font-semibold mt-1">
-              {upcoming[0]
-                ? <>Next up: <span className="opacity-90">{upcoming[0].title}</span> · {relative(upcoming[0].due)}</>
-                : 'Nothing due — great time to revise.'}
+              {nextWork
+                ? <>Next up: <span className="opacity-90">{nextWork.title}</span> - {relative(nextWork.due)}</>
+                : 'Nothing due - great time to revise.'}
             </h2>
             <div className="mt-4 flex flex-wrap gap-2">
-              <button className="btn bg-white text-brand-700 hover:bg-white/90" onClick={() => openAI()}>
+              <button className="btn bg-white text-brand-700 hover:bg-white/90" onClick={planDay}>
                 <Icon.sparkle className="w-4 h-4" /> Plan my day
               </button>
               <button className="btn bg-white/10 hover:bg-white/20 border border-white/20" onClick={quickNote}>
@@ -87,17 +102,15 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* Stats */}
       <section className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Stat label="Open tasks" value={stats.open} icon="task" tone="rose" onClick={() => navigate('assignments')} />
         <Stat label="Cards due" value={dueCards} icon="cards" tone="brand" onClick={() => navigate('revision')} />
         <Stat label="Study today" value={`${stats.studyToday}m`} icon="timer" tone="amber" onClick={() => navigate('study')} />
         <Stat label="Habit streaks" value={stats.streaks} icon="fire" tone="emerald" onClick={() => navigate('habits')} />
-        <Stat label="Avg grade" value={weeklyGrade != null ? `${weeklyGrade}%` : '—'} icon="grade" tone="violet" onClick={() => navigate('grades')} />
+        <Stat label="Avg grade" value={weeklyGrade != null ? `${weeklyGrade}%` : '-'} icon="grade" tone="violet" onClick={() => navigate('grades')} />
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Today */}
         <div className="card p-5 lg:col-span-2">
           <Header title="Today" action={{ label: 'Timetable', on: () => navigate('timetable') }} icon="timetable" />
           {todaySlots.length === 0 ? (
@@ -109,10 +122,10 @@ export default function Dashboard() {
                 const c = colorFor(s?.color)
                 return (
                   <li key={t.id} className="py-3 flex items-center gap-3">
-                    <div className={cx('w-10 h-10 rounded-2xl text-white flex items-center justify-center text-lg', c.bg)}>{s?.emoji || '📚'}</div>
+                    <div className={cx('w-10 h-10 rounded-2xl text-white flex items-center justify-center text-lg', c.bg)}>{s?.emoji || 'S'}</div>
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate">{s?.name || 'Subject'}</div>
-                      <div className="text-xs text-ink-500">{fmtTime(t.start)} – {fmtTime(t.end)} · {t.room || s?.room || '—'}</div>
+                      <div className="text-xs text-ink-500">{fmtTime(t.start)}-{fmtTime(t.end)} - {t.room || s?.room || '-'}</div>
                     </div>
                     <button className="btn-ghost" onClick={() => navigate('notes', { subject: s?.id })}><Icon.note className="w-4 h-4" /></button>
                   </li>
@@ -122,7 +135,6 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Upcoming */}
         <div className="card p-5">
           <Header title="Upcoming" action={{ label: 'All', on: () => navigate('assignments') }} icon="task" />
           {upcoming.length === 0 ? (
@@ -153,7 +165,6 @@ export default function Dashboard() {
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Habits */}
         <div className="card p-5">
           <Header title="Today's habits" action={{ label: 'Manage', on: () => navigate('habits') }} icon="habit" />
           <ul className="space-y-2">
@@ -168,11 +179,11 @@ export default function Dashboard() {
                       done ? 'bg-emerald-500 text-white' : 'bg-ink-100 dark:bg-ink-800 text-ink-500'
                     )}
                   >
-                    {done ? <Icon.check className="w-4 h-4" /> : <span className="text-lg">{h.emoji}</span>}
+                    {done ? <Icon.check className="w-4 h-4" /> : <span className="text-sm font-semibold">{h.emoji}</span>}
                   </button>
                   <div className="flex-1">
                     <div className="text-sm font-medium">{h.name}</div>
-                    <div className="text-xs text-ink-500">Streak: {h.streak || 0}🔥</div>
+                    <div className="text-xs text-ink-500">Streak: {h.streak || 0}</div>
                   </div>
                 </li>
               )
@@ -180,7 +191,6 @@ export default function Dashboard() {
           </ul>
         </div>
 
-        {/* Pinned notes */}
         <div className="card p-5 lg:col-span-2">
           <Header title="Pinned notes" action={{ label: 'Notes', on: () => navigate('notes') }} icon="note" />
           {state.notes.filter((n) => n.pinned).length === 0 ? (

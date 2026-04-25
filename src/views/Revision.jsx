@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useApp } from '../context/AppContext.jsx'
 import { Icon } from '../components/Icons.jsx'
 import Modal from '../components/Modal.jsx'
+import Markdown from '../components/Markdown.jsx'
 import { cx, colorFor } from '../lib/utils.js'
 import { aiGenerateFlashcards } from '../lib/ai.js'
 
@@ -43,16 +44,34 @@ export default function Revision() {
 
   const startStudy = () => {
     const q = deckCards.filter((c) => c.due <= Date.now()).slice().sort(() => Math.random() - 0.5)
-    if (q.length === 0) return showToast('No cards due — add more or come back later!', 'info')
+    if (q.length === 0) return showToast('No cards due - add more or come back later!', 'info')
     setQueue(q); setIdx(0); setFlipped(false); setStudying(true)
   }
 
   const review = (quality) => {
     const card = queue[idx]
     update('flashcards', { id: card.id, ...schedule(card, quality) })
-    if (idx + 1 >= queue.length) { setStudying(false); showToast('Session complete 🎉', 'success') }
+    if (idx + 1 >= queue.length) { setStudying(false); showToast('Session complete ', 'success') }
     else { setIdx(idx + 1); setFlipped(false) }
   }
+
+  useEffect(() => {
+    if (!studying) return
+    const onKey = (e) => {
+      if (e.target?.tagName === 'INPUT' || e.target?.tagName === 'TEXTAREA') return
+      if (e.code === 'Space') {
+        e.preventDefault()
+        setFlipped((v) => !v)
+      }
+      if (flipped && ['1', '2', '3', '4'].includes(e.key)) {
+        e.preventDefault()
+        const quality = { 1: 1, 2: 3, 3: 4, 4: 5 }[e.key]
+        review(quality)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [studying, flipped, idx, queue])
 
   const createDeck = () => {
     if (!newDeckName.trim()) return
@@ -82,18 +101,23 @@ export default function Revision() {
           <div className="flex-1" />
           <button className="btn-ghost" onClick={() => setStudying(false)}>Exit</button>
         </div>
+        <div className="h-2 rounded-full bg-ink-100 dark:bg-ink-800 overflow-hidden mb-4">
+          <div className="h-full bg-brand-500 transition-all" style={{ width: `${((idx + 1) / queue.length) * 100}%` }} />
+        </div>
         <div onClick={() => setFlipped((v) => !v)} className="card p-8 min-h-[320px] flex items-center justify-center text-center cursor-pointer select-none">
-          <div className="text-xl md:text-2xl font-display font-semibold">
-            {flipped ? card.back : card.front}
+          <div className="text-xl md:text-2xl font-display font-semibold max-w-full">
+            <Markdown text={flipped ? card.back : card.front} />
           </div>
         </div>
-        <div className="text-center text-xs text-ink-500 mt-2">Tap card to flip</div>
+        <div className="text-center text-xs text-ink-500 mt-2">
+          {flipped ? 'Click to flip back, or press 1-4 to rate.' : 'Click to flip, or press Space.'}
+        </div>
         {flipped && (
           <div className="grid grid-cols-4 gap-2 mt-4">
-            <button className="btn-soft !bg-rose-100 !text-rose-700 dark:!bg-rose-900/40 dark:!text-rose-200" onClick={() => review(1)}>Again</button>
-            <button className="btn-soft !bg-amber-100 !text-amber-700 dark:!bg-amber-900/40 dark:!text-amber-200" onClick={() => review(3)}>Hard</button>
-            <button className="btn-soft !bg-emerald-100 !text-emerald-700 dark:!bg-emerald-900/40 dark:!text-emerald-200" onClick={() => review(4)}>Good</button>
-            <button className="btn-soft !bg-brand-100 !text-brand-700 dark:!bg-brand-900/40 dark:!text-brand-200" onClick={() => review(5)}>Easy</button>
+            <button className="btn-soft !bg-rose-100 !text-rose-700 dark:!bg-rose-900/40 dark:!text-rose-200" onClick={() => review(1)}>1 Again</button>
+            <button className="btn-soft !bg-amber-100 !text-amber-700 dark:!bg-amber-900/40 dark:!text-amber-200" onClick={() => review(3)}>2 Hard</button>
+            <button className="btn-soft !bg-emerald-100 !text-emerald-700 dark:!bg-emerald-900/40 dark:!text-emerald-200" onClick={() => review(4)}>3 Good</button>
+            <button className="btn-soft !bg-brand-100 !text-brand-700 dark:!bg-brand-900/40 dark:!text-brand-200" onClick={() => review(5)}>4 Easy</button>
           </div>
         )}
       </div>
@@ -123,7 +147,7 @@ export default function Revision() {
                   </span>
                   <div className="flex-1 min-w-0">
                     <div className="font-medium truncate">{d.name}</div>
-                    <div className="text-xs text-ink-500">{total} cards · {due} due</div>
+                    <div className="text-xs text-ink-500">{total} cards - {due} due</div>
                   </div>
                 </button>
               </li>
@@ -152,7 +176,7 @@ export default function Revision() {
             </div>
 
             <div className="flex items-center justify-between mb-3 text-sm">
-              <div className="text-ink-500">{deckCards.length} cards · {dueCards.length} due now</div>
+              <div className="text-ink-500">{deckCards.length} cards - {dueCards.length} due now</div>
               <button className="btn-ghost" onClick={() => setCardModal({ front: '', back: '' })}><Icon.plus className="w-4 h-4" /> Card</button>
             </div>
 
@@ -170,7 +194,7 @@ export default function Revision() {
                   </div>
                 </li>
               ))}
-              {deckCards.length === 0 && <li className="text-center text-sm text-ink-500 py-10">No cards yet — add one or generate with AI.</li>}
+              {deckCards.length === 0 && <li className="text-center text-sm text-ink-500 py-10">No cards yet - add one or generate with AI.</li>}
             </ul>
           </>
         )}
@@ -182,7 +206,7 @@ export default function Revision() {
         <input className="input" autoFocus placeholder="Deck name" value={newDeckName} onChange={(e) => setNewDeckName(e.target.value)} />
       </Modal>
 
-      <Modal open={genOpen} onClose={() => setGenOpen(false)} title="Generate flashcards from…"
+      <Modal open={genOpen} onClose={() => setGenOpen(false)} title="Generate flashcards from..."
         footer={<><button className="btn-ghost" onClick={() => setGenOpen(false)}>Cancel</button>
         <button className="btn-primary" onClick={generate}><Icon.sparkle className="w-4 h-4" /> Generate</button></>}>
         <div className="text-sm text-ink-500 mb-2">Paste notes, a paragraph, or type a topic like "photosynthesis":</div>

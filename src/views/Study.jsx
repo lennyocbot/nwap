@@ -4,7 +4,7 @@ import { Icon } from '../components/Icons.jsx'
 import { cx, todayISO } from '../lib/utils.js'
 
 export default function Study() {
-  const { state, add, showToast, navigate } = useApp()
+  const { state, add, showToast, openAI } = useApp()
   const { focus, short, long, longEvery } = state.settings.pomodoro
 
   const [mode, setMode] = useState('focus') // focus | short | long
@@ -40,10 +40,10 @@ export default function Study() {
       setCycle(nextCycle)
       const nextMode = nextCycle % longEvery === 0 ? 'long' : 'short'
       setMode(nextMode)
-      showToast(`Focus complete · break ${nextMode === 'long' ? long : short}m`, 'success')
+      showToast(`Focus complete - break ${nextMode === 'long' ? long : short}m`, 'success')
     } else {
       setMode('focus')
-      showToast('Break over — ready to focus?', 'info')
+      showToast('Break over - ready to focus?', 'info')
     }
     setRunning(false)
     try { navigator.vibrate?.(200) } catch {}
@@ -71,9 +71,9 @@ export default function Study() {
     <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_1fr] gap-4">
       <div className="card p-6 md:p-8 flex flex-col items-center">
         <div className="flex gap-2 mb-6">
-          <Tab label={`Focus ${focus}m`} active={mode === 'focus'} onClick={() => { setMode('focus'); setRunning(false) }} />
-          <Tab label={`Short ${short}m`} active={mode === 'short'} onClick={() => { setMode('short'); setRunning(false) }} />
-          <Tab label={`Long ${long}m`} active={mode === 'long'} onClick={() => { setMode('long'); setRunning(false) }} />
+          <Tab label={`Focus (${focus}m)`} active={mode === 'focus'} onClick={() => { setMode('focus'); setRunning(false) }} />
+          <Tab label={`Short Break (${short}m)`} active={mode === 'short'} onClick={() => { setMode('short'); setRunning(false) }} />
+          <Tab label={`Long Break (${long}m)`} active={mode === 'long'} onClick={() => { setMode('long'); setRunning(false) }} />
         </div>
 
         <div className="relative w-64 h-64 md:w-80 md:h-80">
@@ -88,7 +88,7 @@ export default function Study() {
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <div className="text-6xl md:text-7xl font-display font-semibold tracking-tight tabular-nums">{mm}:{ss}</div>
-            <div className="text-xs text-ink-500 uppercase tracking-wider mt-2">{mode} · cycle {cycle + 1}</div>
+            <div className="text-xs text-ink-500 uppercase tracking-wider mt-2">{mode} - cycle {cycle + 1}</div>
           </div>
         </div>
 
@@ -98,8 +98,9 @@ export default function Study() {
             {running ? <Icon.pause className="w-5 h-5" /> : <Icon.play className="w-5 h-5" />}
             {running ? 'Pause' : 'Start'}
           </button>
-          <button className="btn-ghost" onClick={() => setDistraction((d) => d + 1)} title="Log distraction">
+          <button className="btn-soft" onClick={() => setDistraction((d) => d + 1)} title="Log distraction">
             <Icon.flag className="w-5 h-5" />
+            Log distraction
           </button>
         </div>
 
@@ -138,11 +139,16 @@ export default function Study() {
         <div className="card p-5">
           <div className="font-display font-semibold mb-2">Tips</div>
           <ul className="text-sm text-ink-600 dark:text-ink-300 space-y-1 list-disc pl-5">
-            <li>Put phone in another room — raise the cost of distraction.</li>
+            <li>Put phone in another room - raise the cost of distraction.</li>
             <li>Start with the smallest possible step.</li>
             <li>Ask AI to break an assignment into 25-minute chunks.</li>
           </ul>
-          <button className="btn-soft mt-3 w-full" onClick={() => navigate('assignments')}><Icon.sparkle className="w-4 h-4" /> Get AI to plan my next session</button>
+          <button
+            className="btn-soft mt-3 w-full"
+            onClick={() => openAI(null, 'Plan my next 25-minute study session using my current assignments, timetable, and weak topics. Give me one focused task, a mini checklist, and a break plan.')}
+          >
+            <Icon.sparkle className="w-4 h-4" /> Get AI to plan my next session
+          </button>
         </div>
       </div>
     </div>

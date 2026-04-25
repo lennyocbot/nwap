@@ -32,7 +32,7 @@ export default function Files() {
           <option value="all">All subjects</option>
           {state.subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
-        <div className="text-sm text-ink-500">{state.files.length} files · stored locally on device</div>
+        <div className="text-sm text-ink-500">{state.files.length} files - stored locally on device</div>
         <div className="flex-1" />
         <input ref={inputRef} type="file" multiple hidden onChange={onPick} />
         <button className="btn-primary" onClick={() => inputRef.current?.click()}><Icon.upload className="w-4 h-4" /> Upload</button>
@@ -40,8 +40,8 @@ export default function Files() {
 
       {list.length === 0 ? (
         <div className="card p-10 text-center text-ink-500">
-          <div className="text-5xl mb-2">📎</div>
-          No files yet — upload PDFs, images, or study docs.
+          <div className="text-5xl mb-2">[file]</div>
+          No files yet - upload PDFs, images, or study docs.
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -56,7 +56,7 @@ export default function Files() {
                     : <div className="text-4xl">{fileEmoji(f.type)}</div>}
                 </div>
                 <div className="text-sm font-medium truncate">{f.name}</div>
-                <div className="text-xs text-ink-500">{fmtSize(f.size)} · {fmtDateTime(f.createdAt)}</div>
+                <div className="text-xs text-ink-500">{fmtSize(f.size)} - {fmtDateTime(f.createdAt)}</div>
                 <div className="mt-2 flex gap-1">
                   <a className="btn-soft flex-1" href={f.data} download={f.name}><Icon.download className="w-4 h-4" /> Open</a>
                   <button className="btn-ghost text-rose-600" onClick={() => remove('files', f.id)}><Icon.trash className="w-4 h-4" /></button>
@@ -76,11 +76,11 @@ function fmtSize(n) {
   return `${(n / 1024 / 1024).toFixed(1)} MB`
 }
 function fileEmoji(type = '') {
-  if (type.startsWith('image/')) return '🖼️'
-  if (type.startsWith('video/')) return '🎬'
-  if (type.startsWith('audio/')) return '🎧'
-  if (type.includes('pdf')) return '📄'
-  if (type.includes('zip')) return '🗜️'
-  if (type.includes('text') || type.includes('markdown')) return '📝'
-  return '📁'
+  if (type.startsWith('image/')) return 'IMG'
+  if (type.startsWith('video/')) return 'VID'
+  if (type.startsWith('audio/')) return 'AUD'
+  if (type.includes('pdf')) return 'PDF'
+  if (type.includes('zip')) return 'ZIP'
+  if (type.includes('text') || type.includes('markdown')) return 'TXT'
+  return 'FILE'
 }

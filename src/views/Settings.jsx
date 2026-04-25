@@ -135,7 +135,7 @@ export default function Settings() {
           <div className="flex gap-2">
             <input className="input font-mono" type={showKey ? 'text' : 'password'}
               value={state.settings.aiKey} onChange={(e) => setSettings({ aiKey: e.target.value })}
-              placeholder={state.settings.aiProvider === 'openrouter' ? 'sk-or-v1-…' : state.settings.aiProvider === 'anthropic' ? 'sk-ant-…' : 'sk-…'} />
+              placeholder={state.settings.aiProvider === 'openrouter' ? 'sk-or-v1-...' : state.settings.aiProvider === 'anthropic' ? 'sk-ant-...' : 'sk-...'} />
             <button className="btn-ghost" onClick={() => setShowKey((v) => !v)}>{showKey ? 'Hide' : 'Show'}</button>
           </div>
           <div className="text-xs text-ink-500 mt-1">
@@ -184,7 +184,7 @@ export default function Settings() {
       </Section>
 
       <div className="text-center text-xs text-ink-400 pt-4">
-        ScholarAI · Install to iPad via Safari Share, then Add to Home Screen.
+        ScholarAI - Install to iPad via Safari Share, then Add to Home Screen.
       </div>
     </div>
   )

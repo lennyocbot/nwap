@@ -43,6 +43,15 @@ export default function Notes() {
 
   const patch = (p) => update('notes', { id: note.id, ...p, updatedAt: Date.now() })
 
+  const handleContentChange = (content) => {
+    const patchData = { content }
+    if (!note.title || /^(untitled|quick note)$/i.test(note.title.trim())) {
+      const nextTitle = titleFromContent(content)
+      if (nextTitle) patchData.title = nextTitle
+    }
+    patch(patchData)
+  }
+
   const runSummarize = async () => {
     if (!note) return
     setAiBusy(true); setAiOutput(null)
@@ -86,7 +95,7 @@ export default function Notes() {
 
   const saveCardsToDeck = (cards) => {
     if (!cards?.length) return
-    const deckName = `${note.title} — cards`
+    const deckName = `${note.title} - cards`
     const deck = add('decks', { name: deckName, subjectId: note.subjectId || null, color: 'brand' })
     cards.forEach((c) => add('flashcards', {
       deckId: deck.id, front: c.front, back: c.back,
@@ -102,7 +111,7 @@ export default function Notes() {
         <div className="flex items-center gap-2 mb-2">
           <div className="relative flex-1">
             <Icon.search className="w-4 h-4 text-ink-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input className="input pl-9" placeholder="Search notes…" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <input className="input pl-9" placeholder="Search notes..." value={query} onChange={(e) => setQuery(e.target.value)} />
           </div>
           <button className="btn-primary" onClick={createNote}><Icon.plus className="w-4 h-4" /></button>
         </div>
@@ -177,9 +186,9 @@ export default function Notes() {
             ) : (
               <textarea
                 value={note.content}
-                onChange={(e) => patch({ content: e.target.value })}
-                placeholder="# Start writing…  markdown supported"
-                className="flex-1 resize-none bg-transparent focus:outline-none text-[15px] leading-relaxed font-mono"
+                onChange={(e) => handleContentChange(e.target.value)}
+                placeholder="# Start writing...  markdown supported"
+                className="flex-1 resize-none bg-transparent focus:outline-none text-[15px] leading-relaxed"
               />
             )}
 
@@ -192,7 +201,7 @@ export default function Notes() {
               <button className="btn-ghost" onClick={() => openAI({ type: 'note', id: note.id })}><Icon.chat className="w-4 h-4" /> Ask about this note</button>
             </div>
 
-            {aiBusy && <div className="text-sm text-ink-500 animate-pulse-soft mt-3">Working…</div>}
+            {aiBusy && <div className="text-sm text-ink-500 animate-pulse-soft mt-3">Working...</div>}
             {aiOutput && (
               <div className="mt-3 p-4 rounded-2xl bg-ink-50 dark:bg-ink-800">
                 {aiOutput.kind === 'markdown' && <Markdown text={aiOutput.text} />}
@@ -209,9 +218,9 @@ export default function Notes() {
                       {aiOutput.cards.map((c, i) => (
                         <div key={i} className="card p-3 !shadow-none">
                           <div className="text-xs text-ink-500">Front</div>
-                          <div className="font-medium">{c.front}</div>
+                          <Markdown text={c.front} />
                           <div className="text-xs text-ink-500 mt-2">Back</div>
-                          <div>{c.back}</div>
+                          <Markdown text={c.back} />
                         </div>
                       ))}
                     </div>
@@ -234,7 +243,7 @@ function TagEditor({ tags, onChange }) {
       {tags.map((t) => (
         <span key={t} className="chip gap-1">
           #{t}
-          <button className="text-ink-400 hover:text-rose-500" onClick={() => onChange(tags.filter((x) => x !== t))}>×</button>
+          <button className="text-ink-400 hover:text-rose-500" onClick={() => onChange(tags.filter((x) => x !== t))}>x</button>
         </span>
       ))}
       <input
@@ -246,7 +255,7 @@ function TagEditor({ tags, onChange }) {
             setVal('')
           }
         }}
-        placeholder="add tag…" className="text-xs bg-transparent focus:outline-none px-2 py-1"
+        placeholder="add tag..." className="text-xs bg-transparent focus:outline-none px-2 py-1"
       />
     </div>
   )
@@ -291,4 +300,14 @@ function QuizBlock({ questions = [] }) {
       </div>
     </div>
   )
+}
+
+function titleFromContent(content) {
+  const heading = content.match(/^\s*#{1,3}\s+(.+)$/m)?.[1]
+  const source = heading || content.split(/\n+/).map((line) => line.trim()).find(Boolean)
+  if (!source) return ''
+  return source
+    .replace(/[*_`>#\[\]()]/g, '')
+    .replace(/\s+/g, ' ')
+    .slice(0, 60)
 }

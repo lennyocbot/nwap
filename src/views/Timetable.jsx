@@ -9,7 +9,7 @@ const days = [
   { n: 4, label: 'Thu' }, { n: 5, label: 'Fri' }, { n: 6, label: 'Sat' }, { n: 7, label: 'Sun' },
 ]
 
-const hours = Array.from({ length: 14 }, (_, i) => i + 7) // 7am–8pm
+const hours = Array.from({ length: 14 }, (_, i) => i + 7) // 7am-8pm
 
 export default function Timetable() {
   const { state, add, update, remove } = useApp()
@@ -44,7 +44,7 @@ export default function Timetable() {
         <div className="grid" style={{ gridTemplateColumns: '56px repeat(7, minmax(120px,1fr))' }}>
           <div />
           {days.map((d) => (
-            <div key={d.n} className={cx('text-center text-xs font-semibold py-2', d.n === todayN && 'text-brand-600')}>{d.label}</div>
+            <div key={d.n} className={cx('text-center text-xs font-semibold py-2 rounded-t-xl', d.n === todayN && 'text-brand-600 bg-brand-50 dark:bg-brand-900/20')}>{d.label}</div>
           ))}
           {/* time column */}
           <div className="relative border-r border-ink-100 dark:border-ink-800">
@@ -53,7 +53,7 @@ export default function Timetable() {
             ))}
           </div>
           {days.map((d) => (
-            <div key={d.n} className="relative border-l border-ink-100 dark:border-ink-800" style={{ minHeight: hours.length * 56 }}>
+            <div key={d.n} className={cx('relative border-l border-ink-100 dark:border-ink-800', d.n === todayN && 'bg-brand-50/50 dark:bg-brand-900/10')} style={{ minHeight: hours.length * 56 }}>
               {hours.map((h) => <div key={h} className="h-14 border-b border-ink-100 dark:border-ink-800" />)}
               {state.timetable.filter((t) => t.day === d.n).map((t) => {
                 const s = state.subjects.find((x) => x.id === t.subjectId)
@@ -64,7 +64,7 @@ export default function Timetable() {
                     className={cx('absolute left-1 right-1 rounded-xl text-left text-xs p-2 shadow-sm hover:shadow-pop transition text-white', c.bg)}
                     style={{ top: pos.top, height: pos.height }}>
                     <div className="font-semibold truncate">{s?.emoji} {s?.name || 'Subject'}</div>
-                    <div className="opacity-80 truncate">{fmtTime(t.start)}–{fmtTime(t.end)} · {t.room}</div>
+                    <div className="opacity-80 truncate">{fmtTime(t.start)}-{fmtTime(t.end)} - {t.room}</div>
                   </button>
                 )
               })}

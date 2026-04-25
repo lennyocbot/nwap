@@ -4,10 +4,12 @@ import { Icon } from '../components/Icons.jsx'
 import Modal from '../components/Modal.jsx'
 import { cx, colorFor, relative } from '../lib/utils.js'
 import { uid } from '../lib/utils.js'
+import { buildSystemPrompt, callAI } from '../lib/ai.js'
 
 export default function Goals() {
-  const { state, add, update, remove } = useApp()
+  const { state, add, update, remove, showToast } = useApp()
   const [edit, setEdit] = useState(null)
+  const [busy, setBusy] = useState(false)
 
   const create = () => {
     const g = add('goals', {
@@ -18,13 +20,48 @@ export default function Goals() {
     setEdit(g)
   }
 
+  const suggestGoals = async () => {
+    setBusy(true)
+    try {
+      const data = await callAI({
+        settings: state.settings,
+        system: buildSystemPrompt(state, 'Suggesting realistic A-level study goals.'),
+        json: true,
+        messages: [{
+          role: 'user',
+          content: `Suggest 3 practical study goals from my subjects, grades, assignments, and upcoming deadlines. Return JSON only: {"goals":[{"title":"...","subjectId":"existing subject id or null","deadlineDays":30,"milestones":["...","...","..."]}]}.\n\nSubjects: ${JSON.stringify(state.subjects.map((s) => ({ id: s.id, name: s.name, target: s.target })))}\nGrades: ${JSON.stringify(state.grades.slice(-12))}\nAssignments: ${JSON.stringify(state.assignments.filter((a) => a.status !== 'done').slice(0, 12))}`
+        }],
+      })
+      const suggestions = (data?.goals || []).slice(0, 3)
+      if (!suggestions.length) {
+        showToast('No goal suggestions returned', 'info')
+        return
+      }
+      suggestions.forEach((g) => {
+        add('goals', {
+          title: g.title || 'AI suggested goal',
+          subjectId: state.subjects.some((s) => s.id === g.subjectId) ? g.subjectId : null,
+          deadline: new Date(Date.now() + (Number(g.deadlineDays) || 30) * 86400000).toISOString(),
+          milestones: (g.milestones || []).slice(0, 5).map((title) => ({ id: uid(), title, done: false })),
+        })
+      })
+      showToast(`Added ${suggestions.length} AI goal suggestions`, 'success')
+    } catch (e) {
+      showToast(e.message || 'AI error', 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center">
         <div className="text-sm text-ink-500">Long-term goals & milestones</div>
         <div className="flex-1" />
+        <button className="btn-soft" onClick={suggestGoals} disabled={busy}><Icon.sparkle className="w-4 h-4" /> AI suggestions</button>
         <button className="btn-primary" onClick={create}><Icon.plus className="w-4 h-4" /> Add goal</button>
       </div>
+      {busy && <div className="text-sm text-ink-500 animate-pulse-soft">Thinking through goals...</div>}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {state.goals.map((g) => {
@@ -39,7 +76,7 @@ export default function Goals() {
                 <div className={cx('w-10 h-10 rounded-2xl flex items-center justify-center text-white', c.bg)}><Icon.goal className="w-5 h-5" /></div>
                 <div className="flex-1 min-w-0">
                   <div className="font-display font-semibold truncate">{g.title}</div>
-                  <div className="text-xs text-ink-500">{s?.name || 'General'} · {relative(g.deadline)}</div>
+                  <div className="text-xs text-ink-500">{s?.name || 'General'} - {relative(g.deadline)}</div>
                 </div>
                 <button className="btn-ghost" onClick={() => setEdit(g)}><Icon.dots className="w-5 h-5" /></button>
               </div>

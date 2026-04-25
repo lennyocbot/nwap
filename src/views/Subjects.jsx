@@ -9,7 +9,7 @@ export default function Subjects() {
   const [edit, setEdit] = useState(null)
 
   const create = () => {
-    const s = add('subjects', { name: 'New subject', teacher: '', room: '', color: 'brand', emoji: '📘', target: 85 })
+    const s = add('subjects', { name: 'New subject', teacher: '', room: '', color: 'brand', emoji: 'S', target: 85 })
     setEdit(s)
   }
 
@@ -34,10 +34,10 @@ export default function Subjects() {
           return (
             <div key={s.id} className="card p-4">
               <div className="flex items-center gap-3">
-                <div className={cx('w-12 h-12 rounded-2xl flex items-center justify-center text-white text-2xl', c.bg)}>{s.emoji || '📚'}</div>
+                <div className={cx('w-12 h-12 rounded-2xl flex items-center justify-center text-white text-2xl', c.bg)}>{s.emoji || 'S'}</div>
                 <div className="flex-1 min-w-0">
                   <div className="font-display font-semibold truncate">{s.name}</div>
-                  <div className="text-xs text-ink-500 truncate">{s.teacher} {s.room && `· ${s.room}`}</div>
+                  <div className="text-xs text-ink-500 truncate">{s.teacher} {s.room && `- ${s.room}`}</div>
                 </div>
                 <button className="btn-ghost" onClick={() => setEdit(s)}><Icon.dots className="w-5 h-5" /></button>
               </div>
@@ -45,13 +45,13 @@ export default function Subjects() {
                 <Stat label="Notes" value={count.notes} onClick={() => navigate('notes', { subject: s.id })} />
                 <Stat label="Open" value={count.assignments} onClick={() => navigate('assignments')} />
                 <Stat label="Decks" value={count.decks} onClick={() => navigate('revision')} />
-                <Stat label="Avg" value={avg != null ? `${avg}%` : '—'} onClick={() => navigate('grades')} />
+                <Stat label="Avg" value={avg != null ? `${avg}%` : '-'} onClick={() => navigate('grades')} />
               </div>
               {s.target && (
                 <div className="mt-3">
                   <div className="flex items-center justify-between text-xs text-ink-500 mb-1">
                     <span>Target {s.target}%</span>
-                    <span>{avg != null ? `${avg}%` : '—'}</span>
+                    <span>{avg != null ? `${avg}%` : '-'}</span>
                   </div>
                   <div className="h-2 rounded-full bg-ink-100 dark:bg-ink-800 overflow-hidden">
                     <div className={cx('h-full', c.bg)} style={{ width: `${Math.min(100, (avg || 0))}%` }} />

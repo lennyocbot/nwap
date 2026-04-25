@@ -56,7 +56,7 @@ export default function Assignments() {
       const txt = await callAI({
         settings: state.settings,
         system: buildSystemPrompt(state, `Breaking an assignment into concrete steps.`),
-        messages: [{ role: 'user', content: `Break the assignment "${open.title}" for ${s?.name || 'class'} (due ${new Date(open.due).toLocaleString()}) into 5–8 actionable steps with rough time estimates. Markdown checklist.\n\nNotes: ${open.notes || 'none'}` }],
+        messages: [{ role: 'user', content: `Break the assignment "${open.title}" for ${s?.name || 'class'} (due ${new Date(open.due).toLocaleString()}) into 5-8 actionable steps with rough time estimates. Markdown checklist.\n\nNotes: ${open.notes || 'none'}` }],
       })
       setAiOut(txt)
     } catch (e) { showToast(e.message || 'AI error', 'error') } finally { setAiBusy(false) }
@@ -163,7 +163,7 @@ export default function Assignments() {
               <button className="btn-soft" onClick={breakdown} disabled={aiBusy}><Icon.sparkle className="w-4 h-4" /> Break into steps</button>
               <button className="btn-ghost" onClick={() => openAI({ type: 'assignment', id: open.id })}><Icon.chat className="w-4 h-4" /> Ask AI about this</button>
             </div>
-            {aiBusy && <div className="text-sm text-ink-500 animate-pulse-soft">Planning…</div>}
+            {aiBusy && <div className="text-sm text-ink-500 animate-pulse-soft">Planning...</div>}
             {aiOut && <div className="p-3 rounded-2xl bg-ink-50 dark:bg-ink-800"><Markdown text={aiOut} /></div>}
           </div>
         )}

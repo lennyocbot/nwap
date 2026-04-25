@@ -1,5 +1,5 @@
 // Lightweight AI client supporting Anthropic Claude, OpenAI, and a built-in offline mock.
-// The user provides their own API key in Settings — it is stored only on-device.
+// The user provides their own API key in Settings - it is stored only on-device.
 
 export const buildSystemPrompt = (state, contextNote) => {
   const subjects = state.subjects.map((s) => `- ${s.name}${s.teacher ? ` (${s.teacher})` : ''}`).join('\n')
@@ -17,14 +17,14 @@ Prefer concise, structured answers with examples. Use markdown.
 
 Student profile:
 - Name: ${state.user.name || 'Student'}
-- School: ${state.user.school || '—'}
-- Year: ${state.user.year || '—'}
+- School: ${state.user.school || '-'}
+- Year: ${state.user.year || '-'}
 
 Subjects:
-${subjects || '— none yet —'}
+${subjects || '- none yet -'}
 
 Upcoming work:
-${upcoming || '— nothing pending —'}
+${upcoming || '- nothing pending -'}
 
 ${contextNote ? `\nContext for this conversation:\n${contextNote}\n` : ''}`
 }
@@ -83,7 +83,7 @@ async function callAnthropic({ settings, system, messages, json }) {
     model: settings.aiModel || 'claude-opus-4-7',
     max_tokens: 2048,
     system: json
-      ? `${system}\n\nReturn ONLY a valid JSON object — no commentary, no markdown fences.`
+      ? `${system}\n\nReturn ONLY a valid JSON object - no commentary, no markdown fences.`
       : system,
     messages: messages.map((m) => ({ role: m.role, content: m.content })),
   }
@@ -127,7 +127,7 @@ async function callOpenRouter({ settings, system, messages, json }) {
   const model = settings.aiModel || 'anthropic/claude-opus-4'
   const body = {
     model,
-    messages: [{ role: 'system', content: json ? `${system}\n\nReturn ONLY a valid JSON object — no commentary, no markdown fences.` : system }, ...messages],
+    messages: [{ role: 'system', content: json ? `${system}\n\nReturn ONLY a valid JSON object - no commentary, no markdown fences.` : system }, ...messages],
   }
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
@@ -160,21 +160,21 @@ function mockReply(messages, json) {
       return {
         cards: [
           { front: 'Sample front (configure your API key for real generation)', back: 'Sample back' },
-          { front: 'What does ScholarAI need to power AI features?', back: 'An Anthropic or OpenAI API key in Settings.' },
+          { front: 'What does ScholarAI need to power AI features?', back: 'An OpenRouter API key in Settings or Netlify.' },
         ],
       }
     }
     if (/quiz/i.test(last)) {
       return {
         questions: [
-          { q: 'Add your AI key in Settings to generate real quizzes — true or false?', choices: ['True', 'False'], answer: 0 },
+          { q: 'Add your AI key in Settings to generate real quizzes - true or false?', choices: ['True', 'False'], answer: 0 },
         ],
       }
     }
     if (/plan/i.test(last)) {
       return {
         plan: [
-          { day: 'Today', tasks: ['Add an Anthropic or OpenAI key in Settings', 'Then ask me to plan again'] },
+          { day: 'Today', tasks: ['Add an OpenRouter key in Settings', 'Then ask me to plan again'] },
         ],
       }
     }
@@ -183,7 +183,7 @@ function mockReply(messages, json) {
   return [
     "I'm running in **offline demo mode** right now.",
     '',
-    'Add an Anthropic or OpenAI API key in **Settings → AI** and I can:',
+    'Add an OpenRouter API key in **Settings -> AI** and I can:',
     '- Summarize and rewrite your notes',
     '- Generate flashcards & quizzes from any topic',
     '- Build a personalized study plan around your timetable',
@@ -208,7 +208,7 @@ export const aiGenerateFlashcards = async ({ settings, state, source, n = 8 }) =
     settings, system, json: true,
     messages: [{
       role: 'user',
-      content: `Generate ${n} high-quality flashcards from the source below. Return JSON: {"cards":[{"front":"...","back":"..."}]} — fronts should be questions or prompts, backs concise answers.\n\nSOURCE:\n${source}`
+      content: `Generate ${n} high-quality flashcards from the source below. Return JSON: {"cards":[{"front":"...","back":"..."}]} - fronts should be questions or prompts, backs concise answers.\n\nSOURCE:\n${source}`
     }],
   })
   return data?.cards || []

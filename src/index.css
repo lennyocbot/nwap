@@ -67,13 +67,29 @@ body {
 .prose-notes {
   font-size: 1rem;
   line-height: 1.65;
+  overflow-wrap: anywhere;
 }
 .prose-notes h1 { @apply text-2xl font-semibold mt-4 mb-2; }
 .prose-notes h2 { @apply text-xl font-semibold mt-3 mb-2; }
 .prose-notes h3 { @apply text-lg font-semibold mt-3 mb-1; }
+.prose-notes p { @apply my-2; }
 .prose-notes ul { @apply list-disc pl-6 my-2; }
 .prose-notes ol { @apply list-decimal pl-6 my-2; }
 .prose-notes blockquote { @apply border-l-4 border-brand-300 pl-3 my-2 italic text-ink-600 dark:text-ink-300; }
 .prose-notes code { @apply bg-ink-100 dark:bg-ink-800 px-1.5 py-0.5 rounded text-[0.9em]; }
 .prose-notes pre { @apply bg-ink-900 text-ink-50 p-3 rounded-xl overflow-auto my-2; }
+.prose-notes pre code { @apply bg-transparent p-0; }
 .prose-notes a { @apply text-brand-600 underline; }
+.prose-notes table { @apply w-full border-collapse my-3 text-sm; }
+.prose-notes th { @apply bg-ink-100 dark:bg-ink-800 font-semibold; }
+.prose-notes th,
+.prose-notes td { @apply border border-ink-200 dark:border-ink-700 px-3 py-2 text-left align-top; }
+.prose-notes .katex-display { @apply overflow-x-auto overflow-y-hidden py-2; }
+.prose-notes .contains-task-list { @apply list-none pl-0; }
+.prose-notes input[type="checkbox"] { @apply mr-2; }
+
+.react-flow__node-scholarNode {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}

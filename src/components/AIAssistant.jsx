@@ -13,14 +13,16 @@ const STARTERS = [
 ]
 
 export default function AIAssistant({ floating = true }) {
-  const { state, aiPanel, closeAI, openAI, add, update, dispatch, showToast } = useApp()
+  const { state, aiPanel, closeAI, openAI, clearAIPrompt, add, update, remove, dispatch, showToast } = useApp()
   const [chatId, setChatId] = useState(state.chats[0]?.id)
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const scrollRef = useRef(null)
+  const busyRef = useRef(false)
+  const handledPromptRef = useRef(null)
 
-  const chat = state.chats.find((c) => c.id === chatId) || state.chats[0]
+  const chat = state.chats.find((c) => c.id === chatId) || state.chats[0] || null
   const messages = chat?.messages || []
 
   useEffect(() => {
@@ -41,20 +43,42 @@ export default function AIAssistant({ floating = true }) {
     return null
   }, [aiPanel.context, state.notes, state.assignments])
 
-  const newChat = () => {
-    const c = add('chats', { title: 'New chat', messages: [], createdAt: Date.now() })
+  const createChat = (title = 'New chat') => {
+    const c = add('chats', { title, messages: [], createdAt: Date.now() })
     setChatId(c.id)
+    return c
   }
 
-  const send = async (text) => {
+  const newChat = () => createChat()
+
+  const renameChat = () => {
+    if (!chat) return
+    const title = window.prompt('Conversation name', chat.title || 'New chat')
+    if (title?.trim()) update('chats', { id: chat.id, title: title.trim().slice(0, 80) })
+  }
+
+  const deleteChat = () => {
+    if (!chat) return
+    if (state.chats.length <= 1) {
+      update('chats', { id: chat.id, title: 'New chat', messages: [], createdAt: Date.now() })
+      return
+    }
+    remove('chats', chat.id)
+    setChatId(state.chats.find((c) => c.id !== chat.id)?.id || null)
+  }
+
+  const send = async (text, targetChat = chat) => {
     const content = (text ?? input).trim()
-    if (!content || busy) return
+    if (!content || !targetChat || busyRef.current) return
+    busyRef.current = true
     setErr('')
-    const newMsgs = [...messages, { role: 'user', content, at: Date.now() }]
-    const title = chat.title === 'New chat' ? content.slice(0, 40) : chat.title
-    update('chats', { id: chat.id, messages: newMsgs, title })
+
+    const baseMessages = targetChat.messages || []
+    const newMsgs = [...baseMessages, { role: 'user', content, at: Date.now() }]
+    update('chats', { id: targetChat.id, messages: newMsgs })
     setInput('')
     setBusy(true)
+
     try {
       let reply
       const canUseServerKey = state.settings.useServerProxy !== false && !['localhost', '127.0.0.1'].includes(window.location.hostname)
@@ -91,33 +115,53 @@ export default function AIAssistant({ floating = true }) {
           messages: newMsgs.map(({ role, content }) => ({ role, content })),
         })
       }
-      update('chats', { id: chat.id, messages: [...newMsgs, { role: 'assistant', content: reply, at: Date.now() }] })
+
+      update('chats', {
+        id: targetChat.id,
+        messages: [...newMsgs, { role: 'assistant', content: reply, at: Date.now() }],
+        title: makeChatTitle(targetChat.title, content, reply),
+      })
     } catch (e) {
       setErr(e.message || 'Something went wrong')
     } finally {
+      busyRef.current = false
       setBusy(false)
     }
   }
 
+  useEffect(() => {
+    if (!aiPanel.open || !aiPanel.initialPrompt || handledPromptRef.current === aiPanel.requestId) return
+    handledPromptRef.current = aiPanel.requestId
+    const c = createChat('Daily planning')
+    const prompt = aiPanel.initialPrompt
+    clearAIPrompt?.()
+    setTimeout(() => send(prompt, c), 0)
+  }, [aiPanel.open, aiPanel.initialPrompt, aiPanel.requestId])
+
   const body = (
     <div className="flex flex-col h-full min-h-0">
-      <div className="flex items-center px-5 py-4 border-b border-ink-100 dark:border-ink-800 gap-2">
+      <div className="flex flex-wrap items-center px-5 py-4 border-b border-ink-100 dark:border-ink-800 gap-2">
         <div className="w-8 h-8 rounded-2xl bg-gradient-to-br from-brand-500 to-violet-500 flex items-center justify-center text-white">
           <Icon.sparkle className="w-4 h-4" />
         </div>
         <div className="font-display font-semibold">ScholarAI</div>
         <span className="chip">{state.settings.aiKey || state.settings.useServerProxy !== false ? state.settings.aiProvider : 'demo mode'}</span>
-        <div className="flex-1" />
-        <select
-          className="input !py-1.5 max-w-[180px]"
-          value={chat?.id}
-          onChange={(e) => setChatId(e.target.value)}
-        >
-          {state.chats.slice().sort((a, b) => b.createdAt - a.createdAt).map((c) => (
-            <option key={c.id} value={c.id}>{c.title}</option>
-          ))}
-        </select>
-        <button className="btn-ghost" onClick={newChat} title="New chat"><Icon.plus className="w-4 h-4" /></button>
+        <div className="flex-1 min-w-[12px]" />
+        <label className="flex items-center gap-2 text-xs text-ink-500 min-w-0">
+          <span className="hidden sm:inline">Conversations</span>
+          <select
+            className="input !py-1.5 max-w-[190px]"
+            value={chat?.id || ''}
+            onChange={(e) => setChatId(e.target.value)}
+          >
+            {state.chats.slice().sort((a, b) => b.createdAt - a.createdAt).map((c) => (
+              <option key={c.id} value={c.id}>{c.title || 'New chat'}</option>
+            ))}
+          </select>
+        </label>
+        <button className="btn-ghost" onClick={newChat} title="New conversation"><Icon.plus className="w-4 h-4" /></button>
+        <button className="btn-ghost" onClick={renameChat} title="Rename conversation"><Icon.note className="w-4 h-4" /></button>
+        <button className="btn-ghost text-rose-600" onClick={deleteChat} title="Delete conversation"><Icon.trash className="w-4 h-4" /></button>
         {floating && <button className="btn-ghost" onClick={closeAI} title="Close"><Icon.x className="w-4 h-4" /></button>}
       </div>
 
@@ -127,7 +171,7 @@ export default function AIAssistant({ floating = true }) {
             <div className="text-sm text-ink-500 mb-3">Try a starter</div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {STARTERS.map((s) => (
-                <button key={s.label} onClick={() => send(s.prompt)} className="card p-4 text-left hover:border-brand-300 transition">
+                <button key={s.label} onClick={() => send(s.prompt)} disabled={busy} className="card p-4 text-left hover:border-brand-300 transition disabled:opacity-60">
                   <div className="font-medium text-ink-900 dark:text-ink-50">{s.label}</div>
                   <div className="text-xs text-ink-500 mt-1 line-clamp-2">{s.prompt}</div>
                 </button>
@@ -153,7 +197,7 @@ export default function AIAssistant({ floating = true }) {
             </div>
           </div>
         ))}
-        {busy && <div className="text-sm text-ink-500 animate-pulse-soft">Thinking…</div>}
+        {busy && <div className="text-sm text-ink-500 animate-pulse-soft">Thinking...</div>}
         {err && <div className="text-sm text-accent-rose">{err}</div>}
       </div>
 
@@ -161,12 +205,16 @@ export default function AIAssistant({ floating = true }) {
         <div className="flex items-end gap-2">
           <textarea
             className="input min-h-[48px] max-h-40 resize-none"
-            placeholder="Ask anything — plan, explain, quiz, summarize…"
+            placeholder="Ask anything - plan, explain, quiz, summarize..."
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                if (!busyRef.current) send()
+              }
             }}
+            disabled={busy}
             rows={1}
           />
           <button className="btn-primary" onClick={() => send()} disabled={busy || !input.trim()}>
@@ -199,11 +247,20 @@ export default function AIAssistant({ floating = true }) {
       {aiPanel.open && (
         <div className="fixed inset-0 z-40 flex items-stretch md:items-center md:justify-end md:p-6 animate-fade-in">
           <div className="absolute inset-0 bg-black/40" onClick={closeAI} />
-          <div className="relative w-full md:w-[520px] h-full md:h-[80vh] card rounded-b-none md:rounded-3xl animate-slide-up flex flex-col min-h-0">
+          <div className="relative w-full md:w-[560px] h-full md:h-[82vh] card rounded-b-none md:rounded-3xl animate-slide-up flex flex-col min-h-0">
             {body}
           </div>
         </div>
       )}
     </>
   )
+}
+
+function makeChatTitle(current, userText, assistantText) {
+  if (current && !['New chat', 'Daily planning'].includes(current)) return current
+  if (current === 'Daily planning') return current
+  const cleanedUser = userText.replace(/\s+/g, ' ').trim()
+  if (/^(hi|hello|hey|yo|sup)[!?.\s]*$/i.test(cleanedUser)) return 'Quick chat'
+  const source = cleanedUser || assistantText.replace(/\s+/g, ' ').trim()
+  return source.length > 52 ? `${source.slice(0, 49)}...` : source || 'New chat'
 }
