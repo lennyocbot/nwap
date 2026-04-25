@@ -164,7 +164,13 @@ export function AppProvider({ children }) {
       showToast('Signed in', 'success')
       return
     }
-    const created = await supabase.auth.signUp({ email, password })
+    const created = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: window.location.origin,
+      },
+    })
     if (created.error) showToast(created.error.message, 'error')
     else showToast('Account created. Check email confirmation if Supabase requires it.', 'success')
   }, [showToast])
