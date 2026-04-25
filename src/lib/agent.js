@@ -16,6 +16,33 @@ export function classifyAssistantIntent(text) {
   return actionWords.some((word) => lower.includes(word)) ? 'action' : 'chat'
 }
 
+export function planDeterministicAction({ text, state, messages = [] }) {
+  const combined = buildCombinedRequest(text, messages)
+  const lower = combined.toLowerCase()
+  if (!/(assignment|homework|task|due)/i.test(combined)) return null
+
+  const title = parseAssignmentTitle(combined)
+  const due = parseDueDate(combined)
+  if (!title || !due) return null
+
+  const subjectId = inferSubjectId(combined, state)
+  const assignment = {
+    title,
+    subjectId,
+    due,
+    priority: /urgent|important|high priority/i.test(combined) ? 'high' : 'medium',
+    status: 'todo',
+    estMinutes: /essay/i.test(combined) ? 120 : 45,
+    notes: ''
+  }
+
+  const subjectName = state.subjects.find((s) => s.id === subjectId)?.name || 'No subject'
+  return {
+    reply: `Created assignment "${assignment.title}" for ${subjectName}, due ${new Date(assignment.due).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}.`,
+    actions: [{ type: 'create_assignment', payload: assignment }]
+  }
+}
+
 export function buildAgentSystemPrompt(state) {
   const subjects = state.subjects.map((s) => ({ id: s.id, name: s.name }))
   const decks = state.decks.map((d) => ({ id: d.id, name: d.name, subjectId: d.subjectId }))
@@ -146,6 +173,102 @@ export function applyAgentActions({ actions, state, dispatch }) {
 
 function validSubject(state, subjectId) {
   return state.subjects.some((s) => s.id === subjectId) ? subjectId : null
+}
+
+function buildCombinedRequest(text, messages) {
+  const previousUser = [...messages]
+    .reverse()
+    .find((m) => m.role === 'user' && m.content !== text && /(assignment|homework|task|due)/i.test(m.content))
+
+  if (previousUser && !/(assignment|homework|task|due)/i.test(text)) {
+    return `${previousUser.content} ${text}`
+  }
+
+  return text
+}
+
+function parseAssignmentTitle(text) {
+  const called = text.match(/\bcalled\s+["']?([^"',.]+)["']?/i)
+  if (called?.[1]) return tidyTitle(called[1])
+
+  const titled = text.match(/\btitled\s+["']?([^"',.]+)["']?/i)
+  if (titled?.[1]) return tidyTitle(titled[1])
+
+  const on = text.match(/\b(?:assignment|homework|task)\s+(?:on|about|for)\s+([^,.]+?)(?:\s+due|\s+for\s+the|\s+on\s+the|$)/i)
+  if (on?.[1]) return tidyTitle(on[1])
+
+  return ''
+}
+
+function tidyTitle(value) {
+  return value
+    .replace(/\b(april|may|june|july|august|september|october|november|december|january|february|march)\b.*$/i, '')
+    .replace(/\b(maths?|mathematics|physics|economics|econ)\b.*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function parseDueDate(text) {
+  const now = new Date()
+  const lower = text.toLowerCase()
+  const months = {
+    january: 0, february: 1, march: 2, april: 3, may: 4, june: 5,
+    july: 6, august: 7, september: 8, october: 9, november: 10, december: 11
+  }
+
+  const dayMatch = lower.match(/\b(?:for|on|due|the)\s+the\s+(\d{1,2})(?:st|nd|rd|th)?\b|\b(\d{1,2})(?:st|nd|rd|th)\b/)
+  const monthName = Object.keys(months).find((month) => lower.includes(month))
+  const yearMatch = lower.match(/\b(20\d{2})\b/)
+
+  if (dayMatch) {
+    const day = Number(dayMatch[1] || dayMatch[2])
+    const month = monthName ? months[monthName] : now.getMonth()
+    const year = yearMatch ? Number(yearMatch[1]) : now.getFullYear()
+    const date = new Date(year, month, day, 23, 59, 0, 0)
+    if (!Number.isNaN(date.getTime())) return date.toISOString()
+  }
+
+  if (lower.includes('tomorrow')) return endOfDay(1)
+  if (lower.includes('today')) return endOfDay(0)
+  if (lower.includes('friday')) return nextWeekday(5)
+  if (lower.includes('monday')) return nextWeekday(1)
+  if (lower.includes('tuesday')) return nextWeekday(2)
+  if (lower.includes('wednesday')) return nextWeekday(3)
+  if (lower.includes('thursday')) return nextWeekday(4)
+  if (lower.includes('saturday')) return nextWeekday(6)
+  if (lower.includes('sunday')) return nextWeekday(0)
+
+  return ''
+}
+
+function inferSubjectId(text, state) {
+  const lower = text.toLowerCase()
+  const aliases = {
+    maths: 'mathematics',
+    math: 'mathematics',
+    econ: 'economics'
+  }
+
+  return state.subjects.find((subject) => {
+    const name = subject.name.toLowerCase()
+    return lower.includes(name) || Object.entries(aliases).some(([alias, full]) => lower.includes(alias) && name.includes(full))
+  })?.id || null
+}
+
+function endOfDay(offset) {
+  const date = new Date()
+  date.setDate(date.getDate() + offset)
+  date.setHours(23, 59, 0, 0)
+  return date.toISOString()
+}
+
+function nextWeekday(target) {
+  const date = new Date()
+  const today = date.getDay()
+  const delta = (target + 7 - today) % 7 || 7
+  date.setDate(date.getDate() + delta)
+  date.setHours(23, 59, 0, 0)
+  return date.toISOString()
 }
 
 function safeDate(value, fallbackDays) {

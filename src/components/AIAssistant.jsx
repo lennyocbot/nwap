@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../context/AppContext.jsx'
 import { buildSystemPrompt, callAI } from '../lib/ai.js'
-import { applyAgentActions, buildAgentSystemPrompt, classifyAssistantIntent } from '../lib/agent.js'
+import { applyAgentActions, buildAgentSystemPrompt, classifyAssistantIntent, planDeterministicAction } from '../lib/agent.js'
 import { Icon } from './Icons.jsx'
 import Markdown from './Markdown.jsx'
 
@@ -57,7 +57,12 @@ export default function AIAssistant({ floating = true }) {
     setBusy(true)
     try {
       let reply
-      if (classifyAssistantIntent(content) === 'action') {
+      const deterministic = planDeterministicAction({ text: content, state, messages: newMsgs })
+      if (deterministic) {
+        const applied = applyAgentActions({ actions: deterministic.actions, state, dispatch })
+        reply = deterministic.reply
+        if (applied.length) showToast(`AI ${applied[0]}`, 'success')
+      } else if (classifyAssistantIntent(content) === 'action') {
         const canUseServerKey = state.settings.useServerProxy !== false && !['localhost', '127.0.0.1'].includes(window.location.hostname)
         if (!state.settings.aiKey && state.settings.aiProvider !== 'mock' && !canUseServerKey) {
           reply = 'I can change your planner, but first add your OpenRouter key in Settings -> AI or set OPENROUTER_API_KEY in Netlify.'

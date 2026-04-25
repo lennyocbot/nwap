@@ -22,7 +22,7 @@ const titles = {
 }
 
 export default function TopBar({ onMenu }) {
-  const { route, openAI } = useApp()
+  const { route, openAI, account, navigate } = useApp()
   return (
     <header className="sticky top-0 z-20 backdrop-blur bg-white/70 dark:bg-ink-950/70 border-b border-ink-100 dark:border-ink-800">
       <div className="px-4 md:px-8 py-3 flex items-center gap-3" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)' }}>
@@ -33,6 +33,10 @@ export default function TopBar({ onMenu }) {
           {titles[route.name] || 'ScholarAI'}
         </h1>
         <div className="flex-1" />
+        <button className="btn-soft" onClick={() => navigate('settings')} title="Account sync">
+          <Icon.settings className="w-4 h-4" />
+          <span className="hidden sm:inline">{account.user ? 'Synced' : 'Sign in'}</span>
+        </button>
         <button className="btn-soft" onClick={() => openAI()}>
           <Icon.sparkle className="w-4 h-4" />
           <span className="hidden sm:inline">Ask AI</span>

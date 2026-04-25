@@ -26,7 +26,7 @@ const secondary = [
 ]
 
 export default function Sidebar({ open, onClose }) {
-  const { route, navigate, state } = useApp()
+  const { route, navigate, state, account } = useApp()
   const IconOf = (k) => Icon[k]
 
   const Item = ({ id, label, icon }) => {
@@ -62,6 +62,9 @@ export default function Sidebar({ open, onClose }) {
         <div className="space-y-1">{secondary.map((x) => <Item key={x.id} {...x} />)}</div>
       </div>
       <div className="p-3 border-t border-ink-100 dark:border-ink-800">
+        <button onClick={() => navigate('settings')} className="w-full btn-soft mb-2">
+          <Icon.settings className="w-4 h-4" /> {account.user ? 'Account synced' : 'Sign in to sync'}
+        </button>
         <button onClick={() => navigate('ai')} className="w-full btn-primary">
           <Icon.sparkle className="w-4 h-4" /> Ask ScholarAI
         </button>
