@@ -1,4 +1,5 @@
 import { uid } from './utils.js'
+import { normalizeAIText } from './text.js'
 
 const actionWords = [
   'add', 'create', 'make', 'schedule', 'plan', 'move', 'reschedule', 'revise',
@@ -37,6 +38,7 @@ Rules:
 - Use prior user messages in the conversation to resolve follow-ups. Example: if the user first asks "add an assignment for the 27th called volleyball" and then says "april 2026, maths", create the assignment.
 - Never claim that something was added, created, moved, deleted, or updated unless you return a matching action.
 - For normal study questions, explanations, greetings, or brainstorming, return actions: [] and handoffToChat: true unless a short direct reply is enough.
+- For quiz requests, return a present_quiz action with interactive questions. Do not create a note unless the user explicitly asks to save the quiz to notes.
 - Dates must be ISO strings. If the user gives a day/month/year, use 23:59 local time for assignments unless they gave a time.
 - Match subjects to existing subject ids, accepting common aliases and typos like maths -> Mathematics and econ -> Economics.
 
@@ -49,6 +51,7 @@ Supported action objects:
 {"type":"create_deck","payload":{"name":"...","subjectId":"existing subject id or null","color":"brand"}}
 {"type":"create_flashcards","payload":{"deckName":"...","subjectId":"existing subject id or null","cards":[{"front":"...","back":"..."}]}}
 {"type":"update_assignment","payload":{"id":"existing assignment id","patch":{"status":"doing"}}}
+{"type":"present_quiz","payload":{"title":"...","questions":[{"q":"...","choices":["...","...","...","..."],"answer":0,"explain":"..."}]}}
 
 ${contextNote ? `Current page context:\n${contextNote}\n` : ''}
 Subjects: ${JSON.stringify(subjects)}
@@ -71,7 +74,7 @@ export function applyAgentActions({ actions, state, dispatch }) {
         priority: ['low', 'medium', 'high'].includes(payload.priority) ? payload.priority : 'medium',
         status: ['todo', 'doing', 'done'].includes(payload.status) ? payload.status : 'todo',
         estMinutes: Number(payload.estMinutes) || 60,
-        notes: payload.notes || ''
+        notes: normalizeAIText(payload.notes || '')
       }
       dispatch({ type: 'add', key: 'assignments', item })
       applied.push(`created assignment "${item.title}"`)
@@ -81,7 +84,7 @@ export function applyAgentActions({ actions, state, dispatch }) {
       const item = {
         id: uid(),
         title: payload.title || 'AI note',
-        content: payload.content || '',
+        content: normalizeAIText(payload.content || ''),
         subjectId: validSubject(state, payload.subjectId),
         tags: Array.isArray(payload.tags) ? payload.tags.slice(0, 6) : ['ai'],
         pinned: Boolean(payload.pinned),
@@ -98,7 +101,7 @@ export function applyAgentActions({ actions, state, dispatch }) {
         title: payload.title || 'New event',
         date: safeDate(payload.date, 1),
         color: payload.color || 'brand',
-        notes: payload.notes || ''
+        notes: normalizeAIText(payload.notes || '')
       }
       dispatch({ type: 'add', key: 'events', item })
       applied.push(`created event "${item.title}"`)
@@ -111,7 +114,7 @@ export function applyAgentActions({ actions, state, dispatch }) {
         start: timeOr(payload.start, '16:00'),
         end: timeOr(payload.end, '17:00'),
         subjectId: validSubject(state, payload.subjectId),
-        room: payload.room || ''
+        room: normalizeAIText(payload.room || '')
       }
       dispatch({ type: 'add', key: 'timetable', item })
       applied.push(`scheduled ${item.start}-${item.end}`)
@@ -156,8 +159,8 @@ export function applyAgentActions({ actions, state, dispatch }) {
           item: {
             id: uid(),
             deckId: deck.id,
-            front: card.front || 'Question',
-            back: card.back || 'Answer',
+            front: normalizeAIText(card.front || 'Question'),
+            back: normalizeAIText(card.back || 'Answer'),
             ease: 2.5,
             interval: 1,
             due: Date.now(),

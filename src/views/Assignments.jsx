@@ -5,6 +5,7 @@ import Modal from '../components/Modal.jsx'
 import Markdown from '../components/Markdown.jsx'
 import { cx, colorFor, daysUntil, fmtDateTime, relative } from '../lib/utils.js'
 import { callAI, buildSystemPrompt } from '../lib/ai.js'
+import { normalizeAIText } from '../lib/text.js'
 
 const priorities = ['low', 'medium', 'high']
 const columns = [
@@ -58,7 +59,7 @@ export default function Assignments() {
         system: buildSystemPrompt(state, `Breaking an assignment into concrete steps.`),
         messages: [{ role: 'user', content: `Break the assignment "${open.title}" for ${s?.name || 'class'} (due ${new Date(open.due).toLocaleString()}) into 5-8 actionable steps with rough time estimates. Markdown checklist.\n\nNotes: ${open.notes || 'none'}` }],
       })
-      setAiOut(txt)
+      setAiOut(normalizeAIText(txt))
     } catch (e) { showToast(e.message || 'AI error', 'error') } finally { setAiBusy(false) }
   }
 
@@ -87,6 +88,7 @@ export default function Assignments() {
                 const s = state.subjects.find((x) => x.id === a.subjectId)
                 const c = colorFor(s?.color)
                 const d = daysUntil(a.due)
+                const logged = assignmentMinutes(state.studySessions, a.id)
                 return (
                   <div key={a.id} className="group bg-white dark:bg-ink-900 p-3 rounded-2xl border border-ink-100 dark:border-ink-800">
                     <div className="flex items-start gap-2">
@@ -101,6 +103,7 @@ export default function Assignments() {
                           {s && <span className={cx('chip', c.soft)}>{s.emoji} {s.name}</span>}
                           <span className={cx('chip', priorityTone(a.priority))}>{a.priority}</span>
                           <span className={cx('chip', d < 0 && a.status !== 'done' && 'bg-rose-100 text-rose-700')}>{relative(a.due)}</span>
+                          {logged > 0 && <span className="chip"><Icon.timer className="w-3 h-3" /> {logged}m focused</span>}
                         </div>
                       </button>
                     </div>
@@ -125,6 +128,20 @@ export default function Assignments() {
         )}>
         {open && (
           <div className="space-y-3">
+            {assignmentMinutes(state.studySessions, open.id) > 0 && (
+              <div className="rounded-2xl border border-brand-100 bg-brand-50 p-3 text-sm dark:border-brand-900 dark:bg-brand-900/20">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium">Logged focus time</span>
+                  <span className="font-display text-xl font-semibold">{assignmentMinutes(state.studySessions, open.id)}m</span>
+                </div>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-white dark:bg-ink-900">
+                  <div
+                    className="h-full bg-brand-500"
+                    style={{ width: `${Math.min(100, (assignmentMinutes(state.studySessions, open.id) / Math.max(1, open.estMinutes || 1)) * 100)}%` }}
+                  />
+                </div>
+              </div>
+            )}
             <input className="input text-lg font-semibold" value={open.title} onChange={(e) => saveOpen({ title: e.target.value })} />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <div>
@@ -186,4 +203,10 @@ function priorityTone(p) {
     medium: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200',
     low: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200',
   }[p] || ''
+}
+
+function assignmentMinutes(studySessions, assignmentId) {
+  return (studySessions || [])
+    .filter((session) => session.assignmentId === assignmentId)
+    .reduce((total, session) => total + (Number(session.minutes) || 0), 0)
 }

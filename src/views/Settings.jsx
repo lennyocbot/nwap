@@ -4,7 +4,7 @@ import { Icon } from '../components/Icons.jsx'
 import { cx, downloadJSON, subjectColors } from '../lib/utils.js'
 
 export default function Settings() {
-  const { state, setSettings, setUser, showToast, reset, replaceAll, account, signIn, signOut } = useApp()
+  const { state, setSettings, setUser, showToast, reset, replaceAll, account, signIn, signOut, retrySync } = useApp()
   const [showKey, setShowKey] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -60,11 +60,21 @@ export default function Settings() {
       <Section title="Account sync" icon="settings">
         {account.user ? (
           <div className="space-y-3">
-            <div className="text-sm">
-              Signed in as <span className="font-semibold">{account.user.email}</span>
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-3 dark:border-emerald-900 dark:bg-emerald-900/20">
+              <div className="text-sm font-semibold">Cloud workspace</div>
+              <div className="text-sm mt-1">
+                Signed in as <span className="font-semibold">{account.user.email}</span>
+              </div>
+              <div className="text-xs text-ink-500 mt-1">This dashboard, notes, files, chats, and settings sync across devices.</div>
             </div>
-            <div className="text-xs text-ink-500">Sync status: {account.sync}</div>
-            <button className="btn-soft" onClick={signOut}>Sign out</button>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-ink-500">
+              <span className="chip">Sync: {account.sync}</span>
+              {account.error && <span className="text-rose-600">{account.error}</span>}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button className="btn-soft" onClick={retrySync} type="button">Retry sync</button>
+              <button className="btn-soft" onClick={signOut} type="button">Sign out</button>
+            </div>
           </div>
         ) : (
           <form
@@ -81,8 +91,11 @@ export default function Settings() {
               <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
             </Field>
             <button className="btn-primary">Sign in or create account</button>
+            <div className="rounded-2xl border border-amber-100 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-100">
+              Local demo mode. Nothing here is shared across devices until you sign in. AI keys stay on this device and are never synced to Supabase.
+            </div>
             <div className="text-xs text-ink-500">
-              {account.sync}. Your workspace syncs across devices after Supabase is connected. AI keys stay on this device.
+              Status: {account.sync}
             </div>
           </form>
         )}

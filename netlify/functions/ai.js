@@ -48,7 +48,7 @@ async function callOpenRouter({ model, system, messages, json: wantsJson, apiKey
       'X-Title': 'ScholarAI'
     },
     body: JSON.stringify({
-      model: model || 'anthropic/claude-3.5-sonnet',
+      model: model || 'anthropic/claude-sonnet-4-5',
       response_format: wantsJson ? { type: 'json_object' } : undefined,
       messages: [
         { role: 'system', content: wantsJson ? `${system}\n\nReturn ONLY valid JSON.` : system },

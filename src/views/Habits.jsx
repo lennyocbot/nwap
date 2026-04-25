@@ -7,6 +7,7 @@ import { cx, todayISO } from '../lib/utils.js'
 export default function Habits() {
   const { state, add, update, remove } = useApp()
   const [edit, setEdit] = useState(null)
+  const today = todayISO()
 
   const last30 = useMemo(() => {
     return Array.from({ length: 30 }, (_, i) => {
@@ -43,8 +44,9 @@ export default function Habits() {
               {last30.map((d, i) => {
                 const date = new Date(`${d}T00:00:00`)
                 const showMonth = i === 0 || date.getDate() === 1
+                const isToday = d === today
                 return (
-                  <th key={d} className="font-normal">
+                  <th key={d} className={cx('font-normal rounded-lg', isToday && 'bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-100')}>
                     <div className="h-4 text-[9px] text-ink-500">{showMonth ? date.toLocaleDateString(undefined, { month: 'short' }) : ''}</div>
                     <div>{date.getDate()}</div>
                   </th>
@@ -63,12 +65,13 @@ export default function Habits() {
                   </button>
                 </td>
                 {last30.map((d) => (
-                  <td key={d} className="text-center">
+                  <td key={d} className={cx('text-center', d === today && 'bg-brand-50/60 dark:bg-brand-900/20')}>
                     <button onClick={() => toggle(h, d)}
                       className={cx('w-6 h-6 rounded-md mx-auto block transition',
                         h.log[d]
-                          ? 'bg-emerald-500'
-                          : 'border border-ink-200 bg-white hover:bg-ink-100 dark:border-ink-700 dark:bg-ink-900 dark:hover:bg-ink-800')}
+                          ? 'bg-emerald-500 ring-1 ring-emerald-300'
+                          : 'border border-ink-300 bg-white hover:bg-ink-100 dark:border-ink-600 dark:bg-ink-900 dark:hover:bg-ink-800',
+                        d === today && 'ring-2 ring-brand-300')}
                       title={d} />
                   </td>
                 ))}

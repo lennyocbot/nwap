@@ -124,7 +124,7 @@ async function callOpenAI({ settings, system, messages, json }) {
 }
 
 async function callOpenRouter({ settings, system, messages, json }) {
-  const model = settings.aiModel || 'anthropic/claude-opus-4'
+  const model = settings.aiModel || 'anthropic/claude-sonnet-4-5'
   const body = {
     model,
     messages: [{ role: 'system', content: json ? `${system}\n\nReturn ONLY a valid JSON object - no commentary, no markdown fences.` : system }, ...messages],

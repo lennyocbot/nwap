@@ -26,10 +26,17 @@ export function AppProvider({ children }) {
   const [route, setRoute] = useState({ name: 'dashboard', params: {} })
   const [aiPanel, setAiPanel] = useState({ open: false, context: null, initialPrompt: null, requestId: null })
   const [toast, setToast] = useState(null)
-  const [account, setAccount] = useState({ user: null, ready: false, sync: hasSupabase ? 'Not signed in' : 'Supabase not configured' })
-  const cloudLoadedRef = useRef(false)
+  const [account, setAccount] = useState({
+    user: null,
+    ready: !hasSupabase,
+    sync: hasSupabase ? 'Checking session...' : 'Supabase not configured',
+    error: null,
+  })
+  const cloudLoadedRef = useRef(!hasSupabase)
 
-  useEffect(() => { saveState(state) }, [state])
+  useEffect(() => {
+    saveState(account.user ? localCacheState(state) : state)
+  }, [state, account.user])
 
   useEffect(() => {
     if (!supabase) {
@@ -40,17 +47,25 @@ export function AppProvider({ children }) {
     const loadSession = async () => {
       const { data } = await supabase.auth.getSession()
       const user = data.session?.user || null
-      setAccount({ user, ready: true, sync: user ? 'Loading cloud workspace...' : 'Not signed in' })
+      cloudLoadedRef.current = false
+      setAccount({ user, ready: true, sync: user ? 'Loading cloud workspace...' : 'Local demo mode', error: null })
       if (user) await loadCloudState(user.id)
-      else cloudLoadedRef.current = true
+      else {
+        cloudLoadedRef.current = true
+        dispatch({ type: 'replace-all', value: restoreLocalSecrets(defaultState, loadState()) })
+      }
     }
 
     loadSession()
     const { data } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const user = session?.user || null
-      setAccount({ user, ready: true, sync: user ? 'Loading cloud workspace...' : 'Not signed in' })
+      cloudLoadedRef.current = false
+      setAccount({ user, ready: true, sync: user ? 'Loading cloud workspace...' : 'Local demo mode', error: null })
       if (user) await loadCloudState(user.id)
-      else cloudLoadedRef.current = true
+      else {
+        cloudLoadedRef.current = true
+        dispatch({ type: 'replace-all', value: restoreLocalSecrets(defaultState, loadState()) })
+      }
     })
 
     return () => data.subscription.unsubscribe()
@@ -59,30 +74,42 @@ export function AppProvider({ children }) {
   useEffect(() => {
     if (!supabase || !account.user || !cloudLoadedRef.current) return
     const handle = setTimeout(async () => {
-      setAccount((current) => ({ ...current, sync: 'Saving...' }))
-      const { error } = await supabase
-        .from('app_states')
-        .upsert({ user_id: account.user.id, state: cloudSafeState(state), updated_at: new Date().toISOString() })
-      setAccount((current) => ({ ...current, sync: error ? error.message : 'Synced' }))
+      await saveCloudState(account.user.id, state)
     }, 900)
 
     return () => clearTimeout(handle)
-  }, [state, account.user])
+  }, [state, account.user?.id])
 
   const loadCloudState = async (userId) => {
+    cloudLoadedRef.current = false
     const { data, error } = await supabase.from('app_states').select('state').eq('user_id', userId).maybeSingle()
-    cloudLoadedRef.current = true
     if (error) {
-      setAccount((current) => ({ ...current, sync: error.message }))
+      cloudLoadedRef.current = true
+      setAccount((current) => ({ ...current, sync: 'Sync error', error: error.message }))
       return
     }
     if (data?.state) {
-      dispatch({ type: 'replace-all', value: restoreLocalSecrets(data.state, loadState()) })
+      const nextState = restoreLocalSecrets(data.state, loadState())
+      cloudLoadedRef.current = true
+      dispatch({ type: 'replace-all', value: nextState })
       setAccount((current) => ({ ...current, sync: 'Cloud workspace loaded' }))
     } else {
-      await supabase.from('app_states').upsert({ user_id: userId, state: cloudSafeState(loadState()) })
-      setAccount((current) => ({ ...current, sync: 'Cloud workspace created' }))
+      const nextState = restoreLocalSecrets(defaultState, loadState())
+      const createError = await saveCloudState(userId, nextState, 'Cloud workspace created')
+      cloudLoadedRef.current = true
+      dispatch({ type: 'replace-all', value: nextState })
+      if (!createError) setAccount((current) => ({ ...current, sync: 'Cloud workspace created', error: null }))
     }
+  }
+
+  const saveCloudState = async (userId, nextState = state, success = 'Synced') => {
+    if (!supabase || !userId) return null
+    setAccount((current) => ({ ...current, sync: 'Saving...', error: null }))
+    const { error } = await supabase
+      .from('app_states')
+      .upsert({ user_id: userId, state: cloudSafeState(nextState), updated_at: new Date().toISOString() })
+    setAccount((current) => ({ ...current, sync: error ? 'Sync error' : success, error: error?.message || null }))
+    return error
   }
 
   // Theme
@@ -144,8 +171,15 @@ export function AppProvider({ children }) {
 
   const signOut = useCallback(async () => {
     await supabase?.auth.signOut()
+    resetState()
+    replaceAll(restoreLocalSecrets(defaultState, loadState()))
     showToast('Signed out', 'success')
-  }, [showToast])
+  }, [replaceAll, showToast])
+
+  const retrySync = useCallback(async () => {
+    if (!account.user) return
+    await saveCloudState(account.user.id, state)
+  }, [account.user, state])
 
   const reset = useCallback(() => {
     resetState()
@@ -156,10 +190,10 @@ export function AppProvider({ children }) {
     state, dispatch, add, update, remove, set, merge, replaceAll, setSettings, setUser,
     route, navigate,
     aiPanel, openAI, closeAI, clearAIPrompt,
-    account, signIn, signOut,
+    account, signIn, signOut, retrySync,
     toast, showToast,
     reset,
-  }), [state, add, update, remove, set, merge, replaceAll, setSettings, setUser, route, navigate, aiPanel, openAI, closeAI, clearAIPrompt, account, signIn, signOut, toast, showToast, reset])
+  }), [state, add, update, remove, set, merge, replaceAll, setSettings, setUser, route, navigate, aiPanel, openAI, closeAI, clearAIPrompt, account, signIn, signOut, retrySync, toast, showToast, reset])
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>
 }
@@ -173,10 +207,18 @@ export const useApp = () => {
 function cloudSafeState(state) {
   return {
     ...state,
+    files: (state.files || []).map(stripFileForCloud),
     settings: {
       ...state.settings,
       aiKey: ''
     }
+  }
+}
+
+function localCacheState(state) {
+  return {
+    ...state,
+    files: (state.files || []).map((file) => file?.storagePath ? stripFileForCloud(file) : file)
   }
 }
 
@@ -188,6 +230,12 @@ function restoreLocalSecrets(cloudState, localState) {
       ...defaultState.settings,
       ...(cloudState.settings || {}),
       aiKey: localState.settings?.aiKey || ''
-    }
+    },
+    files: (cloudState.files || []).map(stripFileForCloud)
   }
+}
+
+function stripFileForCloud(file) {
+  const { data, signedUrl, previewUrl, ...metadata } = file || {}
+  return metadata
 }

@@ -6,7 +6,7 @@ export const defaultState = {
     theme: 'system',
     accent: 'brand',
     aiProvider: 'openrouter',
-    aiModel: 'anthropic/claude-3.5-sonnet',
+    aiModel: 'anthropic/claude-sonnet-4-5',
     aiKey: '',
     useServerProxy: true,
     pomodoro: { focus: 25, short: 5, long: 15, longEvery: 4 },

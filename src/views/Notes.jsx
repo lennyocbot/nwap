@@ -5,6 +5,7 @@ import Markdown from '../components/Markdown.jsx'
 import Modal from '../components/Modal.jsx'
 import { cx, colorFor } from '../lib/utils.js'
 import { aiSummarizeNote, aiGenerateFlashcards, aiGenerateQuiz, callAI, buildSystemPrompt } from '../lib/ai.js'
+import { normalizeAIText } from '../lib/text.js'
 
 export default function Notes() {
   const { state, add, update, remove, navigate, route, openAI, showToast } = useApp()
@@ -57,7 +58,7 @@ export default function Notes() {
     setAiBusy(true); setAiOutput(null)
     try {
       const res = await aiSummarizeNote({ settings: state.settings, state, note })
-      setAiOutput({ kind: 'markdown', text: res })
+      setAiOutput({ kind: 'markdown', text: normalizeAIText(res) })
     } catch (e) { showToast(e.message || 'AI error', 'error') } finally { setAiBusy(false) }
   }
 
@@ -66,7 +67,10 @@ export default function Notes() {
     setAiBusy(true); setAiOutput(null)
     try {
       const cards = await aiGenerateFlashcards({ settings: state.settings, state, source: note.content })
-      setAiOutput({ kind: 'cards', cards })
+      setAiOutput({
+        kind: 'cards',
+        cards: cards.map((card) => ({ ...card, front: normalizeAIText(card.front), back: normalizeAIText(card.back) })),
+      })
     } catch (e) { showToast(e.message || 'AI error', 'error') } finally { setAiBusy(false) }
   }
 
@@ -75,7 +79,15 @@ export default function Notes() {
     setAiBusy(true); setAiOutput(null)
     try {
       const questions = await aiGenerateQuiz({ settings: state.settings, state, source: note.content })
-      setAiOutput({ kind: 'quiz', questions })
+      setAiOutput({
+        kind: 'quiz',
+        questions: questions.map((question) => ({
+          ...question,
+          q: normalizeAIText(question.q),
+          choices: (question.choices || []).map(normalizeAIText),
+          explain: normalizeAIText(question.explain || ''),
+        })),
+      })
     } catch (e) { showToast(e.message || 'AI error', 'error') } finally { setAiBusy(false) }
   }
 
@@ -88,7 +100,7 @@ export default function Notes() {
         system: buildSystemPrompt(state, 'Rewriting a note for clarity.'),
         messages: [{ role: 'user', content: `Rewrite this note to be clearer and better structured with headings and bullet points. Keep facts intact.\n\n${note.content}` }],
       })
-      patch({ content: text })
+      patch({ content: normalizeAIText(text) })
       showToast('Note rewritten', 'success')
     } catch (e) { showToast(e.message || 'AI error', 'error') } finally { setAiBusy(false) }
   }
@@ -98,7 +110,7 @@ export default function Notes() {
     const deckName = `${note.title} - cards`
     const deck = add('decks', { name: deckName, subjectId: note.subjectId || null, color: 'brand' })
     cards.forEach((c) => add('flashcards', {
-      deckId: deck.id, front: c.front, back: c.back,
+      deckId: deck.id, front: normalizeAIText(c.front), back: normalizeAIText(c.back),
       ease: 2.5, interval: 1, due: Date.now(), reviews: 0,
     }))
     showToast(`Saved ${cards.length} cards to "${deckName}"`, 'success')

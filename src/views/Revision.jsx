@@ -5,6 +5,7 @@ import Modal from '../components/Modal.jsx'
 import Markdown from '../components/Markdown.jsx'
 import { cx, colorFor } from '../lib/utils.js'
 import { aiGenerateFlashcards } from '../lib/ai.js'
+import { normalizeAIText } from '../lib/text.js'
 
 // Very light SM-2 style scheduler
 const schedule = (card, quality) => {
@@ -25,8 +26,8 @@ const schedule = (card, quality) => {
 }
 
 export default function Revision() {
-  const { state, add, update, remove, showToast } = useApp()
-  const [deckId, setDeckId] = useState(state.decks[0]?.id || null)
+  const { state, add, update, remove, showToast, route } = useApp()
+  const [deckId, setDeckId] = useState(route.params?.deckId || state.decks[0]?.id || null)
   const [studying, setStudying] = useState(false)
   const [creatingDeck, setCreatingDeck] = useState(false)
   const [newDeckName, setNewDeckName] = useState('')
@@ -41,6 +42,14 @@ export default function Revision() {
   const [queue, setQueue] = useState([])
   const [idx, setIdx] = useState(0)
   const [flipped, setFlipped] = useState(false)
+
+  useEffect(() => {
+    if (route.params?.deckId) setDeckId(route.params.deckId)
+    if (route.params?.cardId) {
+      const card = state.flashcards.find((item) => item.id === route.params.cardId)
+      if (card) setCardModal(card)
+    }
+  }, [route.params?.deckId, route.params?.cardId, state.flashcards])
 
   const startStudy = () => {
     const q = deckCards.filter((c) => c.due <= Date.now()).slice().sort(() => Math.random() - 0.5)
@@ -84,7 +93,7 @@ export default function Revision() {
     try {
       const cards = await aiGenerateFlashcards({ settings: state.settings, state, source: genSource })
       cards.forEach((c) => add('flashcards', {
-        deckId: deck.id, front: c.front, back: c.back,
+        deckId: deck.id, front: normalizeAIText(c.front), back: normalizeAIText(c.back),
         ease: 2.5, interval: 1, due: Date.now(), reviews: 0,
       }))
       showToast(`Added ${cards.length} cards`, 'success')

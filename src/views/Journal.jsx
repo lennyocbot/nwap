@@ -3,18 +3,19 @@ import { useApp } from '../context/AppContext.jsx'
 import { Icon } from '../components/Icons.jsx'
 import { cx, todayISO } from '../lib/utils.js'
 import { callAI, buildSystemPrompt } from '../lib/ai.js'
+import { normalizeAIText } from '../lib/text.js'
 import Markdown from '../components/Markdown.jsx'
 
 const moods = [
-  { key: 1, emoji: ':(', label: 'Low' },
-  { key: 2, emoji: ':/', label: 'Meh' },
-  { key: 3, emoji: ':|', label: 'Okay' },
-  { key: 4, emoji: ':)', label: 'Good' },
-  { key: 5, emoji: ':D', label: 'Great' },
+  { key: 1, emoji: '😔', label: 'Low' },
+  { key: 2, emoji: '😕', label: 'Meh' },
+  { key: 3, emoji: '😐', label: 'Okay' },
+  { key: 4, emoji: '🙂', label: 'Good' },
+  { key: 5, emoji: '😄', label: 'Great' },
 ]
 
 export default function Journal() {
-  const { state, add, update, remove, showToast } = useApp()
+  const { state, add, update, remove, showToast, route } = useApp()
   const today = todayISO()
   const [date, setDate] = useState(today)
   const [weekly, setWeekly] = useState(null)
@@ -38,6 +39,10 @@ export default function Journal() {
 
   useEffect(() => () => clearTimeout(saveTimer.current), [])
 
+  useEffect(() => {
+    if (route.params?.date) setDate(route.params.date)
+  }, [route.params?.date])
+
   const list = useMemo(() => state.journal.slice().sort((a, b) => b.date.localeCompare(a.date)), [state.journal])
 
   const runWeeklyReview = async () => {
@@ -54,7 +59,7 @@ export default function Journal() {
           content: `Write a warm, specific weekly review based on this data. Call out 2 wins, 1 area to improve, and 3 focused tasks for next week.\n\nJournal entries:\n${last7.map((j) => `- ${j.date} (mood ${j.mood}): ${j.content}`).join('\n') || 'none'}\nStudy time last 7 days: ${studyMins}m. Assignments done: ${done}.`
         }],
       })
-      setWeekly(text)
+      setWeekly(normalizeAIText(text))
     } catch (e) { showToast(e.message || 'AI error', 'error') } finally { setBusy(false) }
   }
 

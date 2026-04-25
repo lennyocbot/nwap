@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Background,
   Controls,
-  MiniMap,
+  MarkerType,
   ReactFlow,
   applyEdgeChanges,
   applyNodeChanges,
@@ -16,9 +16,9 @@ import { callAI, buildSystemPrompt } from '../lib/ai.js'
 const nodeTypes = { scholarNode: ScholarNode }
 
 export default function MindMap() {
-  const { state, add, update, remove, showToast } = useApp()
-  const [mapId, setMapId] = useState(state.mindmaps[0]?.id || null)
-  const [selectedNodeId, setSelectedNodeId] = useState(null)
+  const { state, add, update, remove, showToast, route } = useApp()
+  const [mapId, setMapId] = useState(route.params?.id || state.mindmaps[0]?.id || null)
+  const [selectedNodeId, setSelectedNodeId] = useState(route.params?.nodeId || null)
   const [source, setSource] = useState('')
   const [sourceNoteId, setSourceNoteId] = useState('')
   const [busy, setBusy] = useState(false)
@@ -27,6 +27,11 @@ export default function MindMap() {
 
   const map = state.mindmaps.find((m) => m.id === mapId)
   const selectedNode = map ? findNode(map.root, selectedNodeId) || map.root : null
+
+  useEffect(() => {
+    if (route.params?.id) setMapId(route.params.id)
+    if (route.params?.nodeId) setSelectedNodeId(route.params.nodeId)
+  }, [route.params?.id, route.params?.nodeId])
 
   const flow = useMemo(() => {
     if (!map) return { nodes: [], edges: [] }
@@ -154,6 +159,26 @@ export default function MindMap() {
     }
   }
 
+  const exportFlashcards = () => {
+    if (!map) return
+    const cards = nodesForCards(map.root)
+    if (!cards.length) {
+      showToast('Add a few child nodes before exporting', 'info')
+      return
+    }
+    const deck = add('decks', { name: `${map.title} - mind map cards`, subjectId: null, color: 'brand' })
+    cards.forEach((card) => add('flashcards', {
+      deckId: deck.id,
+      front: card.front,
+      back: card.back,
+      ease: 2.5,
+      interval: 1,
+      due: Date.now(),
+      reviews: 0,
+    }))
+    showToast(`Exported ${cards.length} flashcards`, 'success')
+  }
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4 min-h-[72vh]">
       <div className="card p-3 flex flex-col gap-3">
@@ -214,6 +239,9 @@ export default function MindMap() {
               <input className="text-xl font-display font-semibold bg-transparent focus:outline-none flex-1"
                 value={map.title} onChange={(e) => patch({ title: e.target.value })} />
               {busy && <div className="text-sm text-ink-500 animate-pulse-soft">Working...</div>}
+              <button className="btn-soft" onClick={exportFlashcards}>
+                <Icon.cards className="w-4 h-4" /> Flashcards
+              </button>
               <button className="btn-ghost text-rose-600" onClick={() => { remove('mindmaps', map.id); setMapId(state.mindmaps.find((m) => m.id !== map.id)?.id || null) }}>
                 <Icon.trash className="w-4 h-4" />
               </button>
@@ -231,7 +259,6 @@ export default function MindMap() {
               >
                 <Background />
                 <Controls />
-                <MiniMap pannable zoomable />
               </ReactFlow>
             </div>
           </>
@@ -293,7 +320,8 @@ function treeToFlow(root, savedPositions, handlers) {
     target: link.target,
     type: 'smoothstep',
     animated: false,
-    className: 'stroke-brand-400',
+    style: { stroke: '#3566ff', strokeWidth: 2.5 },
+    markerEnd: { type: MarkerType.ArrowClosed, color: '#3566ff' },
   }))
 
   return { nodes, edges }
@@ -319,4 +347,20 @@ function normaliseTree(node) {
 
 function safeChildren(node) {
   return Array.isArray(node?.children) ? node.children : []
+}
+
+function nodesForCards(root) {
+  const cards = []
+  const walk = (node, parent = null, path = []) => {
+    const nextPath = [...path, node.label]
+    if (parent) {
+      cards.push({
+        front: `Where does "${node.label}" fit in this mind map?`,
+        back: [`Parent: ${parent.label}`, `Path: ${nextPath.join(' > ')}`].join('\n'),
+      })
+    }
+    safeChildren(node).forEach((child) => walk(child, node, nextPath))
+  }
+  if (root) walk(root)
+  return cards
 }

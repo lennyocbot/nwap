@@ -3,6 +3,7 @@ import { useApp } from './context/AppContext.jsx'
 import Sidebar from './components/Sidebar.jsx'
 import TopBar from './components/TopBar.jsx'
 import AIAssistant from './components/AIAssistant.jsx'
+import CommandPalette from './components/CommandPalette.jsx'
 import Dashboard from './views/Dashboard.jsx'
 import Notes from './views/Notes.jsx'
 import Assignments from './views/Assignments.jsx'
@@ -59,6 +60,7 @@ export default function App() {
         </main>
       </div>
       <AIAssistant floating />
+      <CommandPalette />
       {toast && (
         <div className="fixed z-50 bottom-6 left-1/2 -translate-x-1/2 card px-4 py-3 text-sm shadow-pop flex items-center gap-2 animate-slide-up">
           {toast.kind === 'success' && <Icon.check className="w-4 h-4 text-emerald-500" />}

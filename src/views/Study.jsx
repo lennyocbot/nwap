@@ -9,6 +9,7 @@ export default function Study() {
 
   const [mode, setMode] = useState('focus') // focus | short | long
   const [subjectId, setSubjectId] = useState(state.subjects[0]?.id || '')
+  const [assignmentId, setAssignmentId] = useState('')
   const [running, setRunning] = useState(false)
   const [remaining, setRemaining] = useState(focus * 60)
   const [cycle, setCycle] = useState(0)
@@ -35,7 +36,14 @@ export default function Study() {
 
   const finishInterval = () => {
     if (mode === 'focus') {
-      add('studySessions', { date: todayISO(), minutes: focus, subjectId: subjectId || null, at: Date.now() })
+      const assignment = state.assignments.find((item) => item.id === assignmentId)
+      add('studySessions', {
+        date: todayISO(),
+        minutes: focus,
+        subjectId: subjectId || assignment?.subjectId || null,
+        assignmentId: assignmentId || null,
+        at: Date.now(),
+      })
       const nextCycle = cycle + 1
       setCycle(nextCycle)
       const nextMode = nextCycle % longEvery === 0 ? 'long' : 'short'
@@ -53,6 +61,10 @@ export default function Study() {
   const mm = Math.floor(remaining / 60).toString().padStart(2, '0')
   const ss = (remaining % 60).toString().padStart(2, '0')
   const pct = 1 - remaining / total
+  const openAssignments = state.assignments
+    .filter((assignment) => assignment.status !== 'done')
+    .slice()
+    .sort((a, b) => new Date(a.due) - new Date(b.due))
 
   const stats = useMemo(() => {
     const today = todayISO()
@@ -104,10 +116,16 @@ export default function Study() {
           </button>
         </div>
 
-        <div className="mt-5 flex items-center gap-3">
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
           <select className="input max-w-[220px]" value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
             <option value="">No subject</option>
             {state.subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+          <select className="input max-w-[280px]" value={assignmentId} onChange={(e) => setAssignmentId(e.target.value)}>
+            <option value="">No assignment link</option>
+            {openAssignments.map((assignment) => (
+              <option key={assignment.id} value={assignment.id}>{assignment.title}</option>
+            ))}
           </select>
           <span className="chip">Distractions: {distraction}</span>
         </div>
