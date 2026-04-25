@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../context/AppContext.jsx'
 import { buildSystemPrompt, callAI } from '../lib/ai.js'
+import { applyAgentActions, buildAgentSystemPrompt, classifyAssistantIntent } from '../lib/agent.js'
 import { Icon } from './Icons.jsx'
 import Markdown from './Markdown.jsx'
 
@@ -12,7 +13,7 @@ const STARTERS = [
 ]
 
 export default function AIAssistant({ floating = true }) {
-  const { state, aiPanel, closeAI, openAI, add, update } = useApp()
+  const { state, aiPanel, closeAI, openAI, add, update, dispatch, showToast } = useApp()
   const [chatId, setChatId] = useState(state.chats[0]?.id)
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
@@ -55,11 +56,29 @@ export default function AIAssistant({ floating = true }) {
     setInput('')
     setBusy(true)
     try {
-      const reply = await callAI({
-        settings: state.settings,
-        system: buildSystemPrompt(state, contextNote),
-        messages: newMsgs.map(({ role, content }) => ({ role, content })),
-      })
+      let reply
+      if (classifyAssistantIntent(content) === 'action') {
+        const canUseServerKey = state.settings.useServerProxy !== false && !['localhost', '127.0.0.1'].includes(window.location.hostname)
+        if (!state.settings.aiKey && state.settings.aiProvider !== 'mock' && !canUseServerKey) {
+          reply = 'I can change your planner, but first add your OpenRouter key in Settings -> AI or set OPENROUTER_API_KEY in Netlify.'
+        } else {
+          const plan = await callAI({
+            settings: state.settings,
+            system: buildAgentSystemPrompt(state),
+            json: true,
+            messages: [{ role: 'user', content }],
+          })
+          const applied = applyAgentActions({ actions: plan?.actions || [], state, dispatch })
+          reply = plan?.reply || (applied.length ? `Done: ${applied.join(', ')}.` : 'I did not make changes because that did not look like a concrete app action.')
+          if (applied.length) showToast(`AI ${applied[0]}`, 'success')
+        }
+      } else {
+        reply = await callAI({
+          settings: state.settings,
+          system: buildSystemPrompt(state, contextNote),
+          messages: newMsgs.map(({ role, content }) => ({ role, content })),
+        })
+      }
       update('chats', { id: chat.id, messages: [...newMsgs, { role: 'assistant', content: reply, at: Date.now() }] })
     } catch (e) {
       setErr(e.message || 'Something went wrong')

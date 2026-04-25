@@ -4,8 +4,10 @@ import { Icon } from '../components/Icons.jsx'
 import { cx, downloadJSON, subjectColors } from '../lib/utils.js'
 
 export default function Settings() {
-  const { state, setSettings, setUser, showToast, reset, replaceAll } = useApp()
+  const { state, setSettings, setUser, showToast, reset, replaceAll, account, signIn, signOut } = useApp()
   const [showKey, setShowKey] = useState(false)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const fileRef = useRef(null)
 
   const doExport = () => {
@@ -53,6 +55,37 @@ export default function Settings() {
             </button>
           ))}
         </div>
+      </Section>
+
+      <Section title="Account sync" icon="settings">
+        {account.user ? (
+          <div className="space-y-3">
+            <div className="text-sm">
+              Signed in as <span className="font-semibold">{account.user.email}</span>
+            </div>
+            <div className="text-xs text-ink-500">Sync status: {account.sync}</div>
+            <button className="btn-soft" onClick={signOut}>Sign out</button>
+          </div>
+        ) : (
+          <form
+            className="grid gap-3"
+            onSubmit={(e) => {
+              e.preventDefault()
+              signIn(email, password)
+            }}
+          >
+            <Field label="Email">
+              <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </Field>
+            <Field label="Password">
+              <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            </Field>
+            <button className="btn-primary">Sign in or create account</button>
+            <div className="text-xs text-ink-500">
+              {account.sync}. Your workspace syncs across devices after Supabase is connected. AI keys stay on this device.
+            </div>
+          </form>
+        )}
       </Section>
 
       <Section title="AI" icon="sparkle">
@@ -107,10 +140,18 @@ export default function Settings() {
           </div>
           <div className="text-xs text-ink-500 mt-1">
             {state.settings.aiProvider === 'openrouter'
-              ? 'Get a free key at openrouter.ai — pay-as-you-go, access to hundreds of models.'
-              : 'Stored only on this device. Requests go directly from your browser to the provider.'}
+              ? 'Get a key at openrouter.ai. It stays on this device unless you add OPENROUTER_API_KEY in Netlify.'
+              : 'Stored only on this device. For deployed secrets, add the provider key in Netlify environment variables.'}
           </div>
         </Field>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={state.settings.useServerProxy !== false}
+            onChange={(e) => setSettings({ useServerProxy: e.target.checked })}
+          />
+          Use Netlify AI proxy when available
+        </label>
       </Section>
 
       <Section title="Pomodoro" icon="timer">
@@ -139,11 +180,11 @@ export default function Settings() {
             <Icon.trash className="w-4 h-4" /> Reset app
           </button>
         </div>
-        <div className="text-xs text-ink-500 mt-2">All data is stored in your browser. Export regularly if this device matters.</div>
+        <div className="text-xs text-ink-500 mt-2">When signed in, app data syncs to your account. Backups are still useful before big edits.</div>
       </Section>
 
       <div className="text-center text-xs text-ink-400 pt-4">
-        ScholarAI · Install to iPad via Safari → Share → Add to Home Screen.
+        ScholarAI · Install to iPad via Safari Share, then Add to Home Screen.
       </div>
     </div>
   )

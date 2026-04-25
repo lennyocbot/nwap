@@ -30,7 +30,14 @@ ${contextNote ? `\nContext for this conversation:\n${contextNote}\n` : ''}`
 }
 
 export const callAI = async ({ settings, system, messages, json = false }) => {
-  if (settings.aiProvider === 'mock' || !settings.aiKey) {
+  const useProxy = settings.useServerProxy !== false && !isLocalVite()
+  if (settings.aiProvider === 'mock') {
+    return mockReply(messages, json)
+  }
+  if (useProxy) {
+    return callProviderProxy({ settings, system, messages, json })
+  }
+  if (!settings.aiKey) {
     return mockReply(messages, json)
   }
   if (settings.aiProvider === 'anthropic') {
@@ -43,6 +50,32 @@ export const callAI = async ({ settings, system, messages, json = false }) => {
     return callOpenRouter({ settings, system, messages, json })
   }
   return mockReply(messages, json)
+}
+
+async function callProviderProxy({ settings, system, messages, json }) {
+  const res = await fetch('/api/ai', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      provider: settings.aiProvider,
+      model: settings.aiModel,
+      apiKey: settings.aiKey,
+      system,
+      messages,
+      json,
+    }),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => null)
+    throw new Error(data?.error || `AI proxy error: ${res.status}`)
+  }
+  const data = await res.json()
+  const text = data.text || ''
+  return json ? safeJSON(text) : text
+}
+
+function isLocalVite() {
+  return typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname)
 }
 
 async function callAnthropic({ settings, system, messages, json }) {

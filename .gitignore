@@ -1,4 +1,6 @@
 node_modules
+.npm-cache
+.netlify
 dist
 .DS_Store
 .vite

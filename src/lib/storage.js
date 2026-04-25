@@ -5,9 +5,10 @@ export const defaultState = {
   settings: {
     theme: 'system',          // 'light' | 'dark' | 'system'
     accent: 'brand',
-    aiProvider: 'anthropic',  // 'anthropic' | 'openai' | 'mock'
-    aiModel: 'claude-opus-4-7',
+    aiProvider: 'openrouter', // 'openrouter' | 'anthropic' | 'openai' | 'mock'
+    aiModel: 'anthropic/claude-3.5-sonnet',
     aiKey: '',
+    useServerProxy: true,
     pomodoro: { focus: 25, short: 5, long: 15, longEvery: 4 },
     weekStart: 1,             // 0=Sun, 1=Mon
     notifications: true,
