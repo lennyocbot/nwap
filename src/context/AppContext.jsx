@@ -45,23 +45,29 @@ export function AppProvider({ children }) {
     }
 
     const loadSession = async () => {
-      const { data } = await supabase.auth.getSession()
-      const user = data.session?.user || null
-      cloudLoadedRef.current = false
-      setAccount({ user, ready: true, sync: user ? 'Loading cloud workspace...' : 'Local demo mode', error: null })
-      if (user) await loadCloudState(user.id)
-      else {
+      try {
+        const { data, error } = await withTimeout(supabase.auth.getSession(), 'Session check timed out')
+        if (error) throw error
+        const user = data.session?.user || null
+        cloudLoadedRef.current = false
+        setAccount({ user, ready: true, sync: user ? 'Loading cloud workspace...' : 'Local demo mode', error: null })
+        if (user) await loadCloudState(user.id)
+        else {
+          cloudLoadedRef.current = true
+          dispatch({ type: 'replace-all', value: restoreLocalSecrets(defaultState, loadState()) })
+        }
+      } catch (error) {
         cloudLoadedRef.current = true
-        dispatch({ type: 'replace-all', value: restoreLocalSecrets(defaultState, loadState()) })
+        setAccount((current) => ({ ...current, ready: true, sync: 'Sync error', error: error.message }))
       }
     }
 
     loadSession()
-    const { data } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       const user = session?.user || null
       cloudLoadedRef.current = false
       setAccount({ user, ready: true, sync: user ? 'Loading cloud workspace...' : 'Local demo mode', error: null })
-      if (user) await loadCloudState(user.id)
+      if (user) setTimeout(() => loadCloudState(user.id), 0)
       else {
         cloudLoadedRef.current = true
         dispatch({ type: 'replace-all', value: restoreLocalSecrets(defaultState, loadState()) })
@@ -82,34 +88,46 @@ export function AppProvider({ children }) {
 
   const loadCloudState = async (userId) => {
     cloudLoadedRef.current = false
-    const { data, error } = await supabase.from('app_states').select('state').eq('user_id', userId).maybeSingle()
-    if (error) {
+    try {
+      const { data, error } = await withTimeout(
+        supabase.from('app_states').select('state').eq('user_id', userId).maybeSingle(),
+        'Cloud workspace load timed out'
+      )
+      if (error) throw error
+      if (data?.state) {
+        const nextState = restoreLocalSecrets(data.state, loadState())
+        cloudLoadedRef.current = true
+        dispatch({ type: 'replace-all', value: nextState })
+        setAccount((current) => ({ ...current, sync: 'Cloud workspace loaded', error: null }))
+      } else {
+        const nextState = restoreLocalSecrets(defaultState, loadState())
+        const createError = await saveCloudState(userId, nextState, 'Cloud workspace created')
+        cloudLoadedRef.current = true
+        dispatch({ type: 'replace-all', value: nextState })
+        if (!createError) setAccount((current) => ({ ...current, sync: 'Cloud workspace created', error: null }))
+      }
+    } catch (error) {
       cloudLoadedRef.current = true
       setAccount((current) => ({ ...current, sync: 'Sync error', error: error.message }))
-      return
-    }
-    if (data?.state) {
-      const nextState = restoreLocalSecrets(data.state, loadState())
-      cloudLoadedRef.current = true
-      dispatch({ type: 'replace-all', value: nextState })
-      setAccount((current) => ({ ...current, sync: 'Cloud workspace loaded' }))
-    } else {
-      const nextState = restoreLocalSecrets(defaultState, loadState())
-      const createError = await saveCloudState(userId, nextState, 'Cloud workspace created')
-      cloudLoadedRef.current = true
-      dispatch({ type: 'replace-all', value: nextState })
-      if (!createError) setAccount((current) => ({ ...current, sync: 'Cloud workspace created', error: null }))
     }
   }
 
   const saveCloudState = async (userId, nextState = state, success = 'Synced') => {
     if (!supabase || !userId) return null
     setAccount((current) => ({ ...current, sync: 'Saving...', error: null }))
-    const { error } = await supabase
-      .from('app_states')
-      .upsert({ user_id: userId, state: cloudSafeState(nextState), updated_at: new Date().toISOString() })
-    setAccount((current) => ({ ...current, sync: error ? 'Sync error' : success, error: error?.message || null }))
-    return error
+    try {
+      const { error } = await withTimeout(
+        supabase
+          .from('app_states')
+          .upsert({ user_id: userId, state: cloudSafeState(nextState), updated_at: new Date().toISOString() }),
+        'Cloud workspace save timed out'
+      )
+      setAccount((current) => ({ ...current, sync: error ? 'Sync error' : success, error: error?.message || null }))
+      return error
+    } catch (error) {
+      setAccount((current) => ({ ...current, sync: 'Sync error', error: error.message }))
+      return error
+    }
   }
 
   // Theme
@@ -184,7 +202,8 @@ export function AppProvider({ children }) {
 
   const retrySync = useCallback(async () => {
     if (!account.user) return
-    await saveCloudState(account.user.id, state)
+    setAccount((current) => ({ ...current, sync: 'Loading cloud workspace...', error: null }))
+    await loadCloudState(account.user.id)
   }, [account.user, state])
 
   const reset = useCallback(() => {
@@ -244,4 +263,12 @@ function restoreLocalSecrets(cloudState, localState) {
 function stripFileForCloud(file) {
   const { data, signedUrl, previewUrl, ...metadata } = file || {}
   return metadata
+}
+
+function withTimeout(promise, message, ms = 12000) {
+  let timer
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms)
+  })
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
 }
