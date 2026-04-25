@@ -25,6 +25,11 @@ export default function Dashboard() {
   const dueCards = state.flashcards.filter((f) => f.due <= Date.now()).length
   const nextWork = upcoming[0]
   const nextWorkLate = nextWork ? daysUntil(nextWork.due) < 0 : false
+  const readingQueue = state.reading
+    .filter((item) => item.status !== 'done')
+    .slice()
+    .sort((a, b) => statusWeight(a.status) - statusWeight(b.status))
+    .slice(0, 4)
 
   const stats = useMemo(() => {
     const today = todayISO()
@@ -39,6 +44,34 @@ export default function Dashboard() {
     const avg = state.grades.reduce((a, g) => a + (g.score / g.outOf) * 100, 0) / state.grades.length
     return Math.round(avg)
   }, [state.grades])
+
+  const week = useMemo(() => {
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date()
+      d.setDate(d.getDate() - (6 - i))
+      const key = d.toISOString().slice(0, 10)
+      const study = state.studySessions.filter((s) => s.date === key).reduce((total, session) => total + session.minutes, 0)
+      const habits = state.habits.reduce((total, habit) => total + (habit.log?.[key] ? 1 : 0), 0)
+      return { key, label: d.toLocaleDateString(undefined, { weekday: 'short' }), study, habits }
+    })
+    const maxStudy = Math.max(1, ...days.map((day) => day.study))
+    const habitsDone = days.reduce((total, day) => total + day.habits, 0)
+    const totalHabits = Math.max(1, state.habits.length * 7)
+    const open = state.assignments.filter((assignment) => assignment.status !== 'done').length
+    const done = state.assignments.filter((assignment) => assignment.status === 'done').length
+    const totalAssignments = Math.max(1, open + done)
+    const dueCards = state.flashcards.filter((card) => card.due <= Date.now()).length
+    const reviewedCards = state.flashcards.reduce((total, card) => total + (card.reviews || 0), 0)
+    return {
+      days,
+      maxStudy,
+      studyTotal: days.reduce((total, day) => total + day.study, 0),
+      habitPct: Math.round((habitsDone / totalHabits) * 100),
+      assignmentPct: Math.round((done / totalAssignments) * 100),
+      dueCards,
+      reviewedCards,
+    }
+  }, [state.studySessions, state.habits, state.assignments, state.flashcards])
 
   const toggleHabit = (h) => {
     const key = todayISO()
@@ -108,6 +141,26 @@ export default function Dashboard() {
         <Stat label="Study today" value={`${stats.studyToday}m`} icon="timer" tone="amber" onClick={() => navigate('study')} />
         <Stat label="Habit streaks" value={stats.streaks} icon="fire" tone="emerald" onClick={() => navigate('habits')} />
         <Stat label="Avg grade" value={weeklyGrade != null ? `${weeklyGrade}%` : '-'} icon="grade" tone="violet" onClick={() => navigate('grades')} />
+      </section>
+
+      <section className="card p-5">
+        <Header title="This week" action={{ label: 'Study', on: () => navigate('study') }} icon="grade" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <MiniMetric label="Study time" value={`${week.studyTotal}m`} />
+          <MiniMetric label="Habit completion" value={`${week.habitPct}%`} />
+          <MiniMetric label="Assignments done" value={`${week.assignmentPct}%`} />
+          <MiniMetric label="Cards reviewed" value={week.reviewedCards || week.dueCards} />
+        </div>
+        <div className="flex items-end gap-2 h-24">
+          {week.days.map((day) => (
+            <div key={day.key} className="flex-1 flex flex-col items-center gap-1">
+              <div className="w-full rounded-t-lg bg-brand-500/20 dark:bg-brand-500/30 relative overflow-hidden" style={{ height: `${Math.max(8, (day.study / week.maxStudy) * 100)}%` }}>
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-brand-600 to-brand-400" style={{ height: '100%' }} />
+              </div>
+              <div className="text-[10px] text-ink-500">{day.label}</div>
+            </div>
+          ))}
+        </div>
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -191,7 +244,32 @@ export default function Dashboard() {
           </ul>
         </div>
 
-        <div className="card p-5 lg:col-span-2">
+        <div className="card p-5">
+          <Header title="Reading queue" action={{ label: 'Reading', on: () => navigate('reading') }} icon="book" />
+          {readingQueue.length === 0 ? (
+            <Empty text="No reading queued" hint="Ask AI for recommendations." />
+          ) : (
+            <ul className="space-y-2">
+              {readingQueue.map((item) => {
+                const subject = state.subjects.find((s) => s.id === item.subjectId)
+                return (
+                  <li key={item.id} className="rounded-2xl bg-ink-50 p-3 dark:bg-ink-800">
+                    <div className="flex items-start gap-2">
+                      <Icon.book className="w-4 h-4 text-ink-400 mt-0.5" />
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium line-clamp-1">{item.title}</div>
+                        <div className="text-xs text-ink-500">{subject?.name || 'General'} - {item.estMinutes || 30}m</div>
+                      </div>
+                      <span className="chip capitalize">{item.status}</span>
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
+
+        <div className="card p-5">
           <Header title="Pinned notes" action={{ label: 'Notes', on: () => navigate('notes') }} icon="note" />
           {state.notes.filter((n) => n.pinned).length === 0 ? (
             <Empty text="No pinned notes" hint="Pin notes from the Notes view." />
@@ -223,6 +301,10 @@ function priorityDot(p) {
   return { high: 'bg-rose-500', medium: 'bg-amber-500', low: 'bg-emerald-500' }[p] || 'bg-ink-300'
 }
 
+function statusWeight(status) {
+  return { reading: 0, queued: 1, done: 2 }[status] ?? 3
+}
+
 function Stat({ label, value, icon, tone, onClick }) {
   const Ic = Icon[icon]
   const tones = {
@@ -240,6 +322,15 @@ function Stat({ label, value, icon, tone, onClick }) {
       <div className="text-2xl font-display font-semibold">{value}</div>
       <div className="text-xs text-ink-500 mt-0.5">{label}</div>
     </button>
+  )
+}
+
+function MiniMetric({ label, value }) {
+  return (
+    <div className="rounded-2xl bg-ink-50 p-3 dark:bg-ink-800">
+      <div className="text-lg font-display font-semibold">{value}</div>
+      <div className="text-xs text-ink-500">{label}</div>
+    </div>
   )
 }
 

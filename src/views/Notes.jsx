@@ -7,6 +7,37 @@ import { cx, colorFor } from '../lib/utils.js'
 import { aiSummarizeNote, aiGenerateFlashcards, aiGenerateQuiz, callAI, buildSystemPrompt } from '../lib/ai.js'
 import { normalizeAIText } from '../lib/text.js'
 
+const noteTemplates = [
+  {
+    key: 'cornell',
+    label: 'Cornell notes',
+    title: 'Cornell notes',
+    content: '# Topic\n\n## Cues / Questions\n\n- \n\n## Notes\n\n- \n\n## Summary\n\n',
+    tags: ['template', 'cornell'],
+  },
+  {
+    key: 'essay',
+    label: 'Essay plan',
+    title: 'Essay plan',
+    content: '# Essay plan\n\n## Question\n\n\n## Thesis\n\n\n## Argument 1\n\n- Evidence:\n- Evaluation:\n\n## Argument 2\n\n- Evidence:\n- Evaluation:\n\n## Argument 3\n\n- Evidence:\n- Evaluation:\n\n## Conclusion\n\n',
+    tags: ['template', 'essay'],
+  },
+  {
+    key: 'lab',
+    label: 'Lab report',
+    title: 'Lab report',
+    content: '# Lab report\n\n## Aim\n\n\n## Hypothesis\n\n\n## Variables\n\n- Independent:\n- Dependent:\n- Control:\n\n## Method\n\n1. \n\n## Results\n\n| Trial | Result |\n| --- | --- |\n| 1 |  |\n\n## Analysis\n\n\n## Conclusion\n\n',
+    tags: ['template', 'lab'],
+  },
+  {
+    key: 'lecture',
+    label: 'Lesson notes',
+    title: 'Lesson notes',
+    content: '# Lesson notes\n\n## Key ideas\n\n- \n\n## Examples\n\n\n## Questions to ask\n\n- \n\n## Follow-up tasks\n\n- [ ] \n',
+    tags: ['template', 'lesson'],
+  },
+]
+
 export default function Notes() {
   const { state, add, update, remove, navigate, route, openAI, showToast } = useApp()
   const [selectedId, setSelectedId] = useState(route.params?.id || state.notes[0]?.id || null)
@@ -40,6 +71,23 @@ export default function Notes() {
       createdAt: Date.now(), updatedAt: Date.now(),
     })
     setSelectedId(n.id)
+  }
+
+  const createFromTemplate = (templateKey) => {
+    if (!templateKey) return
+    const template = noteTemplates.find((item) => item.key === templateKey)
+    if (!template) return
+    const n = add('notes', {
+      title: template.title,
+      content: template.content,
+      tags: template.tags,
+      subjectId: route.params?.subject || null,
+      pinned: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+    setSelectedId(n.id)
+    showToast(`Created ${template.label}`, 'success')
   }
 
   const patch = (p) => update('notes', { id: note.id, ...p, updatedAt: Date.now() })
@@ -127,6 +175,10 @@ export default function Notes() {
           </div>
           <button className="btn-primary" onClick={createNote}><Icon.plus className="w-4 h-4" /></button>
         </div>
+        <select className="input mb-2 text-sm" value="" onChange={(e) => createFromTemplate(e.target.value)}>
+          <option value="">Create from template...</option>
+          {noteTemplates.map((template) => <option key={template.key} value={template.key}>{template.label}</option>)}
+        </select>
         <div className="overflow-y-auto flex-1 -mr-1 pr-1">
           {filtered.length === 0 && <div className="text-center text-ink-500 py-8 text-sm">No notes</div>}
           <ul className="space-y-1">

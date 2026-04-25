@@ -5,7 +5,7 @@ import Modal from '../components/Modal.jsx'
 import { cx, colorFor, subjectColors } from '../lib/utils.js'
 
 export default function Subjects() {
-  const { state, add, update, remove, navigate } = useApp()
+  const { state, add, update, remove, navigate, openAI } = useApp()
   const [edit, setEdit] = useState(null)
 
   const create = () => {
@@ -28,9 +28,18 @@ export default function Subjects() {
             notes: state.notes.filter((n) => n.subjectId === s.id).length,
             assignments: state.assignments.filter((a) => a.subjectId === s.id && a.status !== 'done').length,
             decks: state.decks.filter((d) => d.subjectId === s.id).length,
+            reading: state.reading.filter((r) => r.subjectId === s.id && r.status !== 'done').length,
+            files: state.files.filter((f) => f.subjectId === s.id).length,
+            maps: state.mindmaps.filter((m) => subjectMatch(m, s.name)).length,
+            goals: state.goals.filter((g) => g.subjectId === s.id).length,
             grades: state.grades.filter((g) => g.subjectId === s.id),
           }
           const avg = count.grades.length ? Math.round(count.grades.reduce((a, g) => a + g.score / g.outOf * 100, 0) / count.grades.length) : null
+          const nextAssignment = state.assignments
+            .filter((a) => a.subjectId === s.id && a.status !== 'done')
+            .slice()
+            .sort((a, b) => new Date(a.due) - new Date(b.due))[0]
+          const latestReading = state.reading.find((r) => r.subjectId === s.id && r.status !== 'done')
           return (
             <div key={s.id} className="card p-4">
               <div className="flex items-center gap-3">
@@ -47,6 +56,12 @@ export default function Subjects() {
                 <Stat label="Decks" value={count.decks} onClick={() => navigate('revision')} />
                 <Stat label="Avg" value={avg != null ? `${avg}%` : '-'} onClick={() => navigate('grades')} />
               </div>
+              <div className="grid grid-cols-4 gap-1 mt-1 text-center">
+                <Stat label="Read" value={count.reading} onClick={() => navigate('reading')} />
+                <Stat label="Files" value={count.files} onClick={() => navigate('files')} />
+                <Stat label="Maps" value={count.maps} onClick={() => navigate('mindmap')} />
+                <Stat label="Goals" value={count.goals} onClick={() => navigate('goals')} />
+              </div>
               {s.target && (
                 <div className="mt-3">
                   <div className="flex items-center justify-between text-xs text-ink-500 mb-1">
@@ -58,6 +73,18 @@ export default function Subjects() {
                   </div>
                 </div>
               )}
+              <div className="mt-4 rounded-2xl bg-ink-50 p-3 text-xs dark:bg-ink-800">
+                <div className="font-semibold text-ink-700 dark:text-ink-100">Next focus</div>
+                <div className="mt-1 text-ink-500">
+                  {nextAssignment ? nextAssignment.title : latestReading ? `Read: ${latestReading.title}` : 'No urgent subject work yet.'}
+                </div>
+                <button
+                  className="btn-soft mt-3 w-full"
+                  onClick={() => openAI(null, `Create a focused 7-day sprint for ${s.name}. Use my current assignments, grades, notes, reading list, flashcards, goals, and timetable. Make concrete tasks and create any useful assignments, revision sessions, flashcards, or calendar events if needed.`)}
+                >
+                  <Icon.sparkle className="w-4 h-4" /> AI subject sprint
+                </button>
+              </div>
             </div>
           )
         })}
@@ -105,6 +132,11 @@ export default function Subjects() {
       </Modal>
     </div>
   )
+}
+
+function subjectMatch(map, subjectName) {
+  const haystack = [map.title, map.root?.label, JSON.stringify(map.root || {})].join(' ').toLowerCase()
+  return haystack.includes(subjectName.toLowerCase())
 }
 
 function Stat({ label, value, onClick }) {

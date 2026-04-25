@@ -3,6 +3,8 @@ import { useApp } from '../context/AppContext.jsx'
 import { Icon } from '../components/Icons.jsx'
 import { supabase } from '../lib/supabase.js'
 import { cx, colorFor, fileToDataURL, fmtDateTime, uid } from '../lib/utils.js'
+import { aiGenerateFlashcards, buildSystemPrompt, callAI } from '../lib/ai.js'
+import { normalizeAIText } from '../lib/text.js'
 
 export default function Files() {
   const { state, add, remove, update, showToast, account } = useApp()
@@ -10,6 +12,7 @@ export default function Files() {
   const [filter, setFilter] = useState('all')
   const [uploading, setUploading] = useState(false)
   const [signedUrls, setSignedUrls] = useState({})
+  const [aiBusy, setAiBusy] = useState(null)
   const cloudFilesEnabled = Boolean(supabase && account.user)
 
   const onPick = async (ev) => {
@@ -121,6 +124,107 @@ export default function Files() {
     showToast('File removed', 'success')
   }
 
+  const fileSourceText = async (file) => {
+    if (!isTextLike(file.type, file.name)) return ''
+    if (file.data) return dataUrlText(file.data)
+    if (file.storagePath && cloudFilesEnabled) {
+      const { data, error } = await supabase.storage.from('user-files').createSignedUrl(file.storagePath, 60 * 5)
+      if (error) throw error
+      const res = await fetch(data.signedUrl)
+      if (!res.ok) throw new Error(`Could not read file text (${res.status})`)
+      return res.text()
+    }
+    return ''
+  }
+
+  const summarizeFile = async (file) => {
+    setAiBusy(file.id)
+    try {
+      const text = await fileSourceText(file)
+      if (!text.trim()) {
+        showToast('AI file tools currently need a text/markdown file', 'info')
+        return
+      }
+      const subject = state.subjects.find((s) => s.id === file.subjectId)?.name || 'General'
+      const summary = await callAI({
+        settings: state.settings,
+        system: buildSystemPrompt(state, `Summarizing an uploaded study file for ${subject}.`),
+        messages: [{
+          role: 'user',
+          content: `Summarize this uploaded file for revision. Include key ideas, formulas/definitions, likely exam questions, and next actions.\n\nFile: ${file.name}\n\n${text.slice(0, 12000)}`
+        }],
+      })
+      const note = add('notes', {
+        title: `${file.name} summary`,
+        content: normalizeAIText(summary),
+        subjectId: file.subjectId || null,
+        tags: ['file', 'summary'],
+        pinned: false,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+      showToast(`Created note "${note.title}"`, 'success')
+    } catch (error) {
+      showToast(error.message || 'AI file summary failed', 'error')
+    } finally {
+      setAiBusy(null)
+    }
+  }
+
+  const flashcardsFromFile = async (file) => {
+    setAiBusy(file.id)
+    try {
+      const text = await fileSourceText(file)
+      if (!text.trim()) {
+        showToast('AI file tools currently need a text/markdown file', 'info')
+        return
+      }
+      const cards = await aiGenerateFlashcards({ settings: state.settings, state, source: text.slice(0, 12000), n: 10 })
+      const deck = add('decks', { name: `${file.name} cards`, subjectId: file.subjectId || null, color: 'brand' })
+      cards.forEach((card) => add('flashcards', {
+        deckId: deck.id,
+        front: normalizeAIText(card.front),
+        back: normalizeAIText(card.back),
+        ease: 2.5,
+        interval: 1,
+        due: Date.now(),
+        reviews: 0,
+      }))
+      showToast(`Created ${cards.length} flashcards`, 'success')
+    } catch (error) {
+      showToast(error.message || 'AI flashcards failed', 'error')
+    } finally {
+      setAiBusy(null)
+    }
+  }
+
+  const mindMapFromFile = async (file) => {
+    setAiBusy(file.id)
+    try {
+      const text = await fileSourceText(file)
+      if (!text.trim()) {
+        showToast('AI file tools currently need a text/markdown file', 'info')
+        return
+      }
+      const data = await callAI({
+        settings: state.settings,
+        system: buildSystemPrompt(state, 'Generating a mind map from an uploaded file.'),
+        json: true,
+        messages: [{
+          role: 'user',
+          content: `Create a concise study mind map from this uploaded file. Return JSON only: {"title":"...","root":{"label":"...","children":[{"label":"...","children":[{"label":"..."}]}]}}.\n\nFile: ${file.name}\n\n${text.slice(0, 12000)}`
+        }],
+      })
+      const root = normalizeTree(data?.root || { label: file.name })
+      add('mindmaps', { title: data?.title || `${file.name} mind map`, root, positions: {} })
+      showToast('Created file mind map', 'success')
+    } catch (error) {
+      showToast(error.message || 'AI mind map failed', 'error')
+    } finally {
+      setAiBusy(null)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -169,6 +273,18 @@ export default function Files() {
                   <button className="btn-soft flex-1" onClick={() => openFile(f)}><Icon.download className="w-4 h-4" /> Open</button>
                   <button className="btn-ghost text-rose-600" onClick={() => deleteFile(f)}><Icon.trash className="w-4 h-4" /></button>
                 </div>
+                <div className="mt-2 grid grid-cols-3 gap-1">
+                  <button className="btn-soft !px-2 text-xs" onClick={() => summarizeFile(f)} disabled={aiBusy === f.id}>
+                    <Icon.sparkle className="w-3 h-3" /> Note
+                  </button>
+                  <button className="btn-soft !px-2 text-xs" onClick={() => flashcardsFromFile(f)} disabled={aiBusy === f.id}>
+                    <Icon.cards className="w-3 h-3" /> Cards
+                  </button>
+                  <button className="btn-soft !px-2 text-xs" onClick={() => mindMapFromFile(f)} disabled={aiBusy === f.id}>
+                    <Icon.mindmap className="w-3 h-3" /> Map
+                  </button>
+                </div>
+                {aiBusy === f.id && <div className="mt-2 text-xs text-ink-500 animate-pulse-soft">AI working...</div>}
               </div>
             )
           })}
@@ -195,4 +311,30 @@ function fileEmoji(type = '') {
 
 function safeFileName(name = 'upload') {
   return name.replace(/[^\w.-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'upload'
+}
+
+function isTextLike(type = '', name = '') {
+  return type.startsWith('text/')
+    || type.includes('json')
+    || type.includes('markdown')
+    || /\.(txt|md|csv|json|tex)$/i.test(name)
+}
+
+function dataUrlText(dataUrl) {
+  const [, meta = '', payload = ''] = dataUrl.match(/^data:([^,]*),(.*)$/) || []
+  if (!payload) return ''
+  const decoded = meta.includes(';base64') ? atob(payload) : decodeURIComponent(payload)
+  try {
+    return new TextDecoder().decode(Uint8Array.from(decoded, (char) => char.charCodeAt(0)))
+  } catch {
+    return decoded
+  }
+}
+
+function normalizeTree(node) {
+  return {
+    id: uid(),
+    label: String(node?.label || 'Mind map').slice(0, 80),
+    children: (node?.children || []).slice(0, 8).map(normalizeTree),
+  }
 }

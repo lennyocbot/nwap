@@ -30,6 +30,22 @@ export default function Settings() {
     }
   }
 
+  const enableNotifications = async () => {
+    if (!('Notification' in window)) {
+      showToast('Browser notifications are not supported here', 'error')
+      return
+    }
+    const permission = await Notification.requestPermission()
+    if (permission === 'granted') {
+      setSettings({ notifications: true })
+      showToast('Reminders enabled', 'success')
+      try { new Notification('ScholarAI reminders enabled', { body: 'Assignment and flashcard reminders can now appear while the app is open.' }) } catch {}
+    } else {
+      setSettings({ notifications: false })
+      showToast('Notifications were not enabled', 'info')
+    }
+  }
+
   return (
     <div className="space-y-4 max-w-2xl">
       <Section title="Profile" icon="subject">
@@ -181,6 +197,25 @@ export default function Settings() {
             <input type="number" className="input" value={state.settings.pomodoro.long}
               onChange={(e) => setSettings({ pomodoro: { ...state.settings.pomodoro, long: Number(e.target.value) || 15 } })} />
           </Field>
+        </div>
+      </Section>
+
+      <Section title="Reminders" icon="flag">
+        <div className="rounded-2xl bg-ink-50 p-3 text-sm dark:bg-ink-800">
+          ScholarAI can send browser reminders for assignments due within 24 hours and flashcards due for review while the app is open.
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button className="btn-soft" onClick={enableNotifications} type="button">
+            <Icon.flag className="w-4 h-4" /> Enable browser reminders
+          </button>
+          <button className={cx('btn-soft', state.settings.notifications && 'ring-2 ring-brand-400')}
+            onClick={() => setSettings({ notifications: !state.settings.notifications })}
+            type="button">
+            {state.settings.notifications ? 'Reminders on' : 'Reminders off'}
+          </button>
+        </div>
+        <div className="text-xs text-ink-500">
+          Browser permission: {typeof Notification === 'undefined' ? 'unsupported' : Notification.permission}
         </div>
       </Section>
 

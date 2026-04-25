@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar.jsx'
 import TopBar from './components/TopBar.jsx'
 import AIAssistant from './components/AIAssistant.jsx'
 import CommandPalette from './components/CommandPalette.jsx'
+import ReminderWatcher from './components/ReminderWatcher.jsx'
 import Dashboard from './views/Dashboard.jsx'
 import Notes from './views/Notes.jsx'
 import Assignments from './views/Assignments.jsx'
@@ -59,6 +60,7 @@ export default function App() {
           </div>
         </main>
       </div>
+      <ReminderWatcher />
       <AIAssistant floating />
       <CommandPalette />
       {toast && (
