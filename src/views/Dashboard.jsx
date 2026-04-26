@@ -103,9 +103,12 @@ export default function Dashboard() {
 
   const planDay = () => {
     const today = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
+    const hour = new Date().getHours()
+    const start = hour >= 7 && hour <= 20 ? 'now' : '10:00'
     openAI(null, [
       `Plan my study day for ${today}.`,
       'Use my timetable, due assignments, revision queue, weak topics, and recent study time.',
+      `Start from ${start}. If any exact preference is missing, make a sensible student-friendly assumption instead of asking a clarification question.`,
       'Give me a realistic schedule with start times, focus blocks, breaks, and the single most important task.',
     ].join('\n'))
   }

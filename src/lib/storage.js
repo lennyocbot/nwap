@@ -7,7 +7,8 @@ export const defaultState = {
     theme: 'light',
     accent: 'brand',
     aiProvider: 'openrouter',
-    aiModel: 'deepseek/deepseek-r1',
+    aiModel: 'meta-llama/llama-3.3-70b-instruct',
+    aiMode: 'normal',
     aiKey: '',
     useServerProxy: true,
     pomodoro: { focus: 25, short: 5, long: 15, longEvery: 4 },
@@ -112,6 +113,7 @@ export const defaultState = {
   journal: [],
   coachBriefs: [],
   achievements: [],
+  examAttempts: [],
 }
 
 function addDays(n) {
@@ -167,6 +169,7 @@ export function migrateState(input, { existingState = false } = {}) {
       ...defaultState.settings,
       ...settings,
       aiProvider: 'openrouter',
+      aiMode: ['normal', 'high'].includes(settings.aiMode) ? settings.aiMode : 'normal',
       aiModel: !settings.aiModel || settings.aiModel === 'anthropic/claude-sonnet-4-5'
         ? defaultState.settings.aiModel
         : settings.aiModel,
@@ -179,6 +182,7 @@ export function migrateState(input, { existingState = false } = {}) {
     notes: migrateNotes(parsed.notes || defaultState.notes),
     coachBriefs: parsed.coachBriefs || [],
     achievements: parsed.achievements || [],
+    examAttempts: parsed.examAttempts || [],
   }
 }
 

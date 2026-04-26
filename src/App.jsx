@@ -24,6 +24,7 @@ import MindMap from './views/MindMap.jsx'
 import Settings from './views/Settings.jsx'
 import AIChat from './views/AIChat.jsx'
 import Account from './views/Account.jsx'
+import ExamSimulator from './views/ExamSimulator.jsx'
 import { Icon } from './components/Icons.jsx'
 
 const views = {
@@ -35,6 +36,7 @@ const views = {
   calendar: Calendar,
   study: Study,
   revision: Revision,
+  exams: ExamSimulator,
   subjects: Subjects,
   grades: Grades,
   goals: Goals,

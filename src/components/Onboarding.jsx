@@ -10,6 +10,7 @@ export default function Onboarding() {
   const [name, setName] = useState(state.user.name === 'Student' ? '' : state.user.name)
   const [year, setYear] = useState(state.user.year || 'A-level')
   const [busy, setBusy] = useState(false)
+  const [authMessage, setAuthMessage] = useState('')
 
   const finish = () => {
     setUser({ name: name.trim() || 'Student', year: year.trim() || 'A-level' })
@@ -21,9 +22,12 @@ export default function Onboarding() {
     event.preventDefault()
     if (!email.trim() || !password.trim()) return
     setBusy(true)
+    setAuthMessage('')
     try {
-      await signIn(email.trim(), password)
-      setStep(2)
+      const result = await signIn(email.trim(), password)
+      if (result?.ok) setStep(2)
+      else if (result?.needsEmailConfirmation) setAuthMessage('Check your email to confirm your account, then return here and sign in.')
+      else setAuthMessage(result?.error || 'Could not sign in yet.')
     } finally {
       setBusy(false)
     }
@@ -75,6 +79,11 @@ export default function Onboarding() {
               <button className="btn-primary w-full" disabled={busy || !email.trim() || !password.trim()}>
                 {busy ? 'Working...' : account.user ? 'Continue' : 'Sign in or create account'}
               </button>
+              {authMessage && (
+                <div className="rounded-2xl bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-100 dark:bg-amber-900/20 dark:text-amber-100 dark:ring-amber-800">
+                  {authMessage}
+                </div>
+              )}
               <button className="btn-soft w-full" type="button" onClick={() => setStep(2)}>
                 Continue in local demo mode
               </button>

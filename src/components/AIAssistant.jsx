@@ -6,7 +6,6 @@ import { markdownFromQuiz, normalizeAIText } from '../lib/text.js'
 import { Icon } from './Icons.jsx'
 import Markdown from './Markdown.jsx'
 import Avatar from './Avatar.jsx'
-import { hasRawMath } from '../lib/math.js'
 
 const STARTERS = [
   { label: 'Plan my week', prompt: 'Build a 7-day study plan based on my upcoming assignments. Reserve time for revision and breaks.' },
@@ -22,11 +21,12 @@ export default function AIAssistant({ floating = true }) {
   const [busy, setBusy] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const [err, setErr] = useState('')
+  const [quotaError, setQuotaError] = useState(null)
   const [conversationOpen, setConversationOpen] = useState(false)
-  const [mathMode, setMathMode] = useState({})
   const scrollRef = useRef(null)
   const busyRef = useRef(false)
   const handledPromptRef = useRef(null)
+  const handledContextRef = useRef(null)
 
   const chat = state.chats.find((c) => c.id === chatId) || state.chats[0] || null
   const messages = chat?.messages || []
@@ -59,13 +59,14 @@ export default function AIAssistant({ floating = true }) {
     return null
   }, [aiPanel.context, state.notes, state.assignments])
 
-  const createChat = (title = 'New chat') => {
-    const c = add('chats', { title, messages: [], createdAt: Date.now() })
+  const createChat = (title = 'New chat', mode = 'chat') => {
+    const c = add('chats', { title, mode, messages: [], createdAt: Date.now() })
     setChatId(c.id)
     return c
   }
 
   const newChat = () => createChat()
+  const newTutorChat = () => createChat('Tutor session', 'tutor')
 
   const renameChat = () => {
     if (!chat) return
@@ -83,11 +84,11 @@ export default function AIAssistant({ floating = true }) {
     setChatId(state.chats.find((c) => c.id !== chat.id)?.id || null)
   }
 
-  const send = async (text, targetChat = chat) => {
+  const send = async (text, targetChat = chat, options = {}) => {
     const content = (text ?? input).trim()
     if (!content || !targetChat || busyRef.current) return
     busyRef.current = true
-    setErr('')
+    setErr(''); setQuotaError(null)
 
     const baseMessages = targetChat.messages || []
     const newMsgs = [...baseMessages, { role: 'user', content, at: Date.now() }]
@@ -105,6 +106,7 @@ export default function AIAssistant({ floating = true }) {
           settings: state.settings,
           system: buildAgentSystemPrompt(state, contextNote),
           json: true,
+          aiModeOverride: options.aiModeOverride,
           messages: newMsgs.map(({ role, content }) => ({ role, content })),
         })
         const actions = Array.isArray(plan?.actions) ? plan.actions : []
@@ -128,7 +130,8 @@ export default function AIAssistant({ floating = true }) {
         } else if (!applied.length && plan?.handoffToChat && classifyAssistantIntent(content) === 'chat') {
           reply = await callAI({
             settings: state.settings,
-            system: buildSystemPrompt(state, contextNote),
+            system: targetChat.mode === 'tutor' ? tutorSystemPrompt(state, contextNote) : buildSystemPrompt(state, contextNote),
+            aiModeOverride: options.aiModeOverride,
             messages: newMsgs.map(({ role, content }) => ({ role, content })),
           })
         } else if (!applied.length) {
@@ -137,7 +140,8 @@ export default function AIAssistant({ floating = true }) {
       } else {
         reply = await callAI({
           settings: state.settings,
-          system: buildSystemPrompt(state, contextNote),
+          system: targetChat.mode === 'tutor' ? tutorSystemPrompt(state, contextNote) : buildSystemPrompt(state, contextNote),
+          aiModeOverride: options.aiModeOverride,
           messages: newMsgs.map(({ role, content }) => ({ role, content })),
         })
       }
@@ -149,7 +153,11 @@ export default function AIAssistant({ floating = true }) {
         title: makeChatTitle(targetChat.title, content, reply),
       })
     } catch (e) {
-      setErr(e.message || 'Something went wrong')
+      if (['QUOTA_5HR', 'QUOTA_WEEKLY'].includes(e.code)) {
+        setQuotaError({ message: e.message, content, chatId: targetChat.id })
+      } else {
+        setErr(e.message || 'Something went wrong')
+      }
     } finally {
       busyRef.current = false
       setBusy(false)
@@ -164,6 +172,12 @@ export default function AIAssistant({ floating = true }) {
     clearAIPrompt?.()
     setTimeout(() => send(prompt, c), 0)
   }, [aiPanel.open, aiPanel.initialPrompt, aiPanel.requestId])
+
+  useEffect(() => {
+    if (!aiPanel.open || !aiPanel.context || aiPanel.initialPrompt || handledContextRef.current === aiPanel.requestId) return
+    handledContextRef.current = aiPanel.requestId
+    createChat(`${aiPanel.context.type || 'Context'} help`)
+  }, [aiPanel.open, aiPanel.context, aiPanel.initialPrompt, aiPanel.requestId])
 
   const body = (
     <div className="flex flex-col h-full min-h-0">
@@ -204,6 +218,7 @@ export default function AIAssistant({ floating = true }) {
           )}
         </div>
         <button className="btn-ghost" onClick={newChat} title="New conversation"><Icon.plus className="w-4 h-4" /></button>
+        <button className="btn-ghost" onClick={newTutorChat} title="New tutor session"><Icon.brain className="w-4 h-4" /></button>
         <button className="btn-ghost" onClick={renameChat} title="Rename conversation"><Icon.note className="w-4 h-4" /></button>
         <button className="btn-ghost text-rose-600" onClick={deleteChat} title="Delete conversation"><Icon.trash className="w-4 h-4" /></button>
         {floating && <button className="btn-ghost" onClick={closeAI} title="Close"><Icon.x className="w-4 h-4" /></button>}
@@ -239,12 +254,7 @@ export default function AIAssistant({ floating = true }) {
                 : 'bg-ink-100 dark:bg-ink-800 text-ink-900 dark:text-ink-50 rounded-bl-md'}`}>
               {m.role === 'assistant' ? (
                 <>
-                  <Markdown text={m.content} mathMode={mathMode[i] || 'auto'} />
-                  {hasRawMath(m.content) && mathMode[i] !== 'aggressive' && (
-                    <button className="mt-2 text-xs underline text-brand-700 dark:text-brand-200" onClick={() => setMathMode((current) => ({ ...current, [i]: 'aggressive' }))} type="button">
-                      Render maths
-                    </button>
-                  )}
+                  <Markdown text={m.content} mathMode="aggressive" />
                 </>
               ) : <div className="whitespace-pre-wrap">{m.content}</div>}
               {m.role === 'assistant' && m.quiz && (
@@ -256,13 +266,30 @@ export default function AIAssistant({ floating = true }) {
         ))}
         {busy && <div className="text-sm text-ink-500 animate-pulse-soft">Syllabi is thinking... {elapsed}s</div>}
         {err && <div className="text-sm text-accent-rose">{err}</div>}
+        {quotaError && (
+          <div className="rounded-2xl bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-100 dark:bg-amber-900/20 dark:text-amber-100 dark:ring-amber-800">
+            <div>{quotaError.message}</div>
+            <button
+              className="btn-soft mt-2"
+              type="button"
+              onClick={() => {
+                const c = state.chats.find((item) => item.id === quotaError.chatId) || chat
+                const content = quotaError.content
+                setQuotaError(null)
+                send(content, c, { aiModeOverride: 'normal' })
+              }}
+            >
+              Use Normal instead
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="p-4 border-t border-ink-100 dark:border-ink-800">
         <div className="flex items-end gap-2">
           <textarea
             className="input min-h-[48px] max-h-40 resize-none"
-            placeholder="Ask anything - plan, explain, quiz, summarize..."
+            placeholder={chat?.mode === 'tutor' ? 'Answer the tutor, ask for a hint, or name a topic...' : 'Ask anything - plan, explain, quiz, summarize...'}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
@@ -315,6 +342,17 @@ function makeChatTitle(current, userText, assistantText) {
   if (/^(hi|hello|hey|yo|sup)[!?.\s]*$/i.test(cleanedUser)) return 'Quick chat'
   const source = cleanedUser || String(assistantText || '').replace(/\s+/g, ' ').trim()
   return source.length > 52 ? `${source.slice(0, 49)}...` : source || 'New chat'
+}
+
+function tutorSystemPrompt(state, contextNote) {
+  return `${buildSystemPrompt(state, contextNote)}
+
+You are in Tutor Mode. Teach Socratically:
+- Ask one question at a time.
+- Give hints before revealing answers.
+- Adapt difficulty based on the student's reply.
+- Be encouraging but do not simply dump the solution unless the student asks.
+- When a concept is missed, suggest a flashcard the student could save.`
 }
 
 function quizFromActions(actions) {

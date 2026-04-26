@@ -95,6 +95,8 @@ export default function Notes() {
   const [preview, setPreview] = useState(true)
   const [aiOutput, setAiOutput] = useState(null)
   const [aiBusy, setAiBusy] = useState(false)
+  const [rewritePreview, setRewritePreview] = useState(null)
+  const [undoRewrite, setUndoRewrite] = useState(null)
 
   useEffect(() => {
     if (route.params?.id) setSelectedId(route.params.id)
@@ -209,9 +211,40 @@ export default function Notes() {
         system: buildSystemPrompt(state, 'Rewriting a note for clarity.'),
         messages: [{ role: 'user', content: `Rewrite this note to be clearer and better structured with headings and bullet points. Keep facts intact.\n\n${note.content}` }],
       })
-      patch({ content: normalizeAIText(text) })
-      showToast('Note rewritten', 'success')
+      setRewritePreview({ noteId: note.id, original: note.content, text: normalizeAIText(text) })
+      showToast('Rewrite preview ready', 'success')
     } catch (e) { showToast(e.message || 'AI error', 'error') } finally { setAiBusy(false) }
+  }
+
+  const acceptRewrite = () => {
+    if (!rewritePreview || !note) return
+    patch({ content: rewritePreview.text })
+    setUndoRewrite({ noteId: note.id, content: rewritePreview.original })
+    setRewritePreview(null)
+    showToast('Rewrite accepted - undo available below', 'success')
+  }
+
+  const copyRewrite = () => {
+    if (!rewritePreview || !note) return
+    const copied = add('notes', {
+      title: `${note.title || 'Note'} rewrite`,
+      content: rewritePreview.text,
+      subjectId: note.subjectId || null,
+      tags: [...(note.tags || []), 'rewrite'],
+      pinned: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+    setSelectedId(copied.id)
+    setRewritePreview(null)
+    showToast('Copied rewrite to a new note', 'success')
+  }
+
+  const restoreRewrite = () => {
+    if (!undoRewrite) return
+    update('notes', { id: undoRewrite.noteId, content: undoRewrite.content, updatedAt: Date.now() })
+    setUndoRewrite(null)
+    showToast('Rewrite undone', 'success')
   }
 
   const saveCardsToDeck = (cards) => {
@@ -365,6 +398,22 @@ export default function Notes() {
             </div>
 
             {aiBusy && <div className="text-sm text-ink-500 animate-pulse-soft mt-3">Working...</div>}
+            {rewritePreview?.noteId === note.id && (
+              <div className="mt-3 rounded-2xl bg-brand-50 p-4 ring-1 ring-brand-100 dark:bg-brand-900/20 dark:ring-brand-800">
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <div className="font-semibold mr-auto">Rewrite preview</div>
+                  <button className="btn-primary" onClick={acceptRewrite}>Accept rewrite</button>
+                  <button className="btn-soft" onClick={copyRewrite}>Copy to new note</button>
+                  <button className="btn-ghost" onClick={() => setRewritePreview(null)}>Reject</button>
+                </div>
+                <Markdown text={rewritePreview.text} />
+              </div>
+            )}
+            {undoRewrite?.noteId === note.id && (
+              <div className="mt-3 rounded-2xl bg-amber-50 p-3 text-sm ring-1 ring-amber-100 dark:bg-amber-900/20 dark:ring-amber-800">
+                Rewrite accepted. <button className="font-semibold underline" onClick={restoreRewrite}>Undo rewrite</button>
+              </div>
+            )}
             {aiOutput && (
               <div className="mt-3 p-4 rounded-2xl bg-ink-50 dark:bg-ink-800">
                 {aiOutput.kind === 'markdown' && <Markdown text={aiOutput.text} />}

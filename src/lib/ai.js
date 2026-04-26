@@ -1,5 +1,6 @@
 // Lightweight AI client. Production AI calls go through the server proxy so API keys
 // never enter the browser bundle or user settings.
+import { supabase } from './supabase.js'
 
 export const buildSystemPrompt = (state, contextNote) => {
   const subjects = state.subjects.map((s) => `- ${s.name}${s.teacher ? ` (${s.teacher})` : ''}`).join('\n')
@@ -11,6 +12,43 @@ export const buildSystemPrompt = (state, contextNote) => {
       return `- ${a.title} [${subj}] due ${new Date(a.due).toLocaleString()} (${a.priority})`
     })
     .join('\n')
+  const gradesBySubject = state.subjects.map((subject) => {
+    const grades = (state.grades || []).filter((grade) => grade.subjectId === subject.id)
+    if (!grades.length) return `- ${subject.name}: no grades yet`
+    const totalWeight = grades.reduce((total, grade) => total + (Number(grade.weight) || 1), 0)
+    const weighted = grades.reduce((total, grade) => total + ((Number(grade.score) || 0) / Math.max(1, Number(grade.outOf) || 100)) * 100 * (Number(grade.weight) || 1), 0) / Math.max(1, totalWeight)
+    const recent = grades.slice().sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 3)
+      .map((grade) => `${grade.name}: ${grade.score}/${grade.outOf}`)
+      .join(', ')
+    return `- ${subject.name}: ${Math.round(weighted)}% weighted average. Recent: ${recent}`
+  }).join('\n')
+  const weakest = state.subjects
+    .map((subject) => {
+      const grades = (state.grades || []).filter((grade) => grade.subjectId === subject.id)
+      if (!grades.length) return null
+      const avg = grades.reduce((total, grade) => total + ((Number(grade.score) || 0) / Math.max(1, Number(grade.outOf) || 100)) * 100, 0) / grades.length
+      return { name: subject.name, avg }
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.avg - b.avg)
+    .slice(0, 2)
+    .map((item) => `${item.name} (${Math.round(item.avg)}%)`)
+    .join(', ')
+  const timetable = (state.timetable || []).slice(0, 20).map((slot) => {
+    const subject = state.subjects.find((s) => s.id === slot.subjectId)?.name || 'Study'
+    const day = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][Math.max(0, Number(slot.day || 1) - 1)]
+    return `- ${day} ${slot.start}-${slot.end}: ${subject}${slot.room ? ` in ${slot.room}` : ''}`
+  }).join('\n')
+  const decks = (state.decks || []).map((deck) => {
+    const cards = (state.flashcards || []).filter((card) => card.deckId === deck.id)
+    const due = cards.filter((card) => Number(card.due || 0) <= Date.now()).length
+    return `- ${deck.name}: ${cards.length} cards, ${due} due`
+  }).join('\n')
+  const sevenDaysAgo = Date.now() - 7 * 86400000
+  const recentStudy = (state.studySessions || [])
+    .filter((session) => Number(session.at || 0) >= sevenDaysAgo || (session.date && new Date(session.date).getTime() >= sevenDaysAgo))
+    .reduce((total, session) => total + (Number(session.minutes) || 0), 0)
+  const habits = (state.habits || []).map((habit) => `- ${habit.name}: streak ${habit.streak || 0}`).join('\n')
   return `You are Syllabi, a warm, focused study assistant for ${state.user.name || 'the student'}.
 You help with notes, study planning, revision, and explaining concepts clearly.
 Prefer concise, structured answers with examples. Use markdown.
@@ -26,16 +64,30 @@ ${subjects || '- none yet -'}
 Upcoming work:
 ${upcoming || '- nothing pending -'}
 
+Grades:
+${gradesBySubject || '- no grades yet -'}
+Weakest subjects: ${weakest || 'not enough grade data yet'}
+
+Timetable:
+${timetable || '- no timetable blocks yet -'}
+
+Revision decks:
+${decks || '- no decks yet -'}
+
+Recent study time: ${recentStudy} minutes in the last 7 days.
+Habits:
+${habits || '- no habits yet -'}
+
 ${contextNote ? `\nContext for this conversation:\n${contextNote}\n` : ''}`
 }
 
-export const callAI = async ({ settings, system, messages, json = false }) => {
+export const callAI = async ({ settings, system, messages, json = false, aiModeOverride = null }) => {
   if (settings.aiProvider === 'mock') {
     return mockReply(messages, json)
   }
   if (!isLocalVite()) {
     try {
-      return await callProviderProxy({ settings, system, messages, json })
+      return await callProviderProxy({ settings, system, messages, json, aiModeOverride })
     } catch (error) {
       throw error
     }
@@ -43,13 +95,14 @@ export const callAI = async ({ settings, system, messages, json = false }) => {
   return mockReply(messages, json)
 }
 
-async function callProviderProxy({ settings, system, messages, json }) {
+async function callProviderProxy({ settings, system, messages, json, aiModeOverride }) {
+  const token = await getAccessToken()
+  if (!token) throw new Error('Sign in to use Syllabi AI.')
   const res = await fetch('/api/ai', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({
-      provider: 'openrouter',
-      model: settings.aiModel,
+      aiMode: aiModeOverride || settings.aiMode || 'normal',
       system,
       messages,
       json,
@@ -57,11 +110,35 @@ async function callProviderProxy({ settings, system, messages, json }) {
   })
   if (!res.ok) {
     const data = await res.json().catch(() => null)
-    throw new Error(data?.error || `AI proxy error: ${res.status}`)
+    const error = new Error(data?.message || data?.error || `AI proxy error: ${res.status}`)
+    error.code = data?.error
+    error.resetIn = data?.reset_in
+    error.resetAt = data?.reset_at
+    throw error
   }
   const data = await res.json()
   const text = data.text || ''
   return json ? safeJSON(text) : text
+}
+
+export async function fetchAIUsage() {
+  if (!supabase) return null
+  const { data: sessionData } = await supabase.auth.getSession()
+  const userId = sessionData.session?.user?.id
+  if (!userId) return null
+  const { data, error } = await supabase
+    .from('user_ai_usage')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
+async function getAccessToken() {
+  if (!supabase) return ''
+  const { data } = await supabase.auth.getSession()
+  return data.session?.access_token || ''
 }
 
 function isLocalVite() {

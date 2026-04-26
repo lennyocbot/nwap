@@ -206,12 +206,13 @@ export function AppProvider({ children }) {
   const signIn = useCallback(async (email, password) => {
     if (!supabase) {
       showToast('Supabase is not configured yet', 'error')
-      return
+      return { ok: false, error: 'Supabase is not configured yet' }
     }
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (!error) {
       showToast('Signed in', 'success')
-      return
+      const { data } = await supabase.auth.getSession()
+      return { ok: true, user: data.session?.user || null }
     }
     const created = await supabase.auth.signUp({
       email,
@@ -220,8 +221,16 @@ export function AppProvider({ children }) {
         emailRedirectTo: window.location.origin,
       },
     })
-    if (created.error) showToast(created.error.message, 'error')
-    else showToast('Account created. Check email confirmation if Supabase requires it.', 'success')
+    if (created.error) {
+      showToast(created.error.message, 'error')
+      return { ok: false, error: created.error.message }
+    }
+    if (created.data?.session?.user) {
+      showToast('Account created and signed in', 'success')
+      return { ok: true, user: created.data.session.user }
+    }
+    showToast('Account created. Check your email, then sign in.', 'success')
+    return { ok: false, needsEmailConfirmation: true }
   }, [showToast])
 
   const signOut = useCallback(async () => {

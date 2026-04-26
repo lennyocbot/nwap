@@ -20,6 +20,13 @@ function normalizeMathText(text, mode) {
   let out = text
     .replace(/\\\[((?:.|\n)*?)\\\]/g, (_, expr) => `$$${expr.trim()}$$`)
     .replace(/\\\(((?:.|\n)*?)\\\)/g, (_, expr) => `$${expr.trim()}$`)
+    .replace(/([A-Za-z])['\u2032]\(([^)]+)\)/g, (_, fn, arg) => `$${fn}'(${arg})$`)
+    .replace(/([A-Za-z])['\u2032]\b/g, (_, fn) => `$${fn}'$`)
+
+  out = out.replace(/(^|\n)([^$\n]*(?:\\(?:int|frac|sqrt|sum|lim)[^$\n]*)\$([^$\n]+)\$([^$\n]*)(?=\n|$))/g, (_, _line, prefix, before, inner, after) => {
+    const expr = `${before}${inner}${after}`.trim()
+    return `${prefix}$$${expr}$$`
+  })
 
   out = out.replace(/(^|[\s(])((?:\\(?:frac|sqrt)\{[^}\n]+\}\{?[^}\n]*\}?|\\(?:int|sum|lim|sin|cos|tan|log|ln|theta|alpha|beta|gamma|pi|omega|Delta|delta|times|cdot|approx|leq|geq|neq|infty)(?:\s*[_^]?\{?[\w+\-=]+\}?)*)(?:\s*[+\-=]\s*(?:\\?\w+|\d+|\{[^}\n]+\}))*)/g, (match, prefix, expr) => {
     if (match.includes('$')) return match

@@ -25,7 +25,26 @@ export function buildAgentSystemPrompt(state, contextNote) {
     title: a.title,
     subjectId: a.subjectId,
     due: a.due,
-    status: a.status
+    status: a.status,
+    priority: a.priority,
+    estMinutes: a.estMinutes,
+    notes: a.notes
+  }))
+  const grades = state.grades.map((g) => ({
+    name: g.name,
+    subjectId: g.subjectId,
+    score: g.score,
+    outOf: g.outOf,
+    weight: g.weight,
+    date: g.date,
+  }))
+  const timetable = state.timetable.map((t) => ({ day: t.day, start: t.start, end: t.end, subjectId: t.subjectId, room: t.room }))
+  const decksSummary = state.decks.map((d) => ({
+    id: d.id,
+    name: d.name,
+    subjectId: d.subjectId,
+    cards: state.flashcards.filter((card) => card.deckId === d.id).length,
+    due: state.flashcards.filter((card) => card.deckId === d.id && card.due <= Date.now()).length,
   }))
 
   return `You are Syllabi's app operator with tools. You are smarter than brittle keyword matching, so interpret typos, follow-up answers, natural dates, and chat history.
@@ -56,7 +75,10 @@ Supported action objects:
 ${contextNote ? `Current page context:\n${contextNote}\n` : ''}
 Subjects: ${JSON.stringify(subjects)}
 Decks: ${JSON.stringify(decks)}
-Assignments: ${JSON.stringify(assignments).slice(0, 3500)}`
+Assignments: ${JSON.stringify(assignments).slice(0, 5000)}
+Grades: ${JSON.stringify(grades).slice(0, 3500)}
+Timetable: ${JSON.stringify(timetable).slice(0, 3500)}
+Revision decks: ${JSON.stringify(decksSummary).slice(0, 2500)}`
 }
 
 export function applyAgentActions({ actions, state, dispatch }) {

@@ -57,7 +57,7 @@ export default function Assignments() {
       const txt = await callAI({
         settings: state.settings,
         system: buildSystemPrompt(state, `Breaking an assignment into concrete steps.`),
-        messages: [{ role: 'user', content: `Break the assignment "${open.title}" for ${s?.name || 'class'} (due ${new Date(open.due).toLocaleString()}) into 5-8 actionable steps with rough time estimates. Markdown checklist.\n\nNotes: ${open.notes || 'none'}` }],
+        messages: [{ role: 'user', content: `Break the assignment "${open.title}" for ${s?.name || 'class'} (due ${new Date(open.due).toLocaleString()}) into 5-8 actionable steps that fit the student's estimate of ${open.estMinutes || 60} minutes. Start with "Your estimate: ${open.estMinutes || 60} min — here's a focused plan that fits." Only warn if the estimate is unrealistic. Markdown checklist with minutes per step.\n\nNotes: ${open.notes || 'none'}` }],
       })
       setAiOut(normalizeAIText(txt))
     } catch (e) { showToast(e.message || 'AI error', 'error') } finally { setAiBusy(false) }
@@ -71,7 +71,7 @@ export default function Assignments() {
           {state.subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
         <div className="flex-1" />
-        <button className="btn-soft" onClick={() => openAI()}><Icon.sparkle className="w-4 h-4" /> Plan with AI</button>
+        <button className="btn-soft" onClick={() => openAI(null, assignmentPlanPrompt(state.assignments, state.subjects))}><Icon.sparkle className="w-4 h-4" /> Plan with AI</button>
         <button className="btn-primary" onClick={create}><Icon.plus className="w-4 h-4" /> New</button>
       </div>
 
@@ -209,4 +209,23 @@ function assignmentMinutes(studySessions, assignmentId) {
   return (studySessions || [])
     .filter((session) => session.assignmentId === assignmentId)
     .reduce((total, session) => total + (Number(session.minutes) || 0), 0)
+}
+
+function assignmentPlanPrompt(assignments, subjects) {
+  const rows = assignments
+    .filter((assignment) => assignment.status !== 'done')
+    .slice()
+    .sort((a, b) => new Date(a.due) - new Date(b.due))
+    .map((assignment) => {
+      const subject = subjects.find((item) => item.id === assignment.subjectId)?.name || 'General'
+      return `- ${assignment.title} | ${subject} | due ${new Date(assignment.due).toLocaleString()} | ${assignment.priority} | ${assignment.status} | estimate ${assignment.estMinutes || 60}m | notes: ${assignment.notes || 'none'}`
+    })
+    .join('\n')
+  return [
+    'Create a study plan for my current assignments this week.',
+    'Use the assignment data below directly. Do not ask me to provide priorities, dates, estimates, or details already listed.',
+    'Tell me which assignment to start with today and why, then give a realistic schedule.',
+    '',
+    rows || 'No open assignments.',
+  ].join('\n')
 }

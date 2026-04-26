@@ -157,3 +157,31 @@ create table if not exists public.api_rate_limits (
 
 create index if not exists api_rate_limits_reset_at_idx
   on public.api_rate_limits(reset_at);
+
+create table if not exists public.user_ai_usage (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  requests_total integer not null default 0,
+  normal_requests_5hr integer not null default 0,
+  normal_requests_168hr integer not null default 0,
+  high_boosts_5hr integer not null default 0,
+  high_boosts_168hr integer not null default 0,
+  window_5hr_start timestamptz not null default now(),
+  window_168hr_start timestamptz not null default now(),
+  tokens_input_total bigint not null default 0,
+  tokens_output_total bigint not null default 0,
+  cost_usd_total numeric not null default 0,
+  cost_usd_5hr numeric not null default 0,
+  cost_usd_168hr numeric not null default 0,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.user_ai_usage enable row level security;
+
+drop policy if exists "Users can read own ai usage" on public.user_ai_usage;
+create policy "Users can read own ai usage"
+  on public.user_ai_usage for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+drop policy if exists "Users can insert own ai usage" on public.user_ai_usage;
+drop policy if exists "Users can update own ai usage" on public.user_ai_usage;

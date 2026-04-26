@@ -26,7 +26,7 @@ const schedule = (card, quality) => {
 }
 
 export default function Revision() {
-  const { state, add, update, remove, showToast, route } = useApp()
+  const { state, add, update, remove, showToast, route, navigate } = useApp()
   const [deckId, setDeckId] = useState(route.params?.deckId || state.decks[0]?.id || null)
   const [studying, setStudying] = useState(false)
   const [creatingDeck, setCreatingDeck] = useState(false)
@@ -136,6 +136,16 @@ export default function Revision() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-4">
       <div className="card p-3">
+        <button
+          className="mb-3 w-full rounded-2xl bg-brand-50 p-3 text-left ring-1 ring-brand-100 hover:bg-brand-100 dark:bg-brand-900/20 dark:ring-brand-800"
+          onClick={() => navigate('exams')}
+          type="button"
+        >
+          <div className="flex items-center gap-2 font-semibold text-brand-800 dark:text-brand-100">
+            <Icon.grade className="w-4 h-4" /> Exam Simulator
+          </div>
+          <div className="mt-1 text-xs text-ink-500">Timed papers, AI marking, and correction cards.</div>
+        </button>
         <div className="flex items-center justify-between px-1 mb-2">
           <div className="font-display font-semibold">Decks</div>
           <button className="btn-ghost" onClick={() => setCreatingDeck(true)}><Icon.plus className="w-4 h-4" /></button>

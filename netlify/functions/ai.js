@@ -10,8 +10,8 @@ export default async (req) => {
     return json({ error: 'Invalid JSON body' }, 400)
   }
 
-  const provider = body.provider || 'openrouter'
-  const key = Netlify.env.get(`${provider.toUpperCase()}_API_KEY`)
+  const provider = 'openrouter'
+  const key = Netlify.env.get('OPENROUTER_API_KEY')
 
   if (!key) {
     return json({ error: 'Server AI is not configured yet' }, 400)
@@ -48,7 +48,7 @@ async function callOpenRouter({ model, system, messages, json: wantsJson, apiKey
       'X-Title': 'Syllabi'
     },
     body: JSON.stringify({
-      model: model || defaultModel || 'deepseek/deepseek-r1',
+      model: model || defaultModel || 'meta-llama/llama-3.3-70b-instruct',
       response_format: wantsJson ? { type: 'json_object' } : undefined,
       messages: [
         { role: 'system', content: wantsJson ? `${system}\n\nReturn ONLY valid JSON.` : system },

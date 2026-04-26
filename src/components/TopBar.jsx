@@ -11,6 +11,7 @@ const titles = {
   calendar: 'Calendar',
   study: 'Study Timer',
   revision: 'Revision',
+  exams: 'Exam Simulator',
   subjects: 'Subjects',
   grades: 'Grades',
   goals: 'Goals',

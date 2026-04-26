@@ -12,6 +12,7 @@ const primary = [
   { id: 'calendar',   label: 'Calendar',   icon: 'calendar' },
   { id: 'study',      label: 'Study',      icon: 'timer' },
   { id: 'revision',   label: 'Revision',   icon: 'cards' },
+  { id: 'exams',      label: 'Exam Simulator', icon: 'grade' },
 ]
 
 const secondary = [

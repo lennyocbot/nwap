@@ -5,6 +5,7 @@ An AI-first personal manager for students, optimized for iPad. Installs as a PWA
 ## Features
 
 - **AI assistant** via secure server-side OpenRouter - planning, explanations, quizzes, summaries, and tool-backed app actions
+- **AI Tutor Mode** and **Exam Simulator** for active revision
 - **Short onboarding** with account setup, profile basics, and non-blocking setup nudges
 - **AI Study Coach** daily brief on the Dashboard
 - **Account page** with profile picture, stats, sync status, and achievement badges
@@ -32,7 +33,7 @@ Open on iPad Safari, then Share -> **Add to Home Screen**.
 
 ## AI
 
-Set `OPENROUTER_API_KEY` on Cloudflare Pages/Workers. The browser never asks students for a key and never sends one from user settings. The default model is `deepseek/deepseek-r1`; users can change the model slug in **Settings -> AI**.
+Set `OPENROUTER_API_KEY` on Cloudflare Pages/Workers. The browser never asks students for a key and never sends one from user settings. Students choose **Normal** or **High intelligence**; the worker maps those modes to the approved OpenRouter models and enforces usage quotas.
 
 ## Cloudflare push reminders
 
@@ -45,6 +46,7 @@ Run `supabase-schema.sql` in Supabase, then set these Cloudflare Pages/Worker va
 - `VAPID_PRIVATE_KEY`
 - `VAPID_SUBJECT`
 - `OPENROUTER_API_KEY`
-- optional `OPENROUTER_MODEL`
+
+For High intelligence burst limiting, create a Cloudflare KV namespace and bind it to the Pages project as `AI_BURST_KV`. If the binding is missing, the worker still enforces Supabase-backed 5-hour and weekly quotas.
 
 The Pages Functions under `functions/api` handle AI and push subscription/test endpoints. The scheduled reminder worker lives in `worker/reminders` and has separate cron triggers for 15-minute reminders and hourly coach checks.

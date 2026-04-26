@@ -1,14 +1,19 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useApp } from '../context/AppContext.jsx'
 import { Icon } from '../components/Icons.jsx'
 import { cx, downloadJSON, subjectColors } from '../lib/utils.js'
 import { pushSupport, sendTestPush, subscribeToPush, unsubscribeFromPush } from '../lib/push.js'
+import { fetchAIUsage } from '../lib/ai.js'
 
 export default function Settings() {
   const { state, setSettings, setUser, showToast, reset, replaceAll, account, signIn, signOut, retrySync } = useApp()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [pushBusy, setPushBusy] = useState(false)
+  const [authBusy, setAuthBusy] = useState(false)
+  const [authMessage, setAuthMessage] = useState('')
+  const [usage, setUsage] = useState(null)
+  const [usageError, setUsageError] = useState('')
   const fileRef = useRef(null)
   const push = typeof window === 'undefined' ? { supported: false, permission: 'unsupported' } : pushSupport()
   const reminders = state.settings.reminders || {}
@@ -73,6 +78,31 @@ export default function Settings() {
 
   const updateReminders = (patch) => setSettings({ reminders: { ...reminders, ...patch } })
 
+  useEffect(() => {
+    let cancelled = false
+    if (!account.user) {
+      setUsage(null)
+      return
+    }
+    fetchAIUsage()
+      .then((data) => { if (!cancelled) setUsage(data) })
+      .catch((error) => { if (!cancelled) setUsageError(error.message || 'Could not load AI usage') })
+    return () => { cancelled = true }
+  }, [account.user?.id])
+
+  const submitAuth = async (event) => {
+    event.preventDefault()
+    setAuthBusy(true)
+    setAuthMessage('')
+    try {
+      const result = await signIn(email, password)
+      if (result?.needsEmailConfirmation) setAuthMessage('Check your email to confirm your account, then sign in here.')
+      else if (result?.error) setAuthMessage(result.error)
+    } finally {
+      setAuthBusy(false)
+    }
+  }
+
   return (
     <div className="space-y-4 max-w-2xl">
       <Section title="Profile" icon="subject">
@@ -133,10 +163,7 @@ export default function Settings() {
         ) : (
           <form
             className="grid gap-3"
-            onSubmit={(e) => {
-              e.preventDefault()
-              signIn(email, password)
-            }}
+            onSubmit={submitAuth}
           >
             <Field label="Email">
               <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
@@ -144,7 +171,8 @@ export default function Settings() {
             <Field label="Password">
               <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
             </Field>
-            <button className="btn-primary">Sign in or create account</button>
+            <button className="btn-primary" disabled={authBusy}>{authBusy ? 'Working...' : 'Sign in or create account'}</button>
+            {authMessage && <div className="rounded-2xl bg-amber-50 p-3 text-xs text-amber-900 ring-1 ring-amber-100 dark:bg-amber-900/20 dark:text-amber-100 dark:ring-amber-800">{authMessage}</div>}
             <div className="rounded-2xl border border-amber-100 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-100">
               Local demo mode. Nothing here is shared across devices until you sign in.
             </div>
@@ -157,26 +185,24 @@ export default function Settings() {
 
       <Section title="AI" icon="sparkle">
         <div className="rounded-2xl bg-brand-50 p-3 text-sm text-brand-900 ring-1 ring-brand-100 dark:bg-brand-900/30 dark:text-brand-100 dark:ring-brand-800">
-          Syllabi AI is built into this workspace. Choose the model you want it to use.
+          Syllabi AI is built into this workspace. Choose how much extra thinking power to use.
         </div>
-        <Field label="Model">
-          <input className="input font-mono" value={state.settings.aiModel}
-            onChange={(e) => setSettings({ aiProvider: 'openrouter', aiModel: e.target.value })}
-            placeholder={defaultModel()} />
-          <div className="text-xs text-ink-500 mt-2">
-            Popular picks:{' '}
-            {[
-              ['deepseek/deepseek-r1', 'DeepSeek R1'],
-              ['anthropic/claude-sonnet-4-5', 'Claude Sonnet'],
-              ['openai/gpt-4o', 'GPT-4o'],
-              ['google/gemini-2.5-pro', 'Gemini Pro'],
-              ['meta-llama/llama-3.3-70b-instruct', 'Llama 70B'],
-            ].map(([model, label]) => (
-              <button key={model} className="font-semibold underline text-brand-600 mr-2"
-                onClick={() => setSettings({ aiProvider: 'openrouter', aiModel: model })}>{label}</button>
-            ))}
-          </div>
-        </Field>
+        <div className="inline-flex rounded-2xl bg-ink-100 p-1 text-sm dark:bg-ink-800">
+          {[
+            ['normal', 'Normal'],
+            ['high', 'High intelligence'],
+          ].map(([mode, label]) => (
+            <button
+              key={mode}
+              className={cx('rounded-xl px-4 py-2 font-semibold transition', (state.settings.aiMode || 'normal') === mode && 'bg-white text-brand-700 shadow-sm dark:bg-ink-900 dark:text-brand-100')}
+              onClick={() => setSettings({ aiProvider: 'openrouter', aiMode: mode })}
+              type="button"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <AIUsage usage={usage} error={usageError} signedIn={Boolean(account.user)} />
       </Section>
 
       <Section title="Pomodoro" icon="timer">
@@ -306,6 +332,37 @@ function Field({ label, children }) {
   )
 }
 
-function defaultModel() {
-  return 'deepseek/deepseek-r1'
+function AIUsage({ usage, error, signedIn }) {
+  if (!signedIn) return <div className="text-xs text-ink-500">Sign in to track High intelligence usage across devices.</div>
+  if (error) return <div className="text-xs text-rose-600">{error}</div>
+  const used = Number(usage?.high_boosts_5hr || 0)
+  const weekly = Number(usage?.high_boosts_168hr || 0)
+  const pct = Math.min(100, (used / 35) * 100)
+  const resetAt = usage?.window_5hr_start ? new Date(new Date(usage.window_5hr_start).getTime() + 5 * 60 * 60 * 1000) : null
+  const full = used >= 35 || Number(usage?.cost_usd_5hr || 0) >= 0.10
+  return (
+    <div className="rounded-2xl bg-white/70 p-3 ring-1 ring-ink-100 dark:bg-ink-900/70 dark:ring-ink-800">
+      <div className="flex items-center justify-between gap-3 text-sm">
+        <span className="font-semibold">AI Usage</span>
+        <span className={cx('font-semibold', full ? 'text-amber-700 dark:text-amber-200' : 'text-ink-500')}>{used} / 35 boosts used</span>
+      </div>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-ink-100 dark:bg-ink-800">
+        <div className={cx('h-full transition-all', full ? 'bg-amber-500' : 'bg-brand-500')} style={{ width: `${pct}%` }} />
+      </div>
+      <div className="mt-2 text-xs text-ink-500">
+        {full ? 'High intelligence is resting. ' : ''}Resets {resetAt ? `in ${remaining(resetAt)}` : 'after your first boost'}.
+      </div>
+      <div className="text-xs text-ink-500">Weekly: {weekly} / 175 boosts. Normal mode has no limit.</div>
+    </div>
+  )
+}
+
+function remaining(date) {
+  const minutes = Math.max(0, Math.ceil((date.getTime() - Date.now()) / 60000))
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  const mins = minutes % 60
+  if (hours < 24) return `${hours}h ${mins}m`
+  const days = Math.floor(hours / 24)
+  return `${days} day${days === 1 ? '' : 's'}`
 }
