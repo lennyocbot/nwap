@@ -94,6 +94,15 @@ body {
 .liquid-spec-b { right: 17vw; top: 21vh; }
 .liquid-spec-c { right: 33vw; bottom: 16vh; }
 
+.animate-rise-in {
+  animation: riseIn 380ms cubic-bezier(.2,.8,.2,1) both;
+}
+
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 @layer components {
   .liquid-glass {
     @apply border border-white/50 bg-white/20 dark:border-white/10 dark:bg-ink-900/30;
@@ -171,6 +180,7 @@ body {
     }
   }
   @media (prefers-reduced-motion: reduce), (pointer: coarse) {
+    .animate-rise-in { animation-duration: 1ms; }
     .liquid-sheen::after { opacity: 0.38; }
     @supports (backdrop-filter: url("#syllabi-liquid-glass")) {
       .liquid-glass,

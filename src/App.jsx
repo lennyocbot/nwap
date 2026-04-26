@@ -62,7 +62,7 @@ export default function App() {
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
         <TopBar onMenu={() => setDrawer(true)} />
         <main className="flex-1 overflow-y-auto">
-          <div className="max-w-6xl mx-auto px-4 md:px-8 py-6 pb-36 md:pb-32">
+          <div className="max-w-6xl mx-auto px-3 sm:px-4 md:px-8 py-4 md:py-6 pb-36 md:pb-32 animate-rise-in">
             <View />
           </div>
         </main>

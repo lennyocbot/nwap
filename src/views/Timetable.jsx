@@ -10,6 +10,8 @@ const days = [
 ]
 
 const schoolRows = [
+  { id: 'before1', label: 'Before school 1', start: '07:00', end: '07:30', kind: 'before' },
+  { id: 'before2', label: 'Before school 2', start: '07:30', end: '08:00', kind: 'before' },
   { id: 'form', label: 'Form', start: '08:00', end: '08:15', kind: 'form', defaultTitle: 'Form time' },
   { id: 'p1', label: 'Period 1', start: '08:15', end: '09:15', kind: 'lesson' },
   { id: 'p2', label: 'Period 2', start: '09:15', end: '10:15', kind: 'lesson' },
@@ -21,6 +23,7 @@ const schoolRows = [
   { id: 'p6', label: 'Period 6', start: '14:30', end: '15:30', kind: 'lesson' },
   { id: 'after1', label: 'After school', start: '15:30', end: '16:30', kind: 'after' },
   { id: 'after2', label: 'After school 2', start: '16:30', end: '17:30', kind: 'after' },
+  { id: 'after3', label: 'After school 3', start: '17:30', end: '18:30', kind: 'after' },
 ]
 
 const kindOptions = [
@@ -30,6 +33,7 @@ const kindOptions = [
   ['break', 'Break'],
   ['lunch', 'Lunch'],
   ['club', 'Club / activity'],
+  ['before', 'Before school'],
   ['after', 'After school'],
 ]
 
@@ -62,7 +66,7 @@ export default function Timetable() {
       <div className="flex flex-wrap items-center gap-2">
         <div>
           <div className="font-display text-lg font-bold">School week</div>
-          <div className="text-sm text-ink-500">8:00-3:30 periods, breaks, lunch, and after-school blocks.</div>
+          <div className="text-sm text-ink-500">Before-school slots, 8:00-3:30 periods, breaks, lunch, and after-school blocks.</div>
         </div>
         <div className="flex-1" />
         <button className="btn-soft" onClick={() => fillDefaultDay(todayN)} type="button">
@@ -87,9 +91,19 @@ export default function Timetable() {
         </section>
       )}
 
-      <div className="liquid-glass-strong rounded-[30px] p-3 overflow-x-auto">
-        <div className="min-w-[980px]">
-          <div className="grid gap-2" style={{ gridTemplateColumns: '138px repeat(7, minmax(112px, 1fr))' }}>
+      <MobileTimetable
+        rows={schoolRows}
+        days={days}
+        todayN={todayN}
+        slotFor={slotFor}
+        addSlot={addSlot}
+        setEdit={setEdit}
+        state={state}
+      />
+
+      <div className="liquid-glass-strong hidden rounded-[30px] p-3 overflow-x-auto md:block">
+        <div className="min-w-[900px] xl:min-w-0">
+          <div className="grid gap-2" style={{ gridTemplateColumns: '128px repeat(7, minmax(104px, 1fr))' }}>
             <div className="rounded-2xl px-3 py-2 text-xs font-semibold text-ink-500">Time</div>
             {days.map((day) => (
               <div key={day.n} className={cx('rounded-2xl px-3 py-2 text-center text-sm font-bold', day.n === todayN ? 'bg-brand-600 text-white shadow-pop' : 'bg-white/42 text-ink-600 ring-1 ring-white/60')}>
@@ -230,6 +244,42 @@ function TimetableRow({ row, todayN, slotFor, addSlot, setEdit, state }) {
   )
 }
 
+function MobileTimetable({ rows, days, todayN, slotFor, addSlot, setEdit, state }) {
+  return (
+    <div className="space-y-3 md:hidden">
+      {days.map((day) => (
+        <section key={day.n} className={cx('liquid-glass rounded-[26px] p-3 animate-rise-in', day.n === todayN && 'ring-2 ring-brand-300')}>
+          <div className="mb-3 flex items-center justify-between">
+            <div className="font-display text-lg font-bold">{day.label}</div>
+            <button className="btn-soft !px-3 !py-1.5 text-xs" onClick={() => addSlot(day.n, rows[3])} type="button">
+              <Icon.plus className="w-3 h-3" /> Add
+            </button>
+          </div>
+          <div className="space-y-2">
+            {rows.map((row) => {
+              const slot = slotFor(day.n, row)
+              return (
+                <button
+                  key={row.id}
+                  className="grid w-full grid-cols-[86px_1fr] gap-2 rounded-2xl bg-white/32 p-2 text-left ring-1 ring-white/60"
+                  onClick={() => slot ? setEdit(slot) : addSlot(day.n, row)}
+                  type="button"
+                >
+                  <div>
+                    <div className="text-xs font-semibold">{row.label}</div>
+                    <div className="text-[10px] text-ink-500">{fmtTime(row.start)}-{fmtTime(row.end)}</div>
+                  </div>
+                  {slot ? <SlotCard slot={slot} state={state} /> : <EmptySlot row={row} />}
+                </button>
+              )
+            })}
+          </div>
+        </section>
+      ))}
+    </div>
+  )
+}
+
 function SlotCard({ slot, state }) {
   const subject = state.subjects.find((item) => item.id === slot.subjectId)
   const color = colorFor(subject?.color)
@@ -270,6 +320,7 @@ function kindTone(kind) {
     lunch: 'bg-emerald-500',
     study: 'bg-violet-500',
     club: 'bg-pink-500',
+    before: 'bg-sky-500',
     after: 'bg-ink-500',
   }[kind] || 'bg-brand-500'
 }

@@ -38,7 +38,7 @@ export function buildAgentSystemPrompt(state, contextNote) {
     weight: g.weight,
     date: g.date,
   }))
-  const timetable = state.timetable.map((t) => ({ day: t.day, start: t.start, end: t.end, subjectId: t.subjectId, room: t.room }))
+  const timetable = state.timetable.map((t) => ({ day: t.day, start: t.start, end: t.end, title: t.title, kind: t.kind, subjectId: t.subjectId, room: t.room }))
   const decksSummary = state.decks.map((d) => ({
     id: d.id,
     name: d.name,
@@ -60,12 +60,14 @@ Rules:
 - For quiz requests, return a present_quiz action with interactive questions. Do not create a note unless the user explicitly asks to save the quiz to notes.
 - Dates must be ISO strings. If the user gives a day/month/year, use 23:59 local time for assignments unless they gave a time.
 - Match subjects to existing subject ids, accepting common aliases and typos like maths -> Mathematics and econ -> Economics.
+- For timetable activities that are not lessons, always set a descriptive title from the user's words, e.g. "Volleyball training", and set kind to club, study, before, after, break, lunch, form, or lesson.
+- If the user gives a timetable activity without an exact time, choose a sensible slot from the school timetable: before school 07:00-08:00, school day 08:00-15:30, after school 15:30-18:30.
 
 Supported action objects:
 {"type":"create_assignment","payload":{"title":"...","subjectId":"existing subject id or null","due":"ISO date","priority":"low|medium|high","status":"todo|doing|done","estMinutes":60,"notes":"..."}}
 {"type":"create_note","payload":{"title":"...","content":"markdown","subjectId":"existing subject id or null","tags":["tag"],"pinned":false}}
 {"type":"create_calendar_event","payload":{"title":"...","date":"ISO date","color":"brand","notes":"..."}}
-{"type":"create_timetable_slot","payload":{"day":1,"start":"09:00","end":"10:00","subjectId":"existing subject id or null","room":""}}
+{"type":"create_timetable_slot","payload":{"day":1,"start":"09:00","end":"10:00","title":"custom activity name or lesson title","kind":"lesson|study|form|break|lunch|club|before|after","subjectId":"existing subject id or null","room":""}}
 {"type":"create_revision_session","payload":{"date":"YYYY-MM-DD","minutes":25,"subjectId":"existing subject id or null","at":"ISO date"}}
 {"type":"create_deck","payload":{"name":"...","subjectId":"existing subject id or null","color":"brand"}}
 {"type":"create_flashcards","payload":{"deckName":"...","subjectId":"existing subject id or null","cards":[{"front":"...","back":"..."}]}}
@@ -130,16 +132,19 @@ export function applyAgentActions({ actions, state, dispatch }) {
     }
 
     if (action.type === 'create_timetable_slot') {
+      const subjectId = validSubject(state, payload.subjectId)
       const item = {
         id: uid(),
         day: Number(payload.day) >= 1 && Number(payload.day) <= 7 ? Number(payload.day) : 1,
         start: timeOr(payload.start, '16:00'),
         end: timeOr(payload.end, '17:00'),
-        subjectId: validSubject(state, payload.subjectId),
+        title: normalizeAIText(payload.title || ''),
+        kind: validKind(payload.kind, subjectId),
+        subjectId,
         room: normalizeAIText(payload.room || '')
       }
       dispatch({ type: 'add', key: 'timetable', item })
-      applied.push(`scheduled ${item.start}-${item.end}`)
+      applied.push(`scheduled "${slotTitle(item, state)}" ${item.start}-${item.end}`)
     }
 
     if (action.type === 'create_revision_session') {
@@ -217,6 +222,18 @@ function safeDate(value, fallbackDays) {
 
 function timeOr(value, fallback) {
   return /^\d{2}:\d{2}$/.test(value || '') ? value : fallback
+}
+
+function validKind(kind, subjectId) {
+  const allowed = ['lesson', 'study', 'form', 'break', 'lunch', 'club', 'before', 'after']
+  if (allowed.includes(kind)) return kind
+  return subjectId ? 'lesson' : 'club'
+}
+
+function slotTitle(item, state) {
+  if (item.title) return item.title
+  const subject = state.subjects.find((subject) => subject.id === item.subjectId)
+  return subject?.name || 'Activity'
 }
 
 function safeISODate(value) {

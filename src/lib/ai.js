@@ -37,7 +37,8 @@ export const buildSystemPrompt = (state, contextNote) => {
   const timetable = (state.timetable || []).slice(0, 20).map((slot) => {
     const subject = state.subjects.find((s) => s.id === slot.subjectId)?.name || 'Study'
     const day = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][Math.max(0, Number(slot.day || 1) - 1)]
-    return `- ${day} ${slot.start}-${slot.end}: ${subject}${slot.room ? ` in ${slot.room}` : ''}`
+    const title = slot.title || subject
+    return `- ${day} ${slot.start}-${slot.end}: ${title}${slot.kind ? ` (${slot.kind})` : ''}${slot.room ? ` in ${slot.room}` : ''}`
   }).join('\n')
   const decks = (state.decks || []).map((deck) => {
     const cards = (state.flashcards || []).filter((card) => card.deckId === deck.id)
