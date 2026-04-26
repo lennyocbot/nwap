@@ -30,10 +30,10 @@ export default function CommandPalette() {
     }
     const onOpenSearch = () => setOpen(true)
     window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('scholarai:open-search', onOpenSearch)
+    window.addEventListener('syllabi:open-search', onOpenSearch)
     return () => {
       window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('scholarai:open-search', onOpenSearch)
+      window.removeEventListener('syllabi:open-search', onOpenSearch)
     }
   }, [])
 

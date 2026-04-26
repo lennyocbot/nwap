@@ -52,7 +52,7 @@ export default function Sidebar({ open, onClose }) {
           <Icon.sparkle className="w-5 h-5" />
         </div>
         <div>
-          <div className="font-display font-semibold text-ink-900 dark:text-ink-50 leading-tight">ScholarAI</div>
+          <div className="font-display font-semibold text-ink-900 dark:text-ink-50 leading-tight">Syllabi</div>
           <div className="text-xs text-ink-500">Hello, {state.user.name || 'Student'}</div>
         </div>
       </div>
@@ -66,7 +66,7 @@ export default function Sidebar({ open, onClose }) {
           <Icon.settings className="w-4 h-4" /> {account.user ? 'Account synced' : 'Sign in to sync'}
         </button>
         <button onClick={() => { openAI(); onClose?.() }} className="w-full btn-primary">
-          <Icon.sparkle className="w-4 h-4" /> Ask ScholarAI
+          <Icon.sparkle className="w-4 h-4" /> Ask Syllabi
         </button>
       </div>
     </aside>

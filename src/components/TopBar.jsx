@@ -30,12 +30,12 @@ export default function TopBar({ onMenu }) {
           <Icon.menu className="w-5 h-5" />
         </button>
         <h1 className="font-display text-xl md:text-2xl font-semibold text-ink-900 dark:text-ink-50">
-          {titles[route.name] || 'ScholarAI'}
+          {titles[route.name] || 'Syllabi'}
         </h1>
         <div className="flex-1" />
         <button
           className="btn-soft"
-          onClick={() => window.dispatchEvent(new Event('scholarai:open-search'))}
+          onClick={() => window.dispatchEvent(new Event('syllabi:open-search'))}
           title="Search"
           type="button"
         >

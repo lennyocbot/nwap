@@ -1,4 +1,4 @@
-# ScholarAI
+# Syllabi
 
 An AI-first personal manager for students, optimized for iPad. Installs as a PWA.
 

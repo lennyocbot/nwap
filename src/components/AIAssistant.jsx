@@ -171,7 +171,7 @@ export default function AIAssistant({ floating = true }) {
         <div className="w-8 h-8 rounded-2xl bg-gradient-to-br from-brand-500 to-violet-500 flex items-center justify-center text-white">
           <Icon.sparkle className="w-4 h-4" />
         </div>
-        <div className="font-display font-semibold">ScholarAI</div>
+        <div className="font-display font-semibold">Syllabi</div>
         <span className="chip">{state.settings.aiKey || state.settings.useServerProxy !== false ? state.settings.aiProvider : 'demo mode'}</span>
         <div className="flex-1 min-w-[12px]" />
         <div className="relative flex items-center gap-2 text-xs text-ink-500 min-w-0">
@@ -244,7 +244,7 @@ export default function AIAssistant({ floating = true }) {
             </div>
           </div>
         ))}
-        {busy && <div className="text-sm text-ink-500 animate-pulse-soft">ScholarAI is thinking... {elapsed}s</div>}
+        {busy && <div className="text-sm text-ink-500 animate-pulse-soft">Syllabi is thinking... {elapsed}s</div>}
         {err && <div className="text-sm text-accent-rose">{err}</div>}
       </div>
 
@@ -270,7 +270,7 @@ export default function AIAssistant({ floating = true }) {
         </div>
         {!state.settings.aiKey && (
           <div className="text-xs text-ink-500 mt-2">
-            Paste your OpenRouter key in Settings, AI, to enable ScholarAI tools on this device.
+            Paste your OpenRouter key in Settings, AI, to enable Syllabi tools on this device.
           </div>
         )}
       </div>

@@ -1,4 +1,5 @@
-const KEY = 'scholarai.state.v1'
+const KEY = 'syllabi.state.v1'
+const LEGACY_KEY = 'scholarai.state.v1'
 
 export const defaultState = {
   user: { name: 'Student', avatar: null, school: '', year: 'A-level' },
@@ -22,12 +23,12 @@ export const defaultState = {
   notes: [
     {
       id: 'n1',
-      title: 'ScholarAI beta workspace',
+      title: 'Syllabi beta workspace',
       subjectId: null,
       tags: ['intro'],
       pinned: true,
       content: [
-        '# ScholarAI beta workspace',
+        '# Syllabi beta workspace',
         '',
         'Use this as your daily command center for A-level Mathematics, Physics, and Economics.',
         '',
@@ -106,7 +107,7 @@ function addDays(n) {
 
 export const loadState = () => {
   try {
-    const raw = localStorage.getItem(KEY)
+    const raw = localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY)
     if (!raw) return defaultState
     const parsed = JSON.parse(raw)
     return {
@@ -127,4 +128,7 @@ export const saveState = (s) => {
   try { localStorage.setItem(KEY, JSON.stringify(s)) } catch {}
 }
 
-export const resetState = () => { localStorage.removeItem(KEY) }
+export const resetState = () => {
+  localStorage.removeItem(KEY)
+  localStorage.removeItem(LEGACY_KEY)
+}

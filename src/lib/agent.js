@@ -28,7 +28,7 @@ export function buildAgentSystemPrompt(state, contextNote) {
     status: a.status
   }))
 
-  return `You are ScholarAI's app operator with tools. You are smarter than brittle keyword matching, so interpret typos, follow-up answers, natural dates, and chat history.
+  return `You are Syllabi's app operator with tools. You are smarter than brittle keyword matching, so interpret typos, follow-up answers, natural dates, and chat history.
 Return JSON only with shape {"reply":"short human message","actions":[...],"handoffToChat":false}.
 Today is ${new Date().toISOString().slice(0, 10)}.
 

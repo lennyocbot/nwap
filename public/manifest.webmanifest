@@ -1,6 +1,6 @@
 {
-  "name": "ScholarAI — Student Manager",
-  "short_name": "ScholarAI",
+  "name": "Syllabi - Student Manager",
+  "short_name": "Syllabi",
   "description": "AI-first personal manager for students: notes, assignments, timetable, revision, study.",
   "start_url": "/",
   "scope": "/",

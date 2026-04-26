@@ -11,7 +11,7 @@ export const buildSystemPrompt = (state, contextNote) => {
       return `- ${a.title} [${subj}] due ${new Date(a.due).toLocaleString()} (${a.priority})`
     })
     .join('\n')
-  return `You are ScholarAI, a warm, focused study assistant for ${state.user.name || 'the student'}.
+  return `You are Syllabi, a warm, focused study assistant for ${state.user.name || 'the student'}.
 You help with notes, study planning, revision, and explaining concepts clearly.
 Prefer concise, structured answers with examples. Use markdown.
 
@@ -134,8 +134,8 @@ async function callOpenRouter({ settings, system, messages, json }) {
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${settings.aiKey}`,
-      'HTTP-Referer': 'https://scholarai.app',
-      'X-Title': 'ScholarAI',
+      'HTTP-Referer': 'https://syllabi.pages.dev',
+      'X-Title': 'Syllabi',
     },
     body: JSON.stringify(body),
   })
@@ -160,7 +160,7 @@ function mockReply(messages, json) {
       return {
         cards: [
           { front: 'Sample front (configure your API key for real generation)', back: 'Sample back' },
-          { front: 'What does ScholarAI need to power AI features?', back: 'An OpenRouter API key in Settings.' },
+          { front: 'What does Syllabi need to power AI features?', back: 'An OpenRouter API key in Settings.' },
         ],
       }
     }

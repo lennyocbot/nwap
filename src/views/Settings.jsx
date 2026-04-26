@@ -11,7 +11,7 @@ export default function Settings() {
   const fileRef = useRef(null)
 
   const doExport = () => {
-    downloadJSON(state, `scholarai-${new Date().toISOString().slice(0, 10)}.json`)
+    downloadJSON(state, `syllabi-${new Date().toISOString().slice(0, 10)}.json`)
     showToast('Exported backup', 'success')
   }
 
@@ -39,7 +39,7 @@ export default function Settings() {
     if (permission === 'granted') {
       setSettings({ notifications: true })
       showToast('Reminders enabled', 'success')
-      try { new Notification('ScholarAI reminders enabled', { body: 'Assignment and flashcard reminders can now appear while the app is open.' }) } catch {}
+      try { new Notification('Syllabi reminders enabled', { body: 'Assignment and flashcard reminders can now appear while the app is open.' }) } catch {}
     } else {
       setSettings({ notifications: false })
       showToast('Notifications were not enabled', 'info')
@@ -169,8 +169,8 @@ export default function Settings() {
           </div>
           <div className="text-xs text-ink-500 mt-1">
             {state.settings.aiProvider === 'openrouter'
-              ? 'Paste your OpenRouter key here to enable ScholarAI on this device. It is not synced to your account.'
-              : 'Paste your API key here to enable ScholarAI on this device. It is not synced to your account.'}
+              ? 'Paste your OpenRouter key here to enable Syllabi on this device. It is not synced to your account.'
+              : 'Paste your API key here to enable Syllabi on this device. It is not synced to your account.'}
           </div>
         </Field>
         <label className="flex items-center gap-2 text-sm">
@@ -202,7 +202,7 @@ export default function Settings() {
 
       <Section title="Reminders" icon="flag">
         <div className="rounded-2xl bg-ink-50 p-3 text-sm dark:bg-ink-800">
-          ScholarAI can send browser reminders for assignments due within 24 hours and flashcards due for review while the app is open.
+          Syllabi can send browser reminders for assignments due within 24 hours and flashcards due for review while the app is open.
         </div>
         <div className="flex flex-wrap gap-2">
           <button className="btn-soft" onClick={enableNotifications} type="button">
@@ -232,7 +232,7 @@ export default function Settings() {
       </Section>
 
       <div className="text-center text-xs text-ink-400 pt-4">
-        ScholarAI - Install to iPad via Safari Share, then Add to Home Screen.
+        Syllabi - Install to iPad via Safari Share, then Add to Home Screen.
       </div>
     </div>
   )

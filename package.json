@@ -1,9 +1,9 @@
 {
-  "name": "scholar-ai",
+  "name": "syllabi",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "ScholarAI - an AI-first iPad student manager PWA",
+  "description": "Syllabi - an AI-first student manager PWA",
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",

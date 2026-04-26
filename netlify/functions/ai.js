@@ -44,8 +44,8 @@ async function callOpenRouter({ model, system, messages, json: wantsJson, apiKey
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
-      'HTTP-Referer': 'https://tomscholarai.netlify.app',
-      'X-Title': 'ScholarAI'
+      'HTTP-Referer': 'https://syllabi.pages.dev',
+      'X-Title': 'Syllabi'
     },
     body: JSON.stringify({
       model: model || 'anthropic/claude-sonnet-4-5',
