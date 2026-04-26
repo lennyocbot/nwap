@@ -55,8 +55,9 @@ export default function App() {
   const View = views[route.name] || Dashboard
 
   return (
-    <div className="h-full flex flex-col md:flex-row text-ink-900 dark:text-ink-50">
+    <div className="app-liquid-bg h-full flex flex-col md:flex-row text-ink-900 dark:text-ink-50">
       <LiquidGlassFilter />
+      <LiquidBackdrop />
       <Sidebar open={drawer} onClose={() => setDrawer(false)} />
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
         <TopBar onMenu={() => setDrawer(true)} />
@@ -78,6 +79,22 @@ export default function App() {
           <span>{toast.msg}</span>
         </div>
       )}
+    </div>
+  )
+}
+
+function LiquidBackdrop() {
+  return (
+    <div className="pointer-events-none fixed inset-0 overflow-hidden">
+      <div className="liquid-orb liquid-orb-a" />
+      <div className="liquid-orb liquid-orb-b" />
+      <div className="liquid-orb liquid-orb-c" />
+      <div className="liquid-streak liquid-streak-a" />
+      <div className="liquid-streak liquid-streak-b" />
+      <div className="liquid-streak liquid-streak-c" />
+      <div className="liquid-spec liquid-spec-a" />
+      <div className="liquid-spec liquid-spec-b" />
+      <div className="liquid-spec liquid-spec-c" />
     </div>
   )
 }
