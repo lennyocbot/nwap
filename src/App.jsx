@@ -55,7 +55,7 @@ export default function App() {
   const View = views[route.name] || Dashboard
 
   return (
-    <div className="h-full flex flex-col md:flex-row bg-ink-50 text-ink-900 dark:bg-ink-950 dark:text-ink-50">
+    <div className="h-full flex flex-col md:flex-row text-ink-900 dark:text-ink-50">
       <LiquidGlassFilter />
       <Sidebar open={drawer} onClose={() => setDrawer(false)} />
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
