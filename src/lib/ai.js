@@ -1,6 +1,7 @@
 // Lightweight AI client. Production AI calls go through the server proxy so API keys
 // never enter the browser bundle or user settings.
 import { supabase } from './supabase.js'
+import { mergedTimetableRows } from './timetable.js'
 
 export const buildSystemPrompt = (state, contextNote) => {
   const now = currentTimeContext()
@@ -41,6 +42,9 @@ export const buildSystemPrompt = (state, contextNote) => {
     const title = slot.title || subject
     return `- ${day} ${slot.start}-${slot.end}: ${title}${slot.kind ? ` (${slot.kind})` : ''}${slot.room ? ` in ${slot.room}` : ''}`
   }).join('\n')
+  const timetableRows = mergedTimetableRows(state.settings?.timetableRows || [])
+    .map((row) => `- ${row.label}: ${row.start}-${row.end} (${row.kind || 'slot'})`)
+    .join('\n')
   const decks = (state.decks || []).map((deck) => {
     const cards = (state.flashcards || []).filter((card) => card.deckId === deck.id)
     const due = cards.filter((card) => Number(card.due || 0) <= Date.now()).length
@@ -78,6 +82,9 @@ Weakest subjects: ${weakest || 'not enough grade data yet'}
 
 Timetable:
 ${timetable || '- no timetable blocks yet -'}
+
+Timetable rows the student can use:
+${timetableRows || '- no timetable row template yet -'}
 
 Revision decks:
 ${decks || '- no decks yet -'}

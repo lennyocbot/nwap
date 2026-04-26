@@ -3,46 +3,32 @@ import { useApp } from '../context/AppContext.jsx'
 import { Icon } from '../components/Icons.jsx'
 import Modal from '../components/Modal.jsx'
 import { cx, colorFor, fmtTime } from '../lib/utils.js'
+import { SCHOOL_TIMETABLE_ROWS, TIMETABLE_KIND_OPTIONS, mergedTimetableRows } from '../lib/timetable.js'
 
 const days = [
   { n: 1, label: 'Mon' }, { n: 2, label: 'Tue' }, { n: 3, label: 'Wed' },
   { n: 4, label: 'Thu' }, { n: 5, label: 'Fri' }, { n: 6, label: 'Sat' }, { n: 7, label: 'Sun' },
 ]
 
-const schoolRows = [
-  { id: 'before1', label: 'Before school 1', start: '07:00', end: '07:30', kind: 'before' },
-  { id: 'before2', label: 'Before school 2', start: '07:30', end: '08:00', kind: 'before' },
-  { id: 'form', label: 'Form', start: '08:00', end: '08:15', kind: 'form', defaultTitle: 'Form time' },
-  { id: 'p1', label: 'Period 1', start: '08:15', end: '09:15', kind: 'lesson' },
-  { id: 'p2', label: 'Period 2', start: '09:15', end: '10:15', kind: 'lesson' },
-  { id: 'break', label: 'Break', start: '10:15', end: '10:35', kind: 'break', defaultTitle: 'Break' },
-  { id: 'p3', label: 'Period 3', start: '10:35', end: '11:35', kind: 'lesson' },
-  { id: 'p4', label: 'Period 4', start: '11:35', end: '12:35', kind: 'lesson' },
-  { id: 'lunch', label: 'Lunch', start: '12:35', end: '13:30', kind: 'lunch', defaultTitle: 'Lunch' },
-  { id: 'p5', label: 'Period 5', start: '13:30', end: '14:30', kind: 'lesson' },
-  { id: 'p6', label: 'Period 6', start: '14:30', end: '15:30', kind: 'lesson' },
-  { id: 'after1', label: 'After school', start: '15:30', end: '16:30', kind: 'after' },
-  { id: 'after2', label: 'After school 2', start: '16:30', end: '17:30', kind: 'after' },
-  { id: 'after3', label: 'After school 3', start: '17:30', end: '18:30', kind: 'after' },
-]
-
-const kindOptions = [
-  ['lesson', 'Lesson'],
-  ['study', 'Study block'],
-  ['form', 'Form time'],
-  ['break', 'Break'],
-  ['lunch', 'Lunch'],
-  ['club', 'Club / activity'],
-  ['before', 'Before school'],
-  ['after', 'After school'],
-]
-
 export default function Timetable() {
-  const { state, add, update, remove } = useApp()
+  const { state, add, update, remove, setSettings } = useApp()
   const [edit, setEdit] = useState(null)
+  const [rowEdit, setRowEdit] = useState(null)
   const todayN = (() => { const d = new Date().getDay(); return d === 0 ? 7 : d })()
+  const baseRows = mergedTimetableRows(state.settings.timetableRows || [])
+  const rows = mergedTimetableRows([
+    ...(state.settings.timetableRows || []),
+    ...(state.timetable || []).map((slot) => ({
+      id: `slot-row-${slot.start}-${slot.end}`,
+      custom: true,
+      label: slot.title?.trim() || 'Custom slot',
+      start: slot.start,
+      end: slot.end,
+      kind: slot.kind || 'study',
+    })).filter((row) => !baseRows.some((base) => base.start === row.start && base.end === row.end)),
+  ])
 
-  const addSlot = (day, row = schoolRows[1]) => {
+  const addSlot = (day, row = SCHOOL_TIMETABLE_ROWS[1]) => {
     const slot = add('timetable', {
       day,
       start: row.start,
@@ -59,20 +45,44 @@ export default function Timetable() {
     return state.timetable.find((item) => item.day === day && item.start === row.start && item.end === row.end)
   }
 
-  const extraSlots = state.timetable.filter((item) => !schoolRows.some((row) => row.start === item.start && row.end === item.end))
+  const saveRow = (row) => {
+    const custom = state.settings.timetableRows || []
+    const nextRow = {
+      ...row,
+      id: row.id || `row-${Date.now()}`,
+      custom: true,
+      label: row.label?.trim() || 'Custom slot',
+      start: row.start || '06:30',
+      end: row.end || '07:00',
+      kind: row.kind || 'before',
+    }
+    const nextRows = custom.some((item) => item.id === nextRow.id)
+      ? custom.map((item) => item.id === nextRow.id ? nextRow : item)
+      : [...custom, nextRow]
+    setSettings({ timetableRows: nextRows })
+    setRowEdit(null)
+  }
+
+  const removeRow = (row) => {
+    setSettings({ timetableRows: (state.settings.timetableRows || []).filter((item) => item.id !== row.id) })
+    setRowEdit(null)
+  }
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <div>
           <div className="font-display text-lg font-bold">School week</div>
-          <div className="text-sm text-ink-500">Before-school slots, 8:00-3:30 periods, breaks, lunch, and after-school blocks.</div>
+          <div className="text-sm text-ink-500">Editable time rows from early morning through evening, with your school periods, breaks, lunch, clubs, and study blocks.</div>
         </div>
         <div className="flex-1" />
+        <button className="btn-soft" onClick={() => setRowEdit({ label: 'Early study', start: '06:30', end: '07:00', kind: 'before' })} type="button">
+          <Icon.plus className="w-4 h-4" /> Add time row
+        </button>
         <button className="btn-soft" onClick={() => fillDefaultDay(todayN)} type="button">
           <Icon.timetable className="w-4 h-4" /> Fill today
         </button>
-        <button className="btn-primary" onClick={() => addSlot(todayN, schoolRows[1])} type="button">
+        <button className="btn-primary" onClick={() => addSlot(todayN, rows[0] || SCHOOL_TIMETABLE_ROWS[0])} type="button">
           <Icon.plus className="w-4 h-4" /> New slot
         </button>
       </div>
@@ -92,7 +102,7 @@ export default function Timetable() {
       )}
 
       <MobileTimetable
-        rows={schoolRows}
+        rows={rows}
         days={days}
         todayN={todayN}
         slotFor={slotFor}
@@ -111,7 +121,7 @@ export default function Timetable() {
               </div>
             ))}
 
-            {schoolRows.map((row) => (
+            {rows.map((row) => (
               <TimetableRow
                 key={row.id}
                 row={row}
@@ -120,25 +130,12 @@ export default function Timetable() {
                 addSlot={addSlot}
                 setEdit={setEdit}
                 state={state}
+                onEditRow={row.custom ? setRowEdit : null}
               />
             ))}
           </div>
         </div>
       </div>
-
-      {extraSlots.length > 0 && (
-        <section className="card p-4">
-          <div className="font-display font-semibold mb-3">Custom times</div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {extraSlots.map((slot) => (
-              <button key={slot.id} className="rounded-2xl bg-white/50 p-3 text-left ring-1 ring-white/70" onClick={() => setEdit(slot)} type="button">
-                <div className="font-semibold">{slotTitle(slot, state)}</div>
-                <div className="text-xs text-ink-500">{days.find((d) => d.n === slot.day)?.label} {fmtTime(slot.start)}-{fmtTime(slot.end)}</div>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
 
       <Modal open={!!edit} onClose={() => setEdit(null)} title="Timetable slot"
         footer={
@@ -166,7 +163,7 @@ export default function Timetable() {
               <div>
                 <div className="text-xs text-ink-500 mb-1">Type</div>
                 <select className="input" value={edit.kind || 'lesson'} onChange={(e) => { update('timetable', { id: edit.id, kind: e.target.value }); setEdit({ ...edit, kind: e.target.value }) }}>
-                  {kindOptions.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                  {TIMETABLE_KIND_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
                 </select>
               </div>
               <div>
@@ -196,11 +193,48 @@ export default function Timetable() {
           </div>
         )}
       </Modal>
+
+      <Modal open={!!rowEdit} onClose={() => setRowEdit(null)} title="Time row"
+        footer={rowEdit && (
+          <>
+            {rowEdit.custom && (
+              <button className="btn-ghost text-rose-600" onClick={() => removeRow(rowEdit)} type="button">
+                <Icon.trash className="w-4 h-4" /> Delete row
+              </button>
+            )}
+            <button className="btn-primary" onClick={() => saveRow(rowEdit)} type="button">Save row</button>
+          </>
+        )}>
+        {rowEdit && (
+          <div className="space-y-3">
+            <div>
+              <div className="text-xs text-ink-500 mb-1">Row label</div>
+              <input className="input" value={rowEdit.label || ''} onChange={(e) => setRowEdit({ ...rowEdit, label: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div>
+                <div className="text-xs text-ink-500 mb-1">Start</div>
+                <input className="input" type="time" value={rowEdit.start || ''} onChange={(e) => setRowEdit({ ...rowEdit, start: e.target.value })} />
+              </div>
+              <div>
+                <div className="text-xs text-ink-500 mb-1">End</div>
+                <input className="input" type="time" value={rowEdit.end || ''} onChange={(e) => setRowEdit({ ...rowEdit, end: e.target.value })} />
+              </div>
+              <div>
+                <div className="text-xs text-ink-500 mb-1">Default type</div>
+                <select className="input" value={rowEdit.kind || 'before'} onChange={(e) => setRowEdit({ ...rowEdit, kind: e.target.value })}>
+                  {TIMETABLE_KIND_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 
   function fillDefaultDay(day) {
-    schoolRows.forEach((row) => {
+    rows.forEach((row) => {
       if (slotFor(day, row)) return
       if (!row.defaultTitle) return
       add('timetable', {
@@ -216,12 +250,13 @@ export default function Timetable() {
   }
 }
 
-function TimetableRow({ row, todayN, slotFor, addSlot, setEdit, state }) {
+function TimetableRow({ row, todayN, slotFor, addSlot, setEdit, state, onEditRow }) {
   return (
     <>
       <div className={cx('rounded-2xl px-3 py-3 ring-1 ring-white/60', row.kind === 'break' || row.kind === 'lunch' ? 'bg-amber-50/70' : 'bg-white/44')}>
         <div className="font-semibold text-sm">{row.label}</div>
         <div className="text-[11px] text-ink-500">{fmtTime(row.start)}-{fmtTime(row.end)}</div>
+        {onEditRow && <button className="mt-1 text-[10px] font-semibold text-brand-600" onClick={() => onEditRow(row)} type="button">Edit row</button>}
       </div>
       {days.map((day) => {
         const slot = slotFor(day.n, row)

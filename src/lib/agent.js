@@ -1,6 +1,7 @@
 import { uid } from './utils.js'
 import { normalizeAIText } from './text.js'
 import { currentTimeContext } from './ai.js'
+import { ensureTimetableRow, mergedTimetableRows } from './timetable.js'
 
 const actionWords = [
   'add', 'create', 'make', 'schedule', 'plan', 'move', 'reschedule', 'revise',
@@ -41,6 +42,8 @@ export function buildAgentSystemPrompt(state, contextNote) {
     date: g.date,
   }))
   const timetable = state.timetable.map((t) => ({ day: t.day, start: t.start, end: t.end, title: t.title, kind: t.kind, subjectId: t.subjectId, room: t.room }))
+  const timetableRows = mergedTimetableRows(state.settings?.timetableRows || [])
+    .map((row) => ({ label: row.label, start: row.start, end: row.end, kind: row.kind }))
   const decksSummary = state.decks.map((d) => ({
     id: d.id,
     name: d.name,
@@ -65,7 +68,8 @@ Rules:
 - If the user asks for a plan for today, schedule from the current local time, not the start of the day, unless they explicitly ask otherwise. Never place new study blocks in the past.
 - Match subjects to existing subject ids, accepting common aliases and typos like maths -> Mathematics and econ -> Economics.
 - For timetable activities that are not lessons, always set a descriptive title from the user's words, e.g. "Volleyball training", and set kind to club, study, before, after, break, lunch, form, or lesson.
-- If the user gives a timetable activity without an exact time, choose a sensible slot from the school timetable: before school 07:00-08:00, school day 08:00-15:30, after school 15:30-18:30.
+- If the user gives a timetable activity without an exact time, choose a sensible free row from Timetable rows below. Prefer "before" rows for morning/training-before-school language and "after" rows for clubs/training-after-school language.
+- If no existing row fits the user's time, create the timetable slot at the user's requested time anyway; the app will add that time range to the timetable grid.
 
 Supported action objects:
 {"type":"create_assignment","payload":{"title":"...","subjectId":"existing subject id or null","due":"ISO date","priority":"low|medium|high","status":"todo|doing|done","estMinutes":60,"notes":"..."}}
@@ -84,6 +88,7 @@ Decks: ${JSON.stringify(decks)}
 Assignments: ${JSON.stringify(assignments).slice(0, 5000)}
 Grades: ${JSON.stringify(grades).slice(0, 3500)}
 Timetable: ${JSON.stringify(timetable).slice(0, 3500)}
+Timetable rows: ${JSON.stringify(timetableRows).slice(0, 2500)}
 Revision decks: ${JSON.stringify(decksSummary).slice(0, 2500)}`
 }
 
@@ -146,6 +151,10 @@ export function applyAgentActions({ actions, state, dispatch }) {
         kind: validKind(payload.kind, subjectId),
         subjectId,
         room: normalizeAIText(payload.room || '')
+      }
+      const nextSettings = ensureTimetableRow(state.settings, item)
+      if (nextSettings !== state.settings) {
+        dispatch({ type: 'set', key: 'settings', value: nextSettings })
       }
       dispatch({ type: 'add', key: 'timetable', item })
       applied.push(`scheduled "${slotTitle(item, state)}" ${item.start}-${item.end}`)
