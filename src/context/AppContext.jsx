@@ -287,7 +287,7 @@ function restoreLocalSecrets(cloudState, localState, { existingState = Boolean(c
     settings: {
       ...defaultState.settings,
       ...(migrated.settings || {}),
-      aiKey: localState.settings?.aiKey || ''
+      aiKey: ''
     },
     user: {
       ...defaultState.user,

@@ -98,8 +98,7 @@ export default function AIAssistant({ floating = true }) {
     try {
       let reply
       let quizPayload = null
-      const canUseServerKey = state.settings.useServerProxy !== false && !['localhost', '127.0.0.1'].includes(window.location.hostname)
-      const hasUsableAI = state.settings.aiProvider === 'mock' || state.settings.aiKey || canUseServerKey
+      const hasUsableAI = state.settings.aiProvider === 'mock' || !['localhost', '127.0.0.1'].includes(window.location.hostname)
 
       if (hasUsableAI) {
         const plan = await callAI({
@@ -135,8 +134,6 @@ export default function AIAssistant({ floating = true }) {
         } else if (!applied.length) {
           reply = plan?.reply || 'I need one more detail before I can use a tool to change the app.'
         }
-      } else if (classifyAssistantIntent(content) === 'action') {
-        reply = 'Syllabi works fully without AI. Add an OpenRouter key in Settings when you want tool-backed AI actions.'
       } else {
         reply = await callAI({
           settings: state.settings,
@@ -175,7 +172,7 @@ export default function AIAssistant({ floating = true }) {
           <img src="/icon-192.png" alt="" className="w-7 h-7 object-cover" />
         </div>
         <div className="font-display font-semibold">Syllabi</div>
-        <span className="chip">{state.settings.aiKey || state.settings.useServerProxy !== false ? state.settings.aiProvider : 'demo mode'}</span>
+        <span className="chip">{state.settings.aiProvider === 'mock' ? 'demo mode' : 'server AI'}</span>
         <div className="flex-1 min-w-[12px]" />
         <div className="relative flex items-center gap-2 text-xs text-ink-500 min-w-0">
           <span className="hidden sm:inline">Conversations</span>
@@ -281,11 +278,6 @@ export default function AIAssistant({ floating = true }) {
             <Icon.send className="w-4 h-4" />
           </button>
         </div>
-        {!state.settings.aiKey && (
-          <div className="text-xs text-ink-500 mt-2">
-            Syllabi works fully without AI. Add an OpenRouter key later in Settings to unlock AI tools.
-          </div>
-        )}
       </div>
     </div>
   )

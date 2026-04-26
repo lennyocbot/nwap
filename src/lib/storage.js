@@ -7,7 +7,7 @@ export const defaultState = {
     theme: 'light',
     accent: 'brand',
     aiProvider: 'openrouter',
-    aiModel: 'anthropic/claude-sonnet-4-5',
+    aiModel: 'deepseek/deepseek-r1',
     aiKey: '',
     useServerProxy: true,
     pomodoro: { focus: 25, short: 5, long: 15, longEvery: 4 },
@@ -166,6 +166,11 @@ export function migrateState(input, { existingState = false } = {}) {
     settings: {
       ...defaultState.settings,
       ...settings,
+      aiProvider: 'openrouter',
+      aiModel: !settings.aiModel || settings.aiModel === 'anthropic/claude-sonnet-4-5'
+        ? defaultState.settings.aiModel
+        : settings.aiModel,
+      aiKey: '',
       onboardingComplete,
       reminders,
       timetableOrientation,

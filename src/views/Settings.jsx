@@ -6,7 +6,6 @@ import { pushSupport, sendTestPush, subscribeToPush, unsubscribeFromPush } from 
 
 export default function Settings() {
   const { state, setSettings, setUser, showToast, reset, replaceAll, account, signIn, signOut, retrySync } = useApp()
-  const [showKey, setShowKey] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [pushBusy, setPushBusy] = useState(false)
@@ -147,7 +146,7 @@ export default function Settings() {
             </Field>
             <button className="btn-primary">Sign in or create account</button>
             <div className="rounded-2xl border border-amber-100 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-100">
-              Local demo mode. Nothing here is shared across devices until you sign in. AI keys stay on this device and are never synced to Supabase.
+              Local demo mode. Nothing here is shared across devices until you sign in.
             </div>
             <div className="text-xs text-ink-500">
               Status: {account.sync}
@@ -157,69 +156,27 @@ export default function Settings() {
       </Section>
 
       <Section title="AI" icon="sparkle">
-        <Field label="Provider">
-          <div className="flex flex-wrap gap-2">
+        <div className="rounded-2xl bg-brand-50 p-3 text-sm text-brand-900 ring-1 ring-brand-100 dark:bg-brand-900/30 dark:text-brand-100 dark:ring-brand-800">
+          Syllabi AI is built into this workspace. Choose the model you want it to use.
+        </div>
+        <Field label="Model">
+          <input className="input font-mono" value={state.settings.aiModel}
+            onChange={(e) => setSettings({ aiProvider: 'openrouter', aiModel: e.target.value })}
+            placeholder={defaultModel()} />
+          <div className="text-xs text-ink-500 mt-2">
+            Popular picks:{' '}
             {[
-              { k: 'openrouter', label: 'OpenRouter' },
-              { k: 'anthropic',  label: 'Anthropic' },
-              { k: 'openai',     label: 'OpenAI' },
-              { k: 'mock',       label: 'Offline demo' },
-            ].map((p) => (
-              <button key={p.k}
-                onClick={() => setSettings({ aiProvider: p.k, aiModel: defaultModel(p.k) })}
-                className={cx('btn-soft', state.settings.aiProvider === p.k && 'ring-2 ring-brand-400')}>
-                {p.label}
-              </button>
+              ['deepseek/deepseek-r1', 'DeepSeek R1'],
+              ['anthropic/claude-sonnet-4-5', 'Claude Sonnet'],
+              ['openai/gpt-4o', 'GPT-4o'],
+              ['google/gemini-2.5-pro', 'Gemini Pro'],
+              ['meta-llama/llama-3.3-70b-instruct', 'Llama 70B'],
+            ].map(([model, label]) => (
+              <button key={model} className="font-semibold underline text-brand-600 mr-2"
+                onClick={() => setSettings({ aiProvider: 'openrouter', aiModel: model })}>{label}</button>
             ))}
           </div>
         </Field>
-        <Field label="Model">
-          <input className="input font-mono" value={state.settings.aiModel}
-            onChange={(e) => setSettings({ aiModel: e.target.value })}
-            placeholder={defaultModel(state.settings.aiProvider)} />
-          <div className="text-xs text-ink-500 mt-1">
-            {state.settings.aiProvider === 'openrouter' && (
-              <>
-                Any model slug from openrouter.ai/models. Popular picks:{' '}
-                {['anthropic/claude-opus-4', 'anthropic/claude-sonnet-4-5', 'openai/gpt-4o', 'google/gemini-2.5-pro', 'meta-llama/llama-3.3-70b-instruct', 'deepseek/deepseek-r1'].map((m) => (
-                  <button key={m} className="font-mono underline text-brand-600 mr-2"
-                    onClick={() => setSettings({ aiModel: m })}>{m}</button>
-                ))}
-              </>
-            )}
-            {state.settings.aiProvider === 'anthropic' && (
-              <>Suggestions: {['claude-opus-4-7', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'].map((m) => (
-                <button key={m} className="font-mono underline text-brand-600 mr-2" onClick={() => setSettings({ aiModel: m })}>{m}</button>
-              ))}</>
-            )}
-            {state.settings.aiProvider === 'openai' && (
-              <>Suggestions: {['gpt-4o', 'gpt-4o-mini', 'o3-mini'].map((m) => (
-                <button key={m} className="font-mono underline text-brand-600 mr-2" onClick={() => setSettings({ aiModel: m })}>{m}</button>
-              ))}</>
-            )}
-          </div>
-        </Field>
-        <Field label={state.settings.aiProvider === 'openrouter' ? 'OpenRouter API key' : 'API key'}>
-          <div className="flex gap-2">
-            <input className="input font-mono" type={showKey ? 'text' : 'password'}
-              value={state.settings.aiKey} onChange={(e) => setSettings({ aiKey: e.target.value })}
-              placeholder={state.settings.aiProvider === 'openrouter' ? 'sk-or-v1-...' : state.settings.aiProvider === 'anthropic' ? 'sk-ant-...' : 'sk-...'} />
-            <button className="btn-ghost" onClick={() => setShowKey((v) => !v)}>{showKey ? 'Hide' : 'Show'}</button>
-          </div>
-          <div className="text-xs text-ink-500 mt-1">
-            {state.settings.aiProvider === 'openrouter'
-              ? 'Paste your OpenRouter key here to enable Syllabi on this device. It is not synced to your account.'
-              : 'Paste your API key here to enable Syllabi on this device. It is not synced to your account.'}
-          </div>
-        </Field>
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={state.settings.useServerProxy !== false}
-            onChange={(e) => setSettings({ useServerProxy: e.target.checked })}
-          />
-          Use secure AI connection when available
-        </label>
       </Section>
 
       <Section title="Pomodoro" icon="timer">
@@ -349,11 +306,6 @@ function Field({ label, children }) {
   )
 }
 
-function defaultModel(provider) {
-  switch (provider) {
-    case 'anthropic':  return 'claude-opus-4-7'
-    case 'openai':     return 'gpt-4o-mini'
-    case 'openrouter': return 'anthropic/claude-sonnet-4-5'
-    default:           return ''
-  }
+function defaultModel() {
+  return 'deepseek/deepseek-r1'
 }

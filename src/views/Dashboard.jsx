@@ -119,7 +119,7 @@ export default function Dashboard() {
     setCoachBusy(true)
     try {
       let next = null
-      const canAskAI = state.settings.aiProvider === 'mock' || state.settings.aiKey || state.settings.useServerProxy !== false
+      const canAskAI = state.settings.aiProvider === 'mock' || !['localhost', '127.0.0.1'].includes(window.location.hostname)
       if (canAskAI) {
         const data = await callAI({
           settings: state.settings,
@@ -374,16 +374,6 @@ export default function Dashboard() {
 
 function SetupNudges({ state, navigate, setSettings }) {
   const items = []
-  if (!state.settings.aiKey && !state.settings.aiSetupDismissed) {
-    items.push({
-      id: 'ai',
-      icon: 'sparkle',
-      title: 'Connect AI tools',
-      text: 'Syllabi works fully without AI. Add an OpenRouter key later to unlock AI tools.',
-      action: () => navigate('settings'),
-      dismiss: () => setSettings({ aiSetupDismissed: true }),
-    })
-  }
   if (!state.user.avatarLocalData && !state.user.avatarStoragePath) items.push({ id: 'avatar', icon: 'subject', title: 'Add profile picture', text: 'Make the workspace feel like yours.', action: () => navigate('account') })
   if ((state.subjects || []).length <= 3) items.push({ id: 'subjects', icon: 'subject', title: 'Confirm subjects', text: 'Edit your A-level subjects and colours.', action: () => navigate('subjects') })
   if ((state.subjects || []).some((subject) => !subject.target)) items.push({ id: 'targets', icon: 'grade', title: 'Set grade targets', text: 'Targets power better coach recommendations.', action: () => navigate('subjects') })

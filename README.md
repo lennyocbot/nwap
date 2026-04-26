@@ -4,7 +4,7 @@ An AI-first personal manager for students, optimized for iPad. Installs as a PWA
 
 ## Features
 
-- **AI assistant** (OpenRouter, Anthropic, OpenAI, or offline demo) - planning, explanations, quizzes, summaries, and tool-backed app actions
+- **AI assistant** via secure server-side OpenRouter - planning, explanations, quizzes, summaries, and tool-backed app actions
 - **Short onboarding** with account setup, profile basics, and non-blocking setup nudges
 - **AI Study Coach** daily brief on the Dashboard
 - **Account page** with profile picture, stats, sync status, and achievement badges
@@ -30,9 +30,9 @@ npm run dev
 
 Open on iPad Safari, then Share -> **Add to Home Screen**.
 
-## AI keys
+## AI
 
-Add your own OpenRouter, Anthropic, or OpenAI API key in **Settings -> AI**. Personal keys stay on-device and are not synced to Supabase. On Cloudflare, `/api/ai` can also use server-side provider keys from environment variables.
+Set `OPENROUTER_API_KEY` on Cloudflare Pages/Workers. The browser never asks students for a key and never sends one from user settings. The default model is `deepseek/deepseek-r1`; users can change the model slug in **Settings -> AI**.
 
 ## Cloudflare push reminders
 
@@ -44,6 +44,7 @@ Run `supabase-schema.sql` in Supabase, then set these Cloudflare Pages/Worker va
 - `VAPID_PUBLIC_KEY`
 - `VAPID_PRIVATE_KEY`
 - `VAPID_SUBJECT`
-- optional `OPENROUTER_API_KEY`
+- `OPENROUTER_API_KEY`
+- optional `OPENROUTER_MODEL`
 
 The Pages Functions under `functions/api` handle AI and push subscription/test endpoints. The scheduled reminder worker lives in `worker/reminders` and has separate cron triggers for 15-minute reminders and hourly coach checks.

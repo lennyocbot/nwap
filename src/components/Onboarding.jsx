@@ -56,7 +56,7 @@ export default function Onboarding() {
                 </p>
               </div>
               <div className="rounded-3xl bg-brand-50 p-4 text-sm text-brand-900 ring-1 ring-brand-100 dark:bg-brand-900/30 dark:text-brand-100 dark:ring-brand-800">
-                Syllabi works fully without AI. Add an OpenRouter key later to unlock AI tools.
+                Your AI tools, timetable, notes, assignments, revision, and files are ready as soon as you enter.
               </div>
               <button className="btn-primary w-full" onClick={() => setStep(1)}>
                 Continue <Icon.chevron className="w-4 h-4" />
@@ -102,7 +102,7 @@ export default function Onboarding() {
                 </div>
                 <h2 className="font-display text-2xl font-bold mt-4">You're in.</h2>
                 <p className="mt-2 text-sm text-ink-500">
-                  The Dashboard will show quick nudges for AI, reminders, targets, and profile polish. None of it blocks studying.
+                  The Dashboard will show quick nudges for reminders, targets, and profile polish. None of it blocks studying.
                 </p>
               </div>
               <button className="btn-primary w-full" onClick={finish}>Go to Dashboard</button>

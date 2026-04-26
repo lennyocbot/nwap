@@ -11,11 +11,11 @@ export async function onRequest({ request, env }) {
   }
 
   const provider = body.provider || 'openrouter'
-  const key = env[`${provider.toUpperCase()}_API_KEY`] || body.apiKey
-  if (!key) return json({ error: `Missing ${provider} API key` }, 400)
+  const key = env[`${provider.toUpperCase()}_API_KEY`]
+  if (!key) return json({ error: 'Server AI is not configured yet' }, 400)
 
   try {
-    if (provider === 'openrouter') return json(await callOpenRouter({ ...body, apiKey: key }))
+    if (provider === 'openrouter') return json(await callOpenRouter({ ...body, apiKey: key, defaultModel: env.OPENROUTER_MODEL }))
     if (provider === 'openai') return json(await callOpenAI({ ...body, apiKey: key }))
     if (provider === 'anthropic') return json(await callAnthropic({ ...body, apiKey: key }))
     return json({ error: `Unsupported provider: ${provider}` }, 400)
@@ -24,7 +24,7 @@ export async function onRequest({ request, env }) {
   }
 }
 
-async function callOpenRouter({ model, system, messages, json: wantsJson, apiKey }) {
+async function callOpenRouter({ model, system, messages, json: wantsJson, apiKey, defaultModel }) {
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -34,7 +34,7 @@ async function callOpenRouter({ model, system, messages, json: wantsJson, apiKey
       'X-Title': 'Syllabi',
     },
     body: JSON.stringify({
-      model: model || 'anthropic/claude-sonnet-4-5',
+      model: model || defaultModel || 'deepseek/deepseek-r1',
       response_format: wantsJson ? { type: 'json_object' } : undefined,
       messages: [
         { role: 'system', content: wantsJson ? `${system}\n\nReturn ONLY valid JSON.` : system },
