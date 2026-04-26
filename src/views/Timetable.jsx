@@ -12,8 +12,9 @@ const days = [
 const hours = Array.from({ length: 14 }, (_, i) => i + 7) // 7am-8pm
 
 export default function Timetable() {
-  const { state, add, update, remove } = useApp()
+  const { state, add, update, remove, setSettings } = useApp()
   const [edit, setEdit] = useState(null)
+  const orientation = state.settings.timetableOrientation || 'days-top'
   const todayN = (() => { const d = new Date().getDay(); return d === 0 ? 7 : d })()
 
   const addSlot = (day) => {
@@ -32,15 +33,40 @@ export default function Timetable() {
     return { top: (from / 60) * 56, height: Math.max(28, ((to - from) / 60) * 56) }
   }
 
+  const colFor = (start, end) => {
+    const [h1, m1] = start.split(':').map(Number)
+    const [h2, m2] = end.split(':').map(Number)
+    const from = (h1 - 7) * 60 + m1
+    const to = (h2 - 7) * 60 + m2
+    return { left: (from / 60) * 96, width: Math.max(56, ((to - from) / 60) * 96) }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <div className="text-sm text-ink-500">Weekly schedule</div>
         <div className="flex-1" />
+        <div className="inline-flex rounded-2xl bg-ink-100 p-1 text-sm dark:bg-ink-800">
+          <button
+            className={cx('rounded-xl px-3 py-1.5 font-medium transition', orientation === 'days-top' && 'bg-white text-brand-700 shadow-sm dark:bg-ink-900 dark:text-brand-100')}
+            onClick={() => setSettings({ timetableOrientation: 'days-top' })}
+            type="button"
+          >
+            Days across top
+          </button>
+          <button
+            className={cx('rounded-xl px-3 py-1.5 font-medium transition', orientation === 'days-left' && 'bg-white text-brand-700 shadow-sm dark:bg-ink-900 dark:text-brand-100')}
+            onClick={() => setSettings({ timetableOrientation: 'days-left' })}
+            type="button"
+          >
+            Days down side
+          </button>
+        </div>
         <button className="btn-primary" onClick={() => addSlot(todayN)}><Icon.plus className="w-4 h-4" /> New slot</button>
       </div>
 
       <div className="card p-3 overflow-x-auto">
+        {orientation === 'days-top' ? (
         <div className="grid" style={{ gridTemplateColumns: '56px repeat(7, minmax(120px,1fr))' }}>
           <div />
           {days.map((d) => (
@@ -72,6 +98,46 @@ export default function Timetable() {
             </div>
           ))}
         </div>
+        ) : (
+        <div className="min-w-[1420px]">
+          <div className="grid" style={{ gridTemplateColumns: `90px repeat(${hours.length}, 96px)` }}>
+            <div />
+            {hours.map((h) => (
+              <div key={h} className="text-[10px] text-ink-400 px-2 py-2 border-l border-ink-100 dark:border-ink-800">{h}:00</div>
+            ))}
+          </div>
+          <div className="space-y-2">
+            {days.map((d) => (
+              <div key={d.n} className={cx('grid rounded-2xl overflow-hidden border border-ink-100 dark:border-ink-800', d.n === todayN && 'bg-brand-50/50 dark:bg-brand-900/10')} style={{ gridTemplateColumns: '90px 1fr' }}>
+                <button
+                  className={cx('p-3 text-sm font-semibold text-left border-r border-ink-100 dark:border-ink-800', d.n === todayN && 'text-brand-700 dark:text-brand-100')}
+                  onClick={() => addSlot(d.n)}
+                  type="button"
+                >
+                  {d.label}
+                  <div className="mt-2 text-[10px] font-normal text-ink-400">+ add</div>
+                </button>
+                <div className="relative h-28" style={{ width: hours.length * 96 }}>
+                  {hours.map((h, i) => <div key={h} className="absolute top-0 bottom-0 border-l border-ink-100 dark:border-ink-800" style={{ left: i * 96 }} />)}
+                  {state.timetable.filter((t) => t.day === d.n).map((t, index) => {
+                    const s = state.subjects.find((x) => x.id === t.subjectId)
+                    const c = colorFor(s?.color)
+                    const pos = colFor(t.start, t.end)
+                    return (
+                      <button key={t.id} onClick={() => setEdit(t)}
+                        className={cx('absolute top-3 rounded-xl text-left text-xs p-2 shadow-sm hover:shadow-pop transition text-white', c.bg)}
+                        style={{ left: pos.left, width: pos.width, height: 42 + (index % 2) * 34 }}>
+                        <div className="font-semibold truncate">{s?.emoji} {s?.name || 'Subject'}</div>
+                        <div className="opacity-80 truncate">{fmtTime(t.start)}-{fmtTime(t.end)} - {t.room}</div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        )}
       </div>
 
       <Modal open={!!edit} onClose={() => setEdit(null)} title="Edit class"

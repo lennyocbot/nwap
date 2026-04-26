@@ -88,8 +88,25 @@ body {
 .prose-notes .contains-task-list { @apply list-none pl-0; }
 .prose-notes input[type="checkbox"] { @apply mr-2; }
 
+.prose-compact {
+  font-size: inherit;
+  line-height: 1.35;
+}
+.prose-compact :where(p, ul, ol) { @apply my-0; }
+.prose-compact :where(ul, ol) { @apply pl-4; }
+.prose-compact :where(.katex-display) { @apply my-0 py-0; }
+.prose-compact :where(table, pre, blockquote) { @apply hidden; }
+
 .react-flow__node-scholarNode {
   background: transparent;
   border: 0;
   box-shadow: none;
+}
+
+.scholar-flow-handle {
+  width: 10px !important;
+  height: 10px !important;
+  border: 2px solid #3566ff !important;
+  background: #fff !important;
+  opacity: 0.9;
 }

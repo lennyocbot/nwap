@@ -160,7 +160,7 @@ function mockReply(messages, json) {
       return {
         cards: [
           { front: 'Sample front (configure your API key for real generation)', back: 'Sample back' },
-          { front: 'What does ScholarAI need to power AI features?', back: 'An OpenRouter API key in Settings or Netlify.' },
+          { front: 'What does ScholarAI need to power AI features?', back: 'An OpenRouter API key in Settings.' },
         ],
       }
     }

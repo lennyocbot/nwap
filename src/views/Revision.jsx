@@ -195,8 +195,8 @@ export default function Revision() {
                   onClick={() => setCardModal(c)}>
                   <Icon.cards className="w-4 h-4 text-ink-400 mt-1" />
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">{c.front}</div>
-                    <div className="text-xs text-ink-500 truncate">{c.back}</div>
+                    <Markdown text={c.front || 'Flashcard'} className="prose-compact font-medium" />
+                    <Markdown text={c.back || 'Revision card'} className="prose-compact text-xs text-ink-500" />
                   </div>
                   <div className="text-[11px] text-ink-500">
                     {c.due <= Date.now() ? <span className="text-brand-600">due</span> : new Date(c.due).toLocaleDateString()}

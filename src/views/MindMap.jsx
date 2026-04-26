@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Background,
   Controls,
+  Handle,
   MarkerType,
+  Position,
   ReactFlow,
   applyEdgeChanges,
   applyNodeChanges,
@@ -277,6 +279,8 @@ function ScholarNode({ id, data, selected }) {
       )}
       onClick={() => data.onSelect(id)}
     >
+      <Handle type="target" position={Position.Left} className="scholar-flow-handle" />
+      <Handle type="source" position={Position.Right} className="scholar-flow-handle" />
       <div className="font-medium text-sm leading-snug break-words">{data.label}</div>
       <div className="mt-2 flex gap-1">
         <button className="chip !px-2" onClick={(e) => { e.stopPropagation(); data.onAdd(id) }} title="Add child"><Icon.plus className="w-3 h-3" /></button>
@@ -322,6 +326,7 @@ function treeToFlow(root, savedPositions, handlers) {
     animated: false,
     style: { stroke: '#3566ff', strokeWidth: 2.5 },
     markerEnd: { type: MarkerType.ArrowClosed, color: '#3566ff' },
+    zIndex: 5,
   }))
 
   return { nodes, edges }

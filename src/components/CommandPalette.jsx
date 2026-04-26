@@ -28,8 +28,13 @@ export default function CommandPalette() {
       }
       if (event.key === 'Escape') setOpen(false)
     }
+    const onOpenSearch = () => setOpen(true)
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    window.addEventListener('scholarai:open-search', onOpenSearch)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('scholarai:open-search', onOpenSearch)
+    }
   }, [])
 
   useEffect(() => {

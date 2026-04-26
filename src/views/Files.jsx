@@ -125,6 +125,7 @@ export default function Files() {
   }
 
   const fileSourceText = async (file) => {
+    if (isPdfLike(file.type, file.name)) return pdfTextFromBytes(await fileBytes(file))
     if (!isTextLike(file.type, file.name)) return ''
     if (file.data) return dataUrlText(file.data)
     if (file.storagePath && cloudFilesEnabled) {
@@ -142,7 +143,7 @@ export default function Files() {
     try {
       const text = await fileSourceText(file)
       if (!text.trim()) {
-        showToast('AI file tools currently need a text/markdown file', 'info')
+        showToast('AI file tools support text, markdown, and readable PDFs', 'info')
         return
       }
       const subject = state.subjects.find((s) => s.id === file.subjectId)?.name || 'General'
@@ -176,7 +177,7 @@ export default function Files() {
     try {
       const text = await fileSourceText(file)
       if (!text.trim()) {
-        showToast('AI file tools currently need a text/markdown file', 'info')
+        showToast('AI file tools support text, markdown, and readable PDFs', 'info')
         return
       }
       const cards = await aiGenerateFlashcards({ settings: state.settings, state, source: text.slice(0, 12000), n: 10 })
@@ -203,7 +204,7 @@ export default function Files() {
     try {
       const text = await fileSourceText(file)
       if (!text.trim()) {
-        showToast('AI file tools currently need a text/markdown file', 'info')
+        showToast('AI file tools support text, markdown, and readable PDFs', 'info')
         return
       }
       const data = await callAI({
@@ -320,6 +321,10 @@ function isTextLike(type = '', name = '') {
     || /\.(txt|md|csv|json|tex)$/i.test(name)
 }
 
+function isPdfLike(type = '', name = '') {
+  return type.includes('pdf') || /\.pdf$/i.test(name)
+}
+
 function dataUrlText(dataUrl) {
   const [, meta = '', payload = ''] = dataUrl.match(/^data:([^,]*),(.*)$/) || []
   if (!payload) return ''
@@ -329,6 +334,44 @@ function dataUrlText(dataUrl) {
   } catch {
     return decoded
   }
+}
+
+async function fileBytes(file) {
+  if (file.data) return dataUrlBytes(file.data)
+  if (file.storagePath && supabase) {
+    const { data, error } = await supabase.storage.from('user-files').createSignedUrl(file.storagePath, 60 * 5)
+    if (error) throw error
+    const res = await fetch(data.signedUrl)
+    if (!res.ok) throw new Error(`Could not read file (${res.status})`)
+    return new Uint8Array(await res.arrayBuffer())
+  }
+  return new Uint8Array()
+}
+
+function dataUrlBytes(dataUrl) {
+  const [, meta = '', payload = ''] = dataUrl.match(/^data:([^,]*),(.*)$/) || []
+  if (!payload) return new Uint8Array()
+  if (!meta.includes(';base64')) return new TextEncoder().encode(decodeURIComponent(payload))
+  const raw = atob(payload)
+  return Uint8Array.from(raw, (char) => char.charCodeAt(0))
+}
+
+async function pdfTextFromBytes(bytes) {
+  if (!bytes?.length) return ''
+  const [{ getDocument, GlobalWorkerOptions }, worker] = await Promise.all([
+    import('pdfjs-dist'),
+    import('pdfjs-dist/build/pdf.worker.mjs?url'),
+  ])
+  GlobalWorkerOptions.workerSrc = worker.default
+  const pdf = await getDocument({ data: bytes }).promise
+  const pages = []
+  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+    const page = await pdf.getPage(pageNumber)
+    const content = await page.getTextContent()
+    const text = content.items.map((item) => item.str || '').join(' ').replace(/\s+/g, ' ').trim()
+    if (text) pages.push(`Page ${pageNumber}\n${text}`)
+  }
+  return pages.join('\n\n')
 }
 
 function normalizeTree(node) {

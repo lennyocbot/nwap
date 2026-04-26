@@ -169,8 +169,8 @@ export default function Settings() {
           </div>
           <div className="text-xs text-ink-500 mt-1">
             {state.settings.aiProvider === 'openrouter'
-              ? 'Get a key at openrouter.ai. It stays on this device unless you add OPENROUTER_API_KEY in Netlify.'
-              : 'Stored only on this device. For deployed secrets, add the provider key in Netlify environment variables.'}
+              ? 'Paste your OpenRouter key here to enable ScholarAI on this device. It is not synced to your account.'
+              : 'Paste your API key here to enable ScholarAI on this device. It is not synced to your account.'}
           </div>
         </Field>
         <label className="flex items-center gap-2 text-sm">
@@ -179,7 +179,7 @@ export default function Settings() {
             checked={state.settings.useServerProxy !== false}
             onChange={(e) => setSettings({ useServerProxy: e.target.checked })}
           />
-          Use Netlify AI proxy when available
+          Use secure AI connection when available
         </label>
       </Section>
 

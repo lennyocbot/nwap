@@ -33,6 +33,15 @@ export default function TopBar({ onMenu }) {
           {titles[route.name] || 'ScholarAI'}
         </h1>
         <div className="flex-1" />
+        <button
+          className="btn-soft"
+          onClick={() => window.dispatchEvent(new Event('scholarai:open-search'))}
+          title="Search"
+          type="button"
+        >
+          <Icon.search className="w-4 h-4" />
+          <span className="hidden lg:inline">Search</span>
+        </button>
         <button className="btn-soft" onClick={() => navigate('settings')} title="Account sync">
           <Icon.settings className="w-4 h-4" />
           <span className="hidden sm:inline">{account.user ? 'Synced' : 'Sign in'}</span>

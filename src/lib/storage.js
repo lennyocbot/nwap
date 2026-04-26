@@ -12,6 +12,7 @@ export const defaultState = {
     pomodoro: { focus: 25, short: 5, long: 15, longEvery: 4 },
     weekStart: 1,
     notifications: true,
+    timetableOrientation: 'days-top',
   },
   subjects: [
     { id: 's1', name: 'Mathematics', teacher: '', room: 'M1', color: 'brand', emoji: 'M', target: 90 },

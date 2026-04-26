@@ -42,13 +42,17 @@ export default function Notes() {
   const { state, add, update, remove, navigate, route, openAI, showToast } = useApp()
   const [selectedId, setSelectedId] = useState(route.params?.id || state.notes[0]?.id || null)
   const [query, setQuery] = useState('')
-  const [preview, setPreview] = useState(false)
+  const [preview, setPreview] = useState(true)
   const [aiOutput, setAiOutput] = useState(null)
   const [aiBusy, setAiBusy] = useState(false)
 
   useEffect(() => {
     if (route.params?.id) setSelectedId(route.params.id)
   }, [route.params?.id])
+
+  useEffect(() => {
+    if (selectedId) setPreview(true)
+  }, [selectedId])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -235,9 +239,22 @@ export default function Notes() {
               <button className="btn-ghost" onClick={() => patch({ pinned: !note.pinned })} title="Pin">
                 <Icon.pin className={cx('w-4 h-4', note.pinned && 'text-amber-500')} />
               </button>
-              <button className="btn-ghost" onClick={() => setPreview((v) => !v)} title="Toggle preview">
-                {preview ? <Icon.note className="w-4 h-4" /> : <Icon.book className="w-4 h-4" />}
-              </button>
+              <div className="inline-flex rounded-2xl bg-ink-100 p-1 text-sm dark:bg-ink-800">
+                <button
+                  className={cx('rounded-xl px-3 py-1.5 font-medium transition', preview && 'bg-white text-brand-700 shadow-sm dark:bg-ink-900 dark:text-brand-100')}
+                  onClick={() => setPreview(true)}
+                  type="button"
+                >
+                  Preview
+                </button>
+                <button
+                  className={cx('rounded-xl px-3 py-1.5 font-medium transition', !preview && 'bg-white text-brand-700 shadow-sm dark:bg-ink-900 dark:text-brand-100')}
+                  onClick={() => setPreview(false)}
+                  type="button"
+                >
+                  Edit
+                </button>
+              </div>
               <button className="btn-ghost text-rose-600" onClick={() => { remove('notes', note.id); setSelectedId(state.notes[0]?.id || null) }} title="Delete">
                 <Icon.trash className="w-4 h-4" />
               </button>

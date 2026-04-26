@@ -18,6 +18,7 @@ export default function AIAssistant({ floating = true }) {
   const [chatId, setChatId] = useState(state.chats[0]?.id)
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
+  const [elapsed, setElapsed] = useState(0)
   const [err, setErr] = useState('')
   const [conversationOpen, setConversationOpen] = useState(false)
   const scrollRef = useRef(null)
@@ -30,6 +31,16 @@ export default function AIAssistant({ floating = true }) {
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
   }, [messages.length, aiPanel.open])
+
+  useEffect(() => {
+    if (!busy) {
+      setElapsed(0)
+      return
+    }
+    const started = Date.now()
+    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000)
+    return () => clearInterval(timer)
+  }, [busy])
 
   const contextNote = useMemo(() => {
     const c = aiPanel.context
@@ -122,7 +133,7 @@ export default function AIAssistant({ floating = true }) {
           reply = plan?.reply || 'I need one more detail before I can use a tool to change the app.'
         }
       } else if (classifyAssistantIntent(content) === 'action') {
-        reply = 'I can use tools to change your planner, but first add your OpenRouter key in Settings -> AI or set OPENROUTER_API_KEY in Netlify.'
+        reply = 'I can use tools to change your planner, but first paste your OpenRouter key in Settings, AI.'
       } else {
         reply = await callAI({
           settings: state.settings,
@@ -233,7 +244,7 @@ export default function AIAssistant({ floating = true }) {
             </div>
           </div>
         ))}
-        {busy && <div className="text-sm text-ink-500 animate-pulse-soft">Thinking...</div>}
+        {busy && <div className="text-sm text-ink-500 animate-pulse-soft">ScholarAI is thinking... {elapsed}s</div>}
         {err && <div className="text-sm text-accent-rose">{err}</div>}
       </div>
 
@@ -259,7 +270,7 @@ export default function AIAssistant({ floating = true }) {
         </div>
         {!state.settings.aiKey && (
           <div className="text-xs text-ink-500 mt-2">
-            Add an OpenRouter key in Settings, AI, or set OPENROUTER_API_KEY in Netlify for real tool use.
+            Paste your OpenRouter key in Settings, AI, to enable ScholarAI tools on this device.
           </div>
         )}
       </div>
