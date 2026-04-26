@@ -119,18 +119,18 @@ function MobileBottomNav({ route, navigate, openAI }) {
     { id: 'revision', label: 'Revise', icon: 'cards' },
   ]
   return (
-    <nav className="liquid-glass-strong fixed inset-x-3 bottom-3 z-40 grid grid-cols-5 gap-1 rounded-[28px] p-2 md:hidden" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}>
+    <nav className="liquid-glass-strong fixed inset-x-2 bottom-2 z-40 grid grid-cols-5 gap-1 rounded-[26px] p-1.5 sm:inset-x-3 sm:bottom-3 sm:p-2 md:hidden" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}>
       {items.map((item) => {
         const Ic = Icon[item.icon]
         const active = route.name === item.id
         return (
-          <button key={item.id} className={`rounded-2xl px-2 py-2 text-xs font-semibold ${active ? 'bg-white/80 text-brand-700 shadow-sm' : 'text-ink-500'}`} onClick={() => navigate(item.id)} type="button">
+          <button key={item.id} className={`rounded-2xl px-1.5 py-2 text-[11px] font-semibold sm:px-2 sm:text-xs ${active ? 'bg-white/80 text-brand-700 shadow-sm' : 'text-ink-500'}`} onClick={() => navigate(item.id)} type="button">
             <Ic className="mx-auto mb-1 h-4 w-4" />
             {item.label}
           </button>
         )
       })}
-      <button className="rounded-2xl bg-brand-600 px-2 py-2 text-xs font-semibold text-white shadow-pop" onClick={() => openAI()} type="button">
+      <button className="rounded-2xl bg-brand-600 px-1.5 py-2 text-[11px] font-semibold text-white shadow-pop sm:px-2 sm:text-xs" onClick={() => openAI()} type="button">
         <Icon.sparkle className="mx-auto mb-1 h-4 w-4" />
         Chat
       </button>

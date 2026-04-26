@@ -3,6 +3,7 @@
 import { supabase } from './supabase.js'
 
 export const buildSystemPrompt = (state, contextNote) => {
+  const now = currentTimeContext()
   const subjects = state.subjects.map((s) => `- ${s.name}${s.teacher ? ` (${s.teacher})` : ''}`).join('\n')
   const upcoming = state.assignments
     .filter((a) => a.status !== 'done')
@@ -59,6 +60,12 @@ Student profile:
 - School: ${state.user.school || '-'}
 - Year: ${state.user.year || '-'}
 
+Current time:
+- Local date/time: ${now.local}
+- Timezone: ${now.timeZone}
+- ISO timestamp: ${now.iso}
+- Day planning rule: if the user asks to plan today, start from the current local time unless they specify another start time. Do not schedule tasks in the past.
+
 Subjects:
 ${subjects || '- none yet -'}
 
@@ -80,6 +87,26 @@ Habits:
 ${habits || '- no habits yet -'}
 
 ${contextNote ? `\nContext for this conversation:\n${contextNote}\n` : ''}`
+}
+
+export function currentTimeContext() {
+  const date = new Date()
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'local'
+  return {
+    iso: date.toISOString(),
+    timeZone,
+    local: date.toLocaleString(undefined, {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZoneName: 'short',
+    }),
+    time: date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
+    date: date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }),
+  }
 }
 
 export const callAI = async ({ settings, system, messages, json = false, aiModeOverride = null }) => {

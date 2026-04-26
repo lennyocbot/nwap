@@ -167,22 +167,22 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-4 md:space-y-6 animate-fade-in">
       <section className={cx(
-        'liquid-glass-strong liquid-sheen p-5 md:p-7 text-white border-transparent rounded-[30px]',
+        'liquid-glass-strong liquid-sheen p-4 md:p-7 text-white border-transparent rounded-[26px] md:rounded-[30px]',
         nextWorkLate
           ? 'bg-gradient-to-br from-rose-700 via-rose-600 to-amber-600'
           : 'bg-gradient-to-br from-brand-700 via-brand-500 to-brand-300'
       )}>
-        <div className="flex items-start gap-4">
+        <div className="flex items-start gap-3 md:gap-4">
           <div className="flex-1">
             <div className="text-white/80 text-sm">Good {greet()}, {state.user.name || 'Student'}</div>
-            <h2 className="font-display text-2xl md:text-3xl font-semibold mt-1">
+            <h2 className="font-display text-[1.55rem] leading-tight md:text-3xl font-semibold mt-1">
               {nextWork
                 ? <>Next up: <span className="opacity-90">{nextWork.title}</span> - {relative(nextWork.due)}</>
                 : 'Nothing due - great time to revise.'}
             </h2>
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-4 grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
               <button className="btn bg-white text-brand-700 hover:bg-white/90" onClick={planDay}>
                 <Icon.sparkle className="w-4 h-4" /> Plan my day
               </button>
@@ -220,7 +220,7 @@ export default function Dashboard() {
         />
       )}
 
-      <section className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <section className="grid grid-cols-2 gap-2 md:grid-cols-5 md:gap-3">
         <Stat label="Open tasks" value={stats.open} icon="task" tone="rose" onClick={() => navigate('assignments')} />
         <Stat label="Cards due" value={dueCards} icon="cards" tone="brand" onClick={() => navigate('revision')} />
         <Stat label="Study today" value={`${stats.studyToday}m`} icon="timer" tone="amber" onClick={() => navigate('study')} />
@@ -253,7 +253,7 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <section className="grid grid-cols-1 gap-3 lg:grid-cols-3 lg:gap-4">
         <div className="card p-5 lg:col-span-2">
           <Header title="Today" action={{ label: 'Timetable', on: () => navigate('timetable') }} icon="timetable" />
           {todaySlots.length === 0 ? (
@@ -307,7 +307,7 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <section className="grid grid-cols-1 gap-3 lg:grid-cols-3 lg:gap-4">
         <div className="card p-5">
           <Header title="Today's habits" action={{ label: 'Manage', on: () => navigate('habits') }} icon="habit" />
           <ul className="space-y-2">
@@ -392,12 +392,12 @@ function SetupNudges({ state, navigate, setSettings }) {
   if (!state.settings.reminders?.enabled) addNudge({ id: 'reminders', icon: 'flag', title: 'Enable reminders', text: 'Get nudges for due work and flashcards.', action: () => navigate('settings') })
   if (!items.length) return null
   return (
-    <section className="card p-4">
+    <section className="card p-3 md:p-4">
       <div className="flex items-center gap-2 mb-3">
         <Icon.check className="w-4 h-4 text-brand-600" />
         <h3 className="font-display font-semibold">Complete your profile</h3>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
         {items.slice(0, 6).map((item) => {
           const Ic = Icon[item.icon]
           return (
@@ -423,7 +423,7 @@ function SetupNudges({ state, navigate, setSettings }) {
 
 function CoachCard({ brief, busy, onRefresh, onDismiss, onApply, onOpenWeak }) {
   return (
-    <section className="card p-5 border-brand-100 dark:border-brand-900">
+    <section className="card p-4 md:p-5 border-brand-100 dark:border-brand-900">
       <div className="flex flex-wrap items-start gap-3">
         <div className="w-11 h-11 rounded-[18px] bg-brand-600 text-white flex items-center justify-center shadow-pop">
           <Icon.brain className="w-5 h-5" />
@@ -440,7 +440,7 @@ function CoachCard({ brief, busy, onRefresh, onDismiss, onApply, onOpenWeak }) {
           <button className="btn-ghost" onClick={onDismiss}><Icon.x className="w-4 h-4" /></button>
         </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+      <div className="grid grid-cols-1 gap-3 mt-4 md:grid-cols-2">
         <div className="rounded-2xl bg-brand-50 p-3 dark:bg-brand-900/20">
           <div className="text-xs font-semibold text-brand-700 dark:text-brand-200">Priorities</div>
           <ul className="mt-2 space-y-1 text-sm">
@@ -454,8 +454,8 @@ function CoachCard({ brief, busy, onRefresh, onDismiss, onApply, onOpenWeak }) {
           </ul>
         </div>
       </div>
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <div className="text-sm font-semibold mr-auto">Next: {brief.nextAction}</div>
+      <div className="mt-4 grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center">
+        <div className="text-sm font-semibold sm:mr-auto">Next: {brief.nextAction}</div>
         <button className="btn-primary" onClick={onApply}><Icon.sparkle className="w-4 h-4" /> Apply plan</button>
         <button className="btn-soft" onClick={onOpenWeak}>Open subjects</button>
       </div>
@@ -488,7 +488,7 @@ function Stat({ label, value, icon, tone, onClick }) {
     violet: 'text-violet-700 dark:text-violet-300 bg-violet-100/60 dark:bg-violet-900/30',
   }
   return (
-    <button className="card p-4 text-left hover:shadow-pop transition" onClick={onClick}>
+    <button className="card tap-pop p-3 md:p-4 text-left hover:shadow-pop transition" onClick={onClick}>
       <div className={cx('w-9 h-9 rounded-2xl flex items-center justify-center mb-3', tones[tone])}>
         <Ic className="w-5 h-5" />
       </div>

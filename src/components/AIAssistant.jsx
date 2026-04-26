@@ -181,7 +181,7 @@ export default function AIAssistant({ floating = true }) {
 
   const body = (
     <div className="flex flex-col h-full min-h-0">
-      <div className="flex flex-wrap items-center px-5 py-4 border-b border-ink-100 dark:border-ink-800 gap-2">
+      <div className="flex flex-wrap items-center px-3 sm:px-5 py-3 sm:py-4 border-b border-ink-100 dark:border-ink-800 gap-2">
         <div className="w-8 h-8 rounded-[14px] bg-white shadow-sm ring-1 ring-brand-100 flex items-center justify-center overflow-hidden">
           <img src="/icon-192.png" alt="" className="w-7 h-7 object-cover" />
         </div>
@@ -189,9 +189,9 @@ export default function AIAssistant({ floating = true }) {
         <span className="chip">{state.settings.aiProvider === 'mock' ? 'demo mode' : 'server AI'}</span>
         <div className="flex-1 min-w-[12px]" />
         <div className="relative flex items-center gap-2 text-xs text-ink-500 min-w-0">
-          <span className="hidden sm:inline">Conversations</span>
+          <span className="hidden md:inline">Conversations</span>
           <button
-            className="input !py-1.5 max-w-[190px] min-w-[160px] flex items-center justify-between gap-2 text-left"
+            className="input !py-1.5 max-w-[160px] min-w-[128px] sm:max-w-[190px] sm:min-w-[160px] flex items-center justify-between gap-2 text-left"
             onClick={() => setConversationOpen((open) => !open)}
             type="button"
           >
@@ -224,7 +224,7 @@ export default function AIAssistant({ floating = true }) {
         {floating && <button className="btn-ghost" onClick={closeAI} title="Close"><Icon.x className="w-4 h-4" /></button>}
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 space-y-4">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-4">
         {messages.length === 0 && (
           <div>
             <div className="text-sm text-ink-500 mb-3">Try a starter</div>
@@ -248,7 +248,7 @@ export default function AIAssistant({ floating = true }) {
                 <img src="/icon-192.png" alt="" className="w-7 h-7 object-cover" />
               </div>
             )}
-            <div className={`max-w-[80%] rounded-3xl px-4 py-3 text-sm
+            <div className={`max-w-[88%] sm:max-w-[80%] rounded-3xl px-4 py-3 text-sm
               ${m.role === 'user'
                 ? 'bg-brand-600 text-white rounded-br-md'
                 : 'bg-ink-100 dark:bg-ink-800 text-ink-900 dark:text-ink-50 rounded-bl-md'}`}>
@@ -285,10 +285,10 @@ export default function AIAssistant({ floating = true }) {
         )}
       </div>
 
-      <div className="p-4 border-t border-ink-100 dark:border-ink-800">
+      <div className="p-3 sm:p-4 border-t border-ink-100 dark:border-ink-800" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}>
         <div className="flex items-end gap-2">
           <textarea
-            className="input min-h-[48px] max-h-40 resize-none"
+            className="input min-h-[48px] max-h-40 resize-none text-base"
             placeholder={chat?.mode === 'tutor' ? 'Answer the tutor, ask for a hint, or name a topic...' : 'Ask anything - plan, explain, quiz, summarize...'}
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -326,7 +326,7 @@ export default function AIAssistant({ floating = true }) {
       {aiPanel.open && (
         <div className="fixed inset-0 z-40 flex items-stretch md:items-center md:justify-end md:p-6 animate-fade-in">
           <div className="absolute inset-0 bg-black/40" onClick={closeAI} />
-          <div className="relative w-full md:w-[560px] h-full md:h-[82vh] liquid-glass-strong rounded-b-none md:rounded-3xl animate-slide-up flex flex-col min-h-0">
+          <div className="relative w-full md:w-[560px] h-[100dvh] md:h-[82vh] liquid-glass-strong rounded-b-none md:rounded-3xl animate-slide-up flex flex-col min-h-0">
             {body}
           </div>
         </div>

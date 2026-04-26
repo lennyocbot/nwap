@@ -260,9 +260,9 @@ export default function Notes() {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-[320px_1fr] gap-4 min-h-[70vh]">
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-[300px_1fr] lg:grid-cols-[320px_1fr] md:gap-4 min-h-[70vh]">
       {/* List */}
-      <div className="card p-3 flex flex-col min-h-0">
+      <div className="card p-3 flex flex-col min-h-[260px] md:min-h-0">
         <div className="flex items-center gap-2 mb-2">
           <div className="relative flex-1">
             <Icon.search className="w-4 h-4 text-ink-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -332,7 +332,7 @@ export default function Notes() {
       </div>
 
       {/* Editor */}
-      <div className="card p-4 md:p-6 flex flex-col min-h-0">
+      <div className="card p-3 sm:p-4 md:p-6 flex flex-col min-h-[60vh] md:min-h-0">
         {!note ? (
           <div className="flex-1 flex items-center justify-center text-ink-500">Select or create a note</div>
         ) : (
@@ -341,7 +341,7 @@ export default function Notes() {
               <input
                 value={note.title}
                 onChange={(e) => patch({ title: e.target.value })}
-                className="text-2xl font-display font-semibold bg-transparent flex-1 min-w-[180px] focus:outline-none"
+                className="text-xl sm:text-2xl font-display font-semibold bg-transparent flex-1 min-w-[160px] focus:outline-none"
                 placeholder="Title"
               />
               <select
@@ -391,13 +391,13 @@ export default function Notes() {
                   value={note.content}
                   onChange={(e) => handleContentChange(e.target.value)}
                   placeholder="# Start writing...  markdown supported"
-                  className="flex-1 resize-none bg-transparent focus:outline-none text-[15px] leading-relaxed"
+                className="flex-1 min-h-[320px] resize-none bg-transparent focus:outline-none text-base md:text-[15px] leading-relaxed"
                 />
               </>
             )}
 
             {/* AI toolbar */}
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
               <button className="btn-soft" onClick={runSummarize} disabled={aiBusy}><Icon.sparkle className="w-4 h-4" /> Summarize</button>
               <button className="btn-soft" onClick={runFlashcards} disabled={aiBusy}><Icon.cards className="w-4 h-4" /> Make flashcards</button>
               <button className="btn-soft" onClick={runQuiz} disabled={aiBusy}><Icon.brain className="w-4 h-4" /> Generate quiz</button>

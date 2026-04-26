@@ -28,11 +28,11 @@ export default function TopBar({ onMenu }) {
   const { route, openAI, account, navigate } = useApp()
   return (
     <header className="liquid-glass sticky top-0 z-20 border-b border-white/70 shadow-[0_16px_40px_-34px_rgba(32,57,143,0.38)]">
-      <div className="px-4 md:px-8 py-3 flex items-center gap-3" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)' }}>
+      <div className="px-3 sm:px-4 md:px-8 py-2.5 md:py-3 flex items-center gap-2 md:gap-3" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.625rem)' }}>
         <button className="md:hidden btn-ghost -ml-2" onClick={onMenu} aria-label="Menu">
           <Icon.menu className="w-5 h-5" />
         </button>
-        <h1 className="font-display text-xl md:text-2xl font-extrabold tracking-tight text-ink-900 dark:text-ink-50">
+        <h1 className="font-display text-lg sm:text-xl md:text-2xl font-extrabold tracking-tight text-ink-900 dark:text-ink-50 truncate">
           {titles[route.name] || 'Syllabi'}
         </h1>
         <div className="flex-1" />
@@ -43,15 +43,15 @@ export default function TopBar({ onMenu }) {
           type="button"
         >
           <Icon.search className="w-4 h-4" />
-          <span className="hidden lg:inline">Search</span>
+          <span className="hidden xl:inline">Search</span>
         </button>
         <button className="btn-soft !pl-2" onClick={() => navigate('account')} title="Account sync">
           <Avatar className="w-7 h-7 rounded-xl" label={false} />
-          <span className="hidden sm:inline">{account.user ? 'Synced' : 'Sign in'}</span>
+          <span className="hidden md:inline">{account.user ? 'Synced' : 'Sign in'}</span>
         </button>
         <button className="btn-soft" onClick={() => openAI()}>
           <Icon.sparkle className="w-4 h-4" />
-          <span className="hidden sm:inline">Ask AI</span>
+          <span className="hidden md:inline">Ask AI</span>
         </button>
       </div>
     </header>

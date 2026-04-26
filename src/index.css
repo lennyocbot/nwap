@@ -98,6 +98,18 @@ body {
   animation: riseIn 380ms cubic-bezier(.2,.8,.2,1) both;
 }
 
+.tap-pop {
+  transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+.tap-pop:active {
+  transform: scale(0.985);
+}
+@media (hover: hover) {
+  .tap-pop:hover {
+    transform: translateY(-1px);
+  }
+}
+
 @keyframes riseIn {
   from { opacity: 0; transform: translateY(10px) scale(0.985); }
   to { opacity: 1; transform: translateY(0) scale(1); }
@@ -181,6 +193,9 @@ body {
   }
   @media (prefers-reduced-motion: reduce), (pointer: coarse) {
     .animate-rise-in { animation-duration: 1ms; }
+    .tap-pop,
+    .tap-pop:active,
+    .tap-pop:hover { transform: none; }
     .liquid-sheen::after { opacity: 0.38; }
     @supports (backdrop-filter: url("#syllabi-liquid-glass")) {
       .liquid-glass,

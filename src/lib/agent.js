@@ -1,5 +1,6 @@
 import { uid } from './utils.js'
 import { normalizeAIText } from './text.js'
+import { currentTimeContext } from './ai.js'
 
 const actionWords = [
   'add', 'create', 'make', 'schedule', 'plan', 'move', 'reschedule', 'revise',
@@ -18,6 +19,7 @@ export function classifyAssistantIntent(text) {
 }
 
 export function buildAgentSystemPrompt(state, contextNote) {
+  const now = currentTimeContext()
   const subjects = state.subjects.map((s) => ({ id: s.id, name: s.name }))
   const decks = state.decks.map((d) => ({ id: d.id, name: d.name, subjectId: d.subjectId }))
   const assignments = state.assignments.map((a) => ({
@@ -49,7 +51,8 @@ export function buildAgentSystemPrompt(state, contextNote) {
 
   return `You are Syllabi's app operator with tools. You are smarter than brittle keyword matching, so interpret typos, follow-up answers, natural dates, and chat history.
 Return JSON only with shape {"reply":"short human message","actions":[...],"handoffToChat":false}.
-Today is ${new Date().toISOString().slice(0, 10)}.
+Current local date/time is ${now.local}.
+Timezone is ${now.timeZone}. ISO timestamp is ${now.iso}.
 
 Rules:
 - If the user asks you to change the app, return one or more actions. These are real tool calls.
@@ -59,6 +62,7 @@ Rules:
 - For normal study questions, explanations, greetings, or brainstorming, return actions: [] and handoffToChat: true unless a short direct reply is enough.
 - For quiz requests, return a present_quiz action with interactive questions. Do not create a note unless the user explicitly asks to save the quiz to notes.
 - Dates must be ISO strings. If the user gives a day/month/year, use 23:59 local time for assignments unless they gave a time.
+- If the user asks for a plan for today, schedule from the current local time, not the start of the day, unless they explicitly ask otherwise. Never place new study blocks in the past.
 - Match subjects to existing subject ids, accepting common aliases and typos like maths -> Mathematics and econ -> Economics.
 - For timetable activities that are not lessons, always set a descriptive title from the user's words, e.g. "Volleyball training", and set kind to club, study, before, after, break, lunch, form, or lesson.
 - If the user gives a timetable activity without an exact time, choose a sensible slot from the school timetable: before school 07:00-08:00, school day 08:00-15:30, after school 15:30-18:30.

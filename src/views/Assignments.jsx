@@ -75,7 +75,7 @@ export default function Assignments() {
         <button className="btn-primary" onClick={create}><Icon.plus className="w-4 h-4" /> New</button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
         {lists.map((col) => (
           <div key={col.key} className={cx('card p-3', col.items.length === 0 && 'bg-white/58 dark:bg-ink-900/70')}>
             <div className="flex items-center justify-between px-2 py-1">
@@ -147,7 +147,7 @@ export default function Assignments() {
               </div>
             )}
             <input className="input text-lg font-semibold" value={open.title} onChange={(e) => saveOpen({ title: e.target.value })} />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
               <div>
                 <div className="text-xs text-ink-500 mb-1">Subject</div>
                 <select className="input" value={open.subjectId || ''} onChange={(e) => saveOpen({ subjectId: e.target.value || null })}>
