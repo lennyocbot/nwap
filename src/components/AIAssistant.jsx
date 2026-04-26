@@ -5,6 +5,8 @@ import { applyAgentActions, buildAgentSystemPrompt, classifyAssistantIntent } fr
 import { markdownFromQuiz, normalizeAIText } from '../lib/text.js'
 import { Icon } from './Icons.jsx'
 import Markdown from './Markdown.jsx'
+import Avatar from './Avatar.jsx'
+import { hasRawMath } from '../lib/math.js'
 
 const STARTERS = [
   { label: 'Plan my week', prompt: 'Build a 7-day study plan based on my upcoming assignments. Reserve time for revision and breaks.' },
@@ -21,6 +23,7 @@ export default function AIAssistant({ floating = true }) {
   const [elapsed, setElapsed] = useState(0)
   const [err, setErr] = useState('')
   const [conversationOpen, setConversationOpen] = useState(false)
+  const [mathMode, setMathMode] = useState({})
   const scrollRef = useRef(null)
   const busyRef = useRef(false)
   const handledPromptRef = useRef(null)
@@ -133,7 +136,7 @@ export default function AIAssistant({ floating = true }) {
           reply = plan?.reply || 'I need one more detail before I can use a tool to change the app.'
         }
       } else if (classifyAssistantIntent(content) === 'action') {
-        reply = 'I can use tools to change your planner, but first paste your OpenRouter key in Settings, AI.'
+        reply = 'Syllabi works fully without AI. Add an OpenRouter key in Settings when you want tool-backed AI actions.'
       } else {
         reply = await callAI({
           settings: state.settings,
@@ -237,11 +240,21 @@ export default function AIAssistant({ floating = true }) {
               ${m.role === 'user'
                 ? 'bg-brand-600 text-white rounded-br-md'
                 : 'bg-ink-100 dark:bg-ink-800 text-ink-900 dark:text-ink-50 rounded-bl-md'}`}>
-              {m.role === 'assistant' ? <Markdown text={m.content} /> : <div className="whitespace-pre-wrap">{m.content}</div>}
+              {m.role === 'assistant' ? (
+                <>
+                  <Markdown text={m.content} mathMode={mathMode[i] || 'auto'} />
+                  {hasRawMath(m.content) && mathMode[i] !== 'aggressive' && (
+                    <button className="mt-2 text-xs underline text-brand-700 dark:text-brand-200" onClick={() => setMathMode((current) => ({ ...current, [i]: 'aggressive' }))} type="button">
+                      Render maths
+                    </button>
+                  )}
+                </>
+              ) : <div className="whitespace-pre-wrap">{m.content}</div>}
               {m.role === 'assistant' && m.quiz && (
                 <QuizMessage quiz={m.quiz} add={add} showToast={showToast} />
               )}
             </div>
+            {m.role === 'user' && <Avatar className="w-8 h-8 rounded-[14px]" label={false} />}
           </div>
         ))}
         {busy && <div className="text-sm text-ink-500 animate-pulse-soft">Syllabi is thinking... {elapsed}s</div>}
@@ -270,7 +283,7 @@ export default function AIAssistant({ floating = true }) {
         </div>
         {!state.settings.aiKey && (
           <div className="text-xs text-ink-500 mt-2">
-            Paste your OpenRouter key in Settings, AI, to enable Syllabi tools on this device.
+            Syllabi works fully without AI. Add an OpenRouter key later in Settings to unlock AI tools.
           </div>
         )}
       </div>

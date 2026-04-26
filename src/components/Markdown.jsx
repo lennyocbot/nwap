@@ -3,8 +3,9 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
+import { normalizeMathMarkdown } from '../lib/math.js'
 
-export default function Markdown({ text = '', className = '' }) {
+export default function Markdown({ text = '', className = '', mathMode = 'auto' }) {
   return (
     <div className={`prose-notes ${className}`}>
       <ReactMarkdown
@@ -14,7 +15,7 @@ export default function Markdown({ text = '', className = '' }) {
           a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
         }}
       >
-        {text || ''}
+        {normalizeMathMarkdown(text || '', mathMode)}
       </ReactMarkdown>
     </div>
   )

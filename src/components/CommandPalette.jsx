@@ -12,6 +12,7 @@ const typeRoute = {
   subject: 'subjects',
   mindmap: 'mindmap',
   goal: 'goals',
+  account: 'account',
 }
 
 export default function CommandPalette() {
@@ -112,6 +113,20 @@ function ResultIcon({ type }) {
 
 function searchState(state, query) {
   const q = query.trim().toLowerCase()
+  if (q.startsWith('#')) {
+    const tag = q.slice(1)
+    return state.notes
+      .filter((note) => (note.tags || []).some((item) => item.toLowerCase().includes(tag)))
+      .slice(0, 18)
+      .map((note) => ({
+        id: note.id,
+        type: 'note',
+        title: note.title || 'Untitled note',
+        subtitle: `#${(note.tags || []).join(' #')}`,
+        text: [note.title, note.content, ...(note.tags || [])].join(' '),
+        params: { id: note.id, tag },
+      }))
+  }
   const haystacks = [
     ...state.notes.map((note) => ({
       id: note.id,

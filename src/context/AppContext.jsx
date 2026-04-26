@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useReducer, useState, useCallback, useRef } from 'react'
-import { defaultState, loadState, saveState, resetState } from '../lib/storage.js'
+import { defaultState, loadState, saveState, resetState, migrateState } from '../lib/storage.js'
 import { hasSupabase, supabase } from '../lib/supabase.js'
 import { uid } from '../lib/utils.js'
+import { ACHIEVEMENTS, nextAchievements } from '../lib/achievements.js'
 
 const AppCtx = createContext(null)
 
@@ -23,7 +24,7 @@ const reducer = (state, action) => {
 
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, null, loadState)
-  const [route, setRoute] = useState({ name: 'dashboard', params: {} })
+  const [route, setRoute] = useState(routeFromLocation)
   const [aiPanel, setAiPanel] = useState({ open: false, context: null, initialPrompt: null, requestId: null })
   const [toast, setToast] = useState(null)
   const [account, setAccount] = useState({
@@ -54,7 +55,7 @@ export function AppProvider({ children }) {
         if (user) await loadCloudState(user.id)
         else {
           cloudLoadedRef.current = true
-          dispatch({ type: 'replace-all', value: restoreLocalSecrets(defaultState, loadState()) })
+          dispatch({ type: 'replace-all', value: restoreLocalSecrets(defaultState, loadState(), { existingState: false }) })
         }
       } catch (error) {
         cloudLoadedRef.current = true
@@ -70,11 +71,21 @@ export function AppProvider({ children }) {
       if (user) setTimeout(() => loadCloudState(user.id), 0)
       else {
         cloudLoadedRef.current = true
-        dispatch({ type: 'replace-all', value: restoreLocalSecrets(defaultState, loadState()) })
+        dispatch({ type: 'replace-all', value: restoreLocalSecrets(defaultState, loadState(), { existingState: false }) })
       }
     })
 
     return () => data.subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    const onMessage = (event) => {
+      if (event.data?.type === 'syllabi:navigate' && event.data.route) {
+        navigate(event.data.route, event.data.params || {})
+      }
+    }
+    navigator.serviceWorker?.addEventListener?.('message', onMessage)
+    return () => navigator.serviceWorker?.removeEventListener?.('message', onMessage)
   }, [])
 
   useEffect(() => {
@@ -95,12 +106,12 @@ export function AppProvider({ children }) {
       )
       if (error) throw error
       if (data?.state) {
-        const nextState = restoreLocalSecrets(data.state, loadState())
+        const nextState = restoreLocalSecrets(data.state, loadState(), { existingState: true })
         cloudLoadedRef.current = true
         dispatch({ type: 'replace-all', value: nextState })
         setAccount((current) => ({ ...current, sync: 'Cloud workspace loaded', error: null }))
       } else {
-        const nextState = restoreLocalSecrets(defaultState, loadState())
+        const nextState = restoreLocalSecrets(defaultState, loadState(), { existingState: false })
         const createError = await saveCloudState(userId, nextState, 'Cloud workspace created')
         cloudLoadedRef.current = true
         dispatch({ type: 'replace-all', value: nextState })
@@ -130,11 +141,39 @@ export function AppProvider({ children }) {
     }
   }
 
-  // Theme
   useEffect(() => {
-    document.documentElement.classList.remove('dark')
-    document.documentElement.style.colorScheme = 'light'
-  }, [])
+    const apply = () => {
+      const theme = state.settings.theme || 'light'
+      const dark = theme === 'dark' || (theme === 'system' && window.matchMedia?.('(prefers-color-scheme: dark)').matches)
+      document.documentElement.classList.toggle('dark', dark)
+      document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#09142c' : '#f4f7ff')
+    }
+    apply()
+    const media = window.matchMedia?.('(prefers-color-scheme: dark)')
+    media?.addEventListener?.('change', apply)
+    return () => media?.removeEventListener?.('change', apply)
+  }, [state.settings.theme])
+
+  useEffect(() => {
+    const unlocked = nextAchievements(state)
+    if (!unlocked.length) return
+    dispatch({ type: 'set', key: 'achievements', value: [...(state.achievements || []), ...unlocked] })
+    unlocked.forEach((item, index) => {
+      const achievement = ACHIEVEMENTS.find((entry) => entry.id === item.id)
+      if (achievement) setTimeout(() => showToast(`Achievement unlocked: ${achievement.name}`, 'success'), index * 450)
+    })
+  }, [
+    state.studySessions,
+    state.habits,
+    state.assignments,
+    state.flashcards,
+    state.notes,
+    state.mindmaps,
+    state.files,
+    state.grades,
+    state.achievements,
+  ])
 
   // CRUD helpers
   const add = useCallback((key, item) => {
@@ -188,7 +227,7 @@ export function AppProvider({ children }) {
   const signOut = useCallback(async () => {
     await supabase?.auth.signOut()
     resetState()
-    replaceAll(restoreLocalSecrets(defaultState, loadState()))
+    replaceAll(restoreLocalSecrets(defaultState, loadState(), { existingState: false }))
     showToast('Signed out', 'success')
   }, [replaceAll, showToast])
 
@@ -224,6 +263,7 @@ export const useApp = () => {
 function cloudSafeState(state) {
   return {
     ...state,
+    user: stripUserForCloud(state.user),
     files: (state.files || []).map(stripFileForCloud),
     settings: {
       ...state.settings,
@@ -235,22 +275,32 @@ function cloudSafeState(state) {
 function localCacheState(state) {
   return {
     ...state,
+    user: state.user || defaultState.user,
     files: (state.files || []).map((file) => file?.storagePath ? stripFileForCloud(file) : file)
   }
 }
 
-function restoreLocalSecrets(cloudState, localState) {
+function restoreLocalSecrets(cloudState, localState, { existingState = Boolean(cloudState?.settings) } = {}) {
+  const migrated = migrateState(cloudState, { existingState })
   return {
-    ...defaultState,
-    ...cloudState,
+    ...migrated,
     settings: {
       ...defaultState.settings,
-      ...(cloudState.settings || {}),
-      theme: 'light',
+      ...(migrated.settings || {}),
       aiKey: localState.settings?.aiKey || ''
     },
-    files: (cloudState.files || []).map(stripFileForCloud)
+    user: {
+      ...defaultState.user,
+      ...(migrated.user || {}),
+      avatarLocalData: localState.user?.avatarLocalData || '',
+    },
+    files: (migrated.files || []).map(stripFileForCloud)
   }
+}
+
+function stripUserForCloud(user = {}) {
+  const { avatarLocalData, ...safeUser } = user
+  return safeUser
 }
 
 function stripFileForCloud(file) {
@@ -264,4 +314,16 @@ function withTimeout(promise, message, ms = 12000) {
     timer = setTimeout(() => reject(new Error(message)), ms)
   })
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
+}
+
+function routeFromLocation() {
+  if (typeof window === 'undefined') return { name: 'dashboard', params: {} }
+  const params = new URLSearchParams(window.location.search)
+  const name = params.get('view') || params.get('route') || 'dashboard'
+  const id = params.get('id')
+  const tag = params.get('tag')
+  const routeParams = {}
+  if (id) routeParams.id = id
+  if (tag) routeParams.tag = tag
+  return { name, params: routeParams }
 }

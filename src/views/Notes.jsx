@@ -36,19 +36,70 @@ const noteTemplates = [
     content: '# Lesson notes\n\n## Key ideas\n\n- \n\n## Examples\n\n\n## Questions to ask\n\n- \n\n## Follow-up tasks\n\n- [ ] \n',
     tags: ['template', 'lesson'],
   },
+  {
+    key: 'revision',
+    label: 'Revision summary',
+    title: 'Revision summary',
+    content: '# Revision summary\n\n## Topic\n\n\n## Must-know ideas\n\n- \n\n## Key formulas / definitions\n\n- \n\n## Common mistakes\n\n- \n\n## Practice questions\n\n- [ ] \n',
+    tags: ['template', 'revision'],
+  },
+  {
+    key: 'problem-set',
+    label: 'Problem set',
+    title: 'Problem set',
+    content: '# Problem set\n\n## Topic\n\n\n## Questions\n\n1. \n\n## Working\n\n\n## Corrections\n\n- \n\n## What to revise next\n\n- [ ] \n',
+    tags: ['template', 'practice'],
+  },
+  {
+    key: 'debate',
+    label: 'Debate / argument plan',
+    title: 'Debate plan',
+    content: '# Debate plan\n\n## Motion / question\n\n\n## Position\n\n\n## Argument for\n\n- Evidence:\n- Evaluation:\n\n## Argument against\n\n- Evidence:\n- Evaluation:\n\n## Judgement\n\n',
+    tags: ['template', 'argument'],
+  },
+  {
+    key: 'maths-worked',
+    label: 'Maths worked solution',
+    title: 'Maths worked solution',
+    content: '# Maths worked solution\n\n## Question\n\n\n## Method\n\n1. \n\n## Working\n\n\n## Final answer\n\n\n## Mistake check\n\n- [ ] Units / exact form\n- [ ] Reasonableness\n',
+    tags: ['template', 'maths'],
+  },
+  {
+    key: 'physics-experiment',
+    label: 'Physics experiment writeup',
+    title: 'Physics experiment writeup',
+    content: '# Physics experiment writeup\n\n## Aim\n\n\n## Apparatus\n\n- \n\n## Method\n\n1. \n\n## Data\n\n| Measurement | Value | Uncertainty |\n| --- | --- | --- |\n|  |  |  |\n\n## Analysis\n\n\n## Evaluation\n\n',
+    tags: ['template', 'physics'],
+  },
+  {
+    key: 'econ-evaluation',
+    label: 'Economics evaluation paragraph',
+    title: 'Economics evaluation paragraph',
+    content: '# Economics evaluation paragraph\n\n## Point\n\n\n## Evidence / chain of reasoning\n\n\n## Counterpoint\n\n\n## Judgement\n\n\n## Keywords\n\n- \n',
+    tags: ['template', 'economics'],
+  },
+  {
+    key: 'past-paper',
+    label: 'Past-paper correction log',
+    title: 'Past-paper correction log',
+    content: '# Past-paper correction log\n\n## Paper / topic\n\n\n| Question | Mark lost | Why | Fix |\n| --- | ---: | --- | --- |\n|  |  |  |  |\n\n## Patterns\n\n- \n\n## Next practice\n\n- [ ] \n',
+    tags: ['template', 'past-paper'],
+  },
 ]
 
 export default function Notes() {
   const { state, add, update, remove, navigate, route, openAI, showToast } = useApp()
   const [selectedId, setSelectedId] = useState(route.params?.id || state.notes[0]?.id || null)
   const [query, setQuery] = useState('')
+  const [activeTag, setActiveTag] = useState(route.params?.tag || '')
   const [preview, setPreview] = useState(true)
   const [aiOutput, setAiOutput] = useState(null)
   const [aiBusy, setAiBusy] = useState(false)
 
   useEffect(() => {
     if (route.params?.id) setSelectedId(route.params.id)
-  }, [route.params?.id])
+    if (route.params?.tag) setActiveTag(route.params.tag)
+  }, [route.params?.id, route.params?.tag])
 
   useEffect(() => {
     if (selectedId) setPreview(true)
@@ -56,17 +107,23 @@ export default function Notes() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
+    const tagQuery = q.startsWith('#') ? q.slice(1) : activeTag.toLowerCase()
     return state.notes
       .slice()
       .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.updatedAt - a.updatedAt)
       .filter((n) => {
+        if (tagQuery && !(n.tags || []).some((tag) => tag.toLowerCase() === tagQuery)) return false
         if (!q) return true
+        if (q.startsWith('#')) return true
         return (n.title + ' ' + n.content + ' ' + (n.tags || []).join(' ')).toLowerCase().includes(q)
       })
       .filter((n) => !route.params?.subject || n.subjectId === route.params.subject)
-  }, [state.notes, query, route.params])
+  }, [state.notes, query, activeTag, route.params])
 
   const note = state.notes.find((n) => n.id === selectedId)
+  const tags = useMemo(() => {
+    return [...new Set(state.notes.flatMap((note) => note.tags || []))].sort((a, b) => a.localeCompare(b))
+  }, [state.notes])
 
   const createNote = () => {
     const n = add('notes', {
@@ -183,6 +240,21 @@ export default function Notes() {
           <option value="">Create from template...</option>
           {noteTemplates.map((template) => <option key={template.key} value={template.key}>{template.label}</option>)}
         </select>
+        {tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-2">
+            {activeTag && <button className="chip text-[10px] bg-brand-100 text-brand-700" onClick={() => setActiveTag('')}>All tags</button>}
+            {tags.slice(0, 12).map((tag) => (
+              <button
+                key={tag}
+                className={cx('chip text-[10px]', activeTag === tag && 'bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100')}
+                onClick={() => setActiveTag(activeTag === tag ? '' : tag)}
+                type="button"
+              >
+                #{tag}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="overflow-y-auto flex-1 -mr-1 pr-1">
           {filtered.length === 0 && <div className="text-center text-ink-500 py-8 text-sm">No notes</div>}
           <ul className="space-y-1">
@@ -204,7 +276,17 @@ export default function Notes() {
                     <div className="text-xs text-ink-500 line-clamp-2 mt-1">{n.content.replace(/[#>*_`]/g, '').slice(0, 120) || 'Empty note'}</div>
                     {n.tags?.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-2">
-                        {n.tags.slice(0, 3).map((t) => <span key={t} className="chip text-[10px]">#{t}</span>)}
+                        {n.tags.slice(0, 3).map((t) => (
+                          <span
+                            key={t}
+                            role="button"
+                            tabIndex={0}
+                            onClick={(event) => { event.stopPropagation(); setActiveTag(t) }}
+                            className="chip text-[10px]"
+                          >
+                            #{t}
+                          </span>
+                        ))}
                       </div>
                     )}
                   </button>

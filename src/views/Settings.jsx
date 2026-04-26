@@ -2,13 +2,17 @@ import { useRef, useState } from 'react'
 import { useApp } from '../context/AppContext.jsx'
 import { Icon } from '../components/Icons.jsx'
 import { cx, downloadJSON, subjectColors } from '../lib/utils.js'
+import { pushSupport, sendTestPush, subscribeToPush, unsubscribeFromPush } from '../lib/push.js'
 
 export default function Settings() {
   const { state, setSettings, setUser, showToast, reset, replaceAll, account, signIn, signOut, retrySync } = useApp()
   const [showKey, setShowKey] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [pushBusy, setPushBusy] = useState(false)
   const fileRef = useRef(null)
+  const push = typeof window === 'undefined' ? { supported: false, permission: 'unsupported' } : pushSupport()
+  const reminders = state.settings.reminders || {}
 
   const doExport = () => {
     downloadJSON(state, `syllabi-${new Date().toISOString().slice(0, 10)}.json`)
@@ -31,20 +35,44 @@ export default function Settings() {
   }
 
   const enableNotifications = async () => {
-    if (!('Notification' in window)) {
-      showToast('Browser notifications are not supported here', 'error')
-      return
-    }
-    const permission = await Notification.requestPermission()
-    if (permission === 'granted') {
-      setSettings({ notifications: true })
-      showToast('Reminders enabled', 'success')
-      try { new Notification('Syllabi reminders enabled', { body: 'Assignment and flashcard reminders can now appear while the app is open.' }) } catch {}
-    } else {
-      setSettings({ notifications: false })
-      showToast('Notifications were not enabled', 'info')
+    setPushBusy(true)
+    try {
+      const data = await subscribeToPush()
+      updateReminders({ enabled: true, devices: data.devices || reminders.devices || [] })
+      showToast('Push reminders enabled', 'success')
+    } catch (error) {
+      showToast(error.message || 'Notifications were not enabled', 'error')
+    } finally {
+      setPushBusy(false)
     }
   }
+
+  const disableNotifications = async () => {
+    setPushBusy(true)
+    try {
+      await unsubscribeFromPush()
+      updateReminders({ enabled: false })
+      showToast('Push reminders disabled', 'success')
+    } catch (error) {
+      showToast(error.message || 'Could not disable reminders', 'error')
+    } finally {
+      setPushBusy(false)
+    }
+  }
+
+  const testNotification = async () => {
+    setPushBusy(true)
+    try {
+      await sendTestPush()
+      showToast('Test notification sent', 'success')
+    } catch (error) {
+      showToast(error.message || 'Test notification failed', 'error')
+    } finally {
+      setPushBusy(false)
+    }
+  }
+
+  const updateReminders = (patch) => setSettings({ reminders: { ...reminders, ...patch } })
 
   return (
     <div className="space-y-4 max-w-2xl">
@@ -63,8 +91,24 @@ export default function Settings() {
       </Section>
 
       <Section title="Appearance" icon="sparkle">
-        <div className="rounded-2xl bg-brand-50 p-3 text-sm text-ink-700 ring-1 ring-brand-100">
-          Syllabi now uses a light Liquid Glass interface by default for better iPad readability and a cleaner home-screen feel.
+        <div className="rounded-2xl bg-brand-50 p-3 text-sm text-ink-700 ring-1 ring-brand-100 dark:bg-brand-900/30 dark:text-brand-100 dark:ring-brand-800">
+          Choose the interface style that works best for your eyes. System follows the device setting.
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {[
+            { key: 'light', label: 'Light' },
+            { key: 'dark', label: 'Dark' },
+            { key: 'system', label: 'System' },
+          ].map((theme) => (
+            <button
+              key={theme.key}
+              className={cx('btn-soft', state.settings.theme === theme.key && 'ring-2 ring-brand-400')}
+              onClick={() => setSettings({ theme: theme.key })}
+              type="button"
+            >
+              {theme.label}
+            </button>
+          ))}
         </div>
       </Section>
 
@@ -196,21 +240,71 @@ export default function Settings() {
       </Section>
 
       <Section title="Reminders" icon="flag">
+        {push.ipadSafari && !push.standalone && (
+          <div className="rounded-2xl bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-100 dark:bg-amber-900/20 dark:text-amber-100 dark:ring-amber-800">
+            Install Syllabi to your Home Screen to enable iPad notifications.
+          </div>
+        )}
         <div className="rounded-2xl bg-ink-50 p-3 text-sm dark:bg-ink-800">
-          Syllabi can send browser reminders for assignments due within 24 hours and flashcards due for review while the app is open.
+          Syllabi can send reminders for deadlines, due flashcards, habit rescue, and your daily coach brief. Push reminders sync to signed-in devices.
         </div>
         <div className="flex flex-wrap gap-2">
-          <button className="btn-soft" onClick={enableNotifications} type="button">
-            <Icon.flag className="w-4 h-4" /> Enable browser reminders
+          <button className="btn-soft" onClick={enableNotifications} disabled={pushBusy || !account.user} type="button">
+            <Icon.flag className="w-4 h-4" /> {pushBusy ? 'Working...' : 'Enable push reminders'}
           </button>
-          <button className={cx('btn-soft', state.settings.notifications && 'ring-2 ring-brand-400')}
-            onClick={() => setSettings({ notifications: !state.settings.notifications })}
+          <button className="btn-soft" onClick={testNotification} disabled={pushBusy || !account.user || push.permission !== 'granted'} type="button">
+            Send test
+          </button>
+          <button className={cx('btn-soft', reminders.enabled && 'ring-2 ring-brand-400')}
+            onClick={() => reminders.enabled ? disableNotifications() : updateReminders({ enabled: true })}
+            disabled={pushBusy}
             type="button">
-            {state.settings.notifications ? 'Reminders on' : 'Reminders off'}
+            {reminders.enabled ? 'Reminders on' : 'Reminders off'}
           </button>
         </div>
+        {!account.user && <div className="text-xs text-amber-700 dark:text-amber-200">Sign in before enabling synced push reminders.</div>}
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            ['assignments', 'Assignment deadlines'],
+            ['flashcards', 'Flashcards due'],
+            ['habits', 'Habit rescue'],
+            ['coach', 'Daily coach brief'],
+          ].map(([key, label]) => (
+            <label key={key} className="flex items-center gap-2 rounded-2xl bg-ink-50 px-3 py-2 text-sm dark:bg-ink-800">
+              <input type="checkbox" checked={reminders[key] !== false} onChange={(e) => updateReminders({ [key]: e.target.checked })} />
+              {label}
+            </label>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <Field label="Quiet from">
+            <input className="input" type="time" value={reminders.quietStart || '21:30'} onChange={(e) => updateReminders({ quietStart: e.target.value })} />
+          </Field>
+          <Field label="Quiet until">
+            <input className="input" type="time" value={reminders.quietEnd || '07:00'} onChange={(e) => updateReminders({ quietEnd: e.target.value })} />
+          </Field>
+          <Field label="Coach brief">
+            <input className="input" type="time" value={state.settings.coachBriefTime || '07:00'} onChange={(e) => setSettings({ coachBriefTime: e.target.value })} />
+          </Field>
+        </div>
         <div className="text-xs text-ink-500">
-          Browser permission: {typeof Notification === 'undefined' ? 'unsupported' : Notification.permission}
+          Browser permission: {push.permission}. Timezone: {reminders.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'local'}.
+        </div>
+        {(reminders.devices || []).length > 0 && (
+          <div className="rounded-2xl bg-white/70 p-3 ring-1 ring-ink-100 dark:bg-ink-900/70 dark:ring-ink-800">
+            <div className="text-xs font-semibold text-ink-500 mb-2">Devices</div>
+            <div className="space-y-1 text-sm">
+              {reminders.devices.map((device) => (
+                <div key={device.id || device.endpoint} className="flex items-center justify-between gap-2">
+                  <span>{device.device_label || device.deviceLabel || 'Device'}</span>
+                  <span className="text-xs text-ink-500">{device.last_seen_at ? new Date(device.last_seen_at).toLocaleDateString() : 'active'}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="text-xs text-ink-500">
+          iPad notifications require Safari, iPadOS 16.4+, and opening Syllabi from the Home Screen icon.
         </div>
       </Section>
 

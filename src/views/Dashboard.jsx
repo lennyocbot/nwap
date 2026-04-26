@@ -1,10 +1,13 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useApp } from '../context/AppContext.jsx'
 import { Icon } from '../components/Icons.jsx'
 import { cx, colorFor, daysUntil, fmtTime, relative, todayISO } from '../lib/utils.js'
+import { briefForToday, buildLocalCoachBrief, upsertBrief } from '../lib/coach.js'
+import { buildSystemPrompt, callAI } from '../lib/ai.js'
 
 export default function Dashboard() {
-  const { state, navigate, openAI, update, add } = useApp()
+  const { state, navigate, openAI, update, add, set, setSettings, showToast } = useApp()
+  const [coachBusy, setCoachBusy] = useState(false)
 
   const todayIdx = useMemo(() => {
     const d = new Date().getDay()
@@ -24,6 +27,7 @@ export default function Dashboard() {
 
   const dueCards = state.flashcards.filter((f) => f.due <= Date.now()).length
   const nextWork = upcoming[0]
+  const coachBrief = useMemo(() => briefForToday(state), [state.coachBriefs])
   const nextWorkLate = nextWork ? daysUntil(nextWork.due) < 0 : false
   const readingQueue = state.reading
     .filter((item) => item.status !== 'done')
@@ -73,6 +77,12 @@ export default function Dashboard() {
     }
   }, [state.studySessions, state.habits, state.assignments, state.flashcards])
 
+  useEffect(() => {
+    if (!state.settings.onboardingComplete || coachBrief) return
+    const brief = buildLocalCoachBrief(state)
+    set('coachBriefs', upsertBrief(state.coachBriefs || [], brief))
+  }, [state.settings.onboardingComplete, coachBrief?.date])
+
   const toggleHabit = (h) => {
     const key = todayISO()
     const was = !!h.log[key]
@@ -98,6 +108,59 @@ export default function Dashboard() {
       'Use my timetable, due assignments, revision queue, weak topics, and recent study time.',
       'Give me a realistic schedule with start times, focus blocks, breaks, and the single most important task.',
     ].join('\n'))
+  }
+
+  const refreshCoach = async () => {
+    const lastRefresh = coachBrief?.refreshedAt || coachBrief?.createdAt || 0
+    if (Date.now() - lastRefresh < 5 * 60 * 1000) {
+      showToast('Coach refresh is on a short cooldown', 'info')
+      return
+    }
+    setCoachBusy(true)
+    try {
+      let next = null
+      const canAskAI = state.settings.aiProvider === 'mock' || state.settings.aiKey || state.settings.useServerProxy !== false
+      if (canAskAI) {
+        const data = await callAI({
+          settings: state.settings,
+          system: buildSystemPrompt(state, 'Creating a concise daily study coach brief.'),
+          json: true,
+          messages: [{
+            role: 'user',
+            content: `Create today's Syllabi Study Coach brief. Return JSON only: {"title":"...","summary":"...","priorities":["..."],"risks":["..."],"nextAction":"..."}. Use the student's assignments, timetable, grades, habits, goals, and due flashcards. Do not create or change app data.`
+          }],
+        })
+        if (data?.summary) {
+          next = {
+            id: `coach-${todayISO()}`,
+            date: todayISO(),
+            source: 'ai',
+            title: data.title || "Today's study brief",
+            summary: data.summary,
+            priorities: (data.priorities || []).slice(0, 4),
+            risks: (data.risks || []).slice(0, 4),
+            nextAction: data.nextAction || 'Start one focused block.',
+            dismissed: false,
+            createdAt: coachBrief?.createdAt || Date.now(),
+            refreshedAt: Date.now(),
+          }
+        }
+      }
+      if (!next) next = { ...buildLocalCoachBrief(state), refreshedAt: Date.now() }
+      set('coachBriefs', upsertBrief(state.coachBriefs || [], next))
+      showToast('Coach brief refreshed', 'success')
+    } catch (error) {
+      const fallback = { ...buildLocalCoachBrief(state), refreshedAt: Date.now() }
+      set('coachBriefs', upsertBrief(state.coachBriefs || [], fallback))
+      showToast(error.message || 'Used local coach brief instead', 'info')
+    } finally {
+      setCoachBusy(false)
+    }
+  }
+
+  const dismissCoach = () => {
+    if (!coachBrief) return
+    set('coachBriefs', upsertBrief(state.coachBriefs || [], { ...coachBrief, dismissed: true }))
   }
 
   return (
@@ -134,6 +197,25 @@ export default function Dashboard() {
           </div>
         </div>
       </section>
+
+      <SetupNudges state={state} navigate={navigate} setSettings={setSettings} />
+
+      {coachBrief && !coachBrief.dismissed && (
+        <CoachCard
+          brief={coachBrief}
+          busy={coachBusy}
+          onRefresh={refreshCoach}
+          onDismiss={dismissCoach}
+          onApply={() => openAI(null, [
+            'Turn today’s Study Coach brief into real app actions.',
+            'Create sensible study/revision sessions or calendar events only where useful.',
+            `Brief: ${coachBrief.summary}`,
+            `Priorities: ${(coachBrief.priorities || []).join('; ')}`,
+            `Next action: ${coachBrief.nextAction}`,
+          ].join('\n'))}
+          onOpenWeak={() => navigate('subjects')}
+        />
+      )}
 
       <section className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Stat label="Open tasks" value={stats.open} icon="task" tone="rose" onClick={() => navigate('assignments')} />
@@ -287,6 +369,96 @@ export default function Dashboard() {
         </div>
       </section>
     </div>
+  )
+}
+
+function SetupNudges({ state, navigate, setSettings }) {
+  const items = []
+  if (!state.settings.aiKey && !state.settings.aiSetupDismissed) {
+    items.push({
+      id: 'ai',
+      icon: 'sparkle',
+      title: 'Connect AI tools',
+      text: 'Syllabi works fully without AI. Add an OpenRouter key later to unlock AI tools.',
+      action: () => navigate('settings'),
+      dismiss: () => setSettings({ aiSetupDismissed: true }),
+    })
+  }
+  if (!state.user.avatarLocalData && !state.user.avatarStoragePath) items.push({ id: 'avatar', icon: 'subject', title: 'Add profile picture', text: 'Make the workspace feel like yours.', action: () => navigate('account') })
+  if ((state.subjects || []).length <= 3) items.push({ id: 'subjects', icon: 'subject', title: 'Confirm subjects', text: 'Edit your A-level subjects and colours.', action: () => navigate('subjects') })
+  if ((state.subjects || []).some((subject) => !subject.target)) items.push({ id: 'targets', icon: 'grade', title: 'Set grade targets', text: 'Targets power better coach recommendations.', action: () => navigate('subjects') })
+  if (state.settings.timetableOrientation !== 'days-left') items.push({ id: 'layout', icon: 'timetable', title: 'Try days-down timetable', text: 'Use the iPad-friendly timetable layout.', action: () => navigate('timetable') })
+  if (!state.settings.reminders?.enabled) items.push({ id: 'reminders', icon: 'flag', title: 'Enable reminders', text: 'Get nudges for due work and flashcards.', action: () => navigate('settings') })
+  if (!items.length) return null
+  return (
+    <section className="card p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Icon.check className="w-4 h-4 text-brand-600" />
+        <h3 className="font-display font-semibold">Complete your profile</h3>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+        {items.slice(0, 6).map((item) => {
+          const Ic = Icon[item.icon]
+          return (
+            <div key={item.id} className="rounded-2xl bg-white/70 p-3 ring-1 ring-ink-100 dark:bg-ink-900/70 dark:ring-ink-800">
+              <div className="flex items-start gap-2">
+                <Ic className="w-4 h-4 text-brand-600 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <div className="font-semibold text-sm">{item.title}</div>
+                  <div className="text-xs text-ink-500 mt-1">{item.text}</div>
+                  <div className="mt-2 flex gap-2">
+                    <button className="text-xs font-semibold text-brand-700 dark:text-brand-200" onClick={item.action}>Open</button>
+                    {item.dismiss && <button className="text-xs text-ink-400" onClick={item.dismiss}>Dismiss</button>}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+function CoachCard({ brief, busy, onRefresh, onDismiss, onApply, onOpenWeak }) {
+  return (
+    <section className="card p-5 border-brand-100 dark:border-brand-900">
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="w-11 h-11 rounded-[18px] bg-brand-600 text-white flex items-center justify-center shadow-pop">
+          <Icon.brain className="w-5 h-5" />
+        </div>
+        <div className="flex-1 min-w-[220px]">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-display text-xl font-extrabold">{brief.title || "Today's study brief"}</h3>
+            <span className="chip">{brief.source === 'ai' ? 'AI coach' : 'Local coach'}</span>
+          </div>
+          <p className="mt-2 text-sm text-ink-600 dark:text-ink-300">{brief.summary}</p>
+        </div>
+        <div className="flex gap-2">
+          <button className="btn-soft" onClick={onRefresh} disabled={busy}><Icon.reset className="w-4 h-4" /> {busy ? 'Refreshing...' : 'Refresh'}</button>
+          <button className="btn-ghost" onClick={onDismiss}><Icon.x className="w-4 h-4" /></button>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+        <div className="rounded-2xl bg-brand-50 p-3 dark:bg-brand-900/20">
+          <div className="text-xs font-semibold text-brand-700 dark:text-brand-200">Priorities</div>
+          <ul className="mt-2 space-y-1 text-sm">
+            {(brief.priorities || []).map((item) => <li key={item}>- {item}</li>)}
+          </ul>
+        </div>
+        <div className="rounded-2xl bg-amber-50 p-3 dark:bg-amber-900/20">
+          <div className="text-xs font-semibold text-amber-800 dark:text-amber-200">Watch-outs</div>
+          <ul className="mt-2 space-y-1 text-sm">
+            {(brief.risks || []).map((item) => <li key={item}>- {item}</li>)}
+          </ul>
+        </div>
+      </div>
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <div className="text-sm font-semibold mr-auto">Next: {brief.nextAction}</div>
+        <button className="btn-primary" onClick={onApply}><Icon.sparkle className="w-4 h-4" /> Apply plan</button>
+        <button className="btn-soft" onClick={onOpenWeak}>Open subjects</button>
+      </div>
+    </section>
   )
 }
 

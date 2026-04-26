@@ -35,7 +35,12 @@ export const callAI = async ({ settings, system, messages, json = false }) => {
     return mockReply(messages, json)
   }
   if (useProxy) {
-    return callProviderProxy({ settings, system, messages, json })
+    try {
+      return await callProviderProxy({ settings, system, messages, json })
+    } catch (error) {
+      if (!settings.aiKey && /missing .*api key/i.test(error.message || '')) return mockReply(messages, json)
+      throw error
+    }
   }
   if (!settings.aiKey) {
     return mockReply(messages, json)
@@ -134,7 +139,7 @@ async function callOpenRouter({ settings, system, messages, json }) {
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${settings.aiKey}`,
-      'HTTP-Referer': 'https://syllabi.pages.dev',
+      'HTTP-Referer': 'https://syllabi.cc',
       'X-Title': 'Syllabi',
     },
     body: JSON.stringify(body),

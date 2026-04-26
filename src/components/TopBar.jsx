@@ -1,5 +1,6 @@
 import { useApp } from '../context/AppContext.jsx'
 import { Icon } from './Icons.jsx'
+import Avatar from './Avatar.jsx'
 
 const titles = {
   dashboard: 'Dashboard',
@@ -19,6 +20,7 @@ const titles = {
   journal: 'Journal',
   mindmap: 'Mind Maps',
   settings: 'Settings',
+  account: 'Account',
 }
 
 export default function TopBar({ onMenu }) {
@@ -42,8 +44,8 @@ export default function TopBar({ onMenu }) {
           <Icon.search className="w-4 h-4" />
           <span className="hidden lg:inline">Search</span>
         </button>
-        <button className="btn-soft" onClick={() => navigate('settings')} title="Account sync">
-          <Icon.settings className="w-4 h-4" />
+        <button className="btn-soft !pl-2" onClick={() => navigate('account')} title="Account sync">
+          <Avatar className="w-7 h-7 rounded-xl" label={false} />
           <span className="hidden sm:inline">{account.user ? 'Synced' : 'Sign in'}</span>
         </button>
         <button className="btn-soft" onClick={() => openAI()}>

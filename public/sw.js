@@ -1,5 +1,5 @@
-const CACHE = 'scholarai-v1'
-const ASSETS = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg']
+const CACHE = 'syllabi-v2'
+const ASSETS = ['/', '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png']
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)))
@@ -30,6 +30,49 @@ self.addEventListener('fetch', (e) => {
         })
         .catch(() => cached)
       return cached || fetched
+    })
+  )
+})
+
+self.addEventListener('push', (event) => {
+  let payload = {}
+  try {
+    payload = event.data?.json() || {}
+  } catch {
+    payload = { title: 'Syllabi', body: event.data?.text() || 'You have a study reminder.' }
+  }
+
+  const title = payload.title || 'Syllabi'
+  const options = {
+    body: payload.body || 'You have a study reminder.',
+    tag: payload.tag || 'syllabi-reminder',
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    data: {
+      route: payload.route || 'dashboard',
+      entityId: payload.entityId || '',
+      createdAt: payload.createdAt || new Date().toISOString(),
+    },
+  }
+
+  event.waitUntil(self.registration.showNotification(title, options))
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const route = event.notification.data?.route || 'dashboard'
+  const entityId = event.notification.data?.entityId || ''
+  const url = `/?view=${encodeURIComponent(route)}${entityId ? `&id=${encodeURIComponent(entityId)}` : ''}`
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if ('focus' in client) {
+          client.postMessage({ type: 'syllabi:navigate', route, params: entityId ? { id: entityId } : {} })
+          return client.focus()
+        }
+      }
+      return self.clients.openWindow(url)
     })
   )
 })

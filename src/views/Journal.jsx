@@ -5,6 +5,7 @@ import { cx, todayISO } from '../lib/utils.js'
 import { callAI, buildSystemPrompt } from '../lib/ai.js'
 import { normalizeAIText } from '../lib/text.js'
 import Markdown from '../components/Markdown.jsx'
+import Avatar from '../components/Avatar.jsx'
 
 const moods = [
   { key: 1, emoji: '😔', label: 'Low' },
@@ -90,6 +91,7 @@ export default function Journal() {
 
       <div className="card p-5 space-y-4">
         <div className="flex items-center">
+          <Avatar className="w-10 h-10 mr-3" label={false} />
           <div className="font-display font-semibold text-lg">
             {new Date(date).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
           </div>

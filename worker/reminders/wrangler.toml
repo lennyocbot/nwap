@@ -1,0 +1,7 @@
+name = "syllabi-reminders"
+main = "index.js"
+compatibility_date = "2026-04-26"
+compatibility_flags = ["nodejs_compat"]
+
+[triggers]
+crons = ["*/15 * * * *", "0 * * * *"]

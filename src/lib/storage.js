@@ -2,7 +2,7 @@ const KEY = 'syllabi.state.v1'
 const LEGACY_KEY = 'scholarai.state.v1'
 
 export const defaultState = {
-  user: { name: 'Student', avatar: null, school: '', year: 'A-level' },
+  user: { name: 'Student', avatar: null, avatarStoragePath: '', avatarLocalData: '', school: '', year: 'A-level' },
   settings: {
     theme: 'light',
     accent: 'brand',
@@ -12,8 +12,22 @@ export const defaultState = {
     useServerProxy: true,
     pomodoro: { focus: 25, short: 5, long: 15, longEvery: 4 },
     weekStart: 1,
-    notifications: true,
-    timetableOrientation: 'days-top',
+    onboardingComplete: false,
+    aiSetupDismissed: false,
+    notifications: false,
+    reminders: {
+      enabled: false,
+      assignments: true,
+      flashcards: true,
+      habits: false,
+      coach: true,
+      quietStart: '21:30',
+      quietEnd: '07:00',
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'local',
+      devices: [],
+    },
+    coachBriefTime: '07:00',
+    timetableOrientation: 'days-left',
   },
   subjects: [
     { id: 's1', name: 'Mathematics', teacher: '', room: 'M1', color: 'brand', emoji: 'M', target: 90 },
@@ -96,6 +110,8 @@ export const defaultState = {
   reading: [],
   mindmaps: [],
   journal: [],
+  coachBriefs: [],
+  achievements: [],
 }
 
 function addDays(n) {
@@ -110,16 +126,7 @@ export const loadState = () => {
     const raw = localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY)
     if (!raw) return defaultState
     const parsed = JSON.parse(raw)
-    return {
-      ...defaultState,
-      ...parsed,
-      settings: {
-        ...defaultState.settings,
-        ...(parsed.settings || {}),
-        theme: 'light',
-        pomodoro: { ...defaultState.settings.pomodoro, ...(parsed.settings?.pomodoro || {}) },
-      },
-    }
+    return migrateState(parsed, { existingState: true })
   } catch {
     return defaultState
   }
@@ -132,4 +139,57 @@ export const saveState = (s) => {
 export const resetState = () => {
   localStorage.removeItem(KEY)
   localStorage.removeItem(LEGACY_KEY)
+}
+
+export function migrateState(input, { existingState = false } = {}) {
+  const parsed = input || {}
+  const settings = parsed.settings || {}
+  const legacyNotifications = typeof settings.notifications === 'boolean' ? settings.notifications : defaultState.settings.notifications
+  const reminders = settings.reminders
+    ? { ...defaultState.settings.reminders, ...settings.reminders }
+    : { ...defaultState.settings.reminders, enabled: legacyNotifications }
+
+  const onboardingComplete = settings.onboardingComplete === undefined
+    ? Boolean(existingState)
+    : Boolean(settings.onboardingComplete)
+
+  const timetableOrientation = settings.timetableOrientation
+    || (existingState ? 'days-top' : defaultState.settings.timetableOrientation)
+
+  return {
+    ...defaultState,
+    ...parsed,
+    user: {
+      ...defaultState.user,
+      ...(parsed.user || {}),
+    },
+    settings: {
+      ...defaultState.settings,
+      ...settings,
+      onboardingComplete,
+      reminders,
+      timetableOrientation,
+      pomodoro: { ...defaultState.settings.pomodoro, ...(settings.pomodoro || {}) },
+    },
+    notes: migrateNotes(parsed.notes || defaultState.notes),
+    coachBriefs: parsed.coachBriefs || [],
+    achievements: parsed.achievements || [],
+  }
+}
+
+function migrateNotes(notes) {
+  return (notes || []).map((note) => {
+    if (
+      note.title === 'ScholarAI beta workspace'
+      && typeof note.content === 'string'
+      && note.content.includes('ScholarAI beta workspace')
+    ) {
+      return {
+        ...note,
+        title: 'Syllabi beta workspace',
+        content: note.content.replaceAll('ScholarAI beta workspace', 'Syllabi beta workspace').replaceAll('ScholarAI', 'Syllabi'),
+      }
+    }
+    return note
+  })
 }
