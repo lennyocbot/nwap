@@ -203,6 +203,14 @@ export default function Dashboard() {
 
       <SetupNudges state={state} navigate={navigate} setSettings={setSettings} />
 
+      <section className="grid grid-cols-2 gap-2 md:grid-cols-5 md:gap-3">
+        <Stat label="Open tasks" value={stats.open} icon="task" tone="rose" onClick={() => navigate(‘assignments’)} />
+        <Stat label="Cards due" value={dueCards} icon="cards" tone="brand" onClick={() => navigate(‘revision’)} />
+        <Stat label="Study today" value={`${stats.studyToday}m`} icon="timer" tone="amber" onClick={() => navigate(‘study’)} sparkline={week?.days?.map((d) => d.study)} />
+        <Stat label="Habit streaks" value={stats.streaks} icon="fire" tone="emerald" onClick={() => navigate(‘habits’)} />
+        <Stat label="Avg grade" value={weeklyGrade != null ? `${weeklyGrade}%` : ‘-’} icon="grade" tone="violet" onClick={() => navigate(‘grades’)} />
+      </section>
+
       {coachBrief && !coachBrief.dismissed && (
         <CoachCard
           brief={coachBrief}
@@ -210,23 +218,15 @@ export default function Dashboard() {
           onRefresh={refreshCoach}
           onDismiss={dismissCoach}
           onApply={() => openAI(null, [
-            'Turn today’s Study Coach brief into real app actions.',
-            'Create sensible study/revision sessions or calendar events only where useful.',
+            ‘Turn today’s Study Coach brief into real app actions.’,
+            ‘Create sensible study/revision sessions or calendar events only where useful.’,
             `Brief: ${coachBrief.summary}`,
-            `Priorities: ${(coachBrief.priorities || []).join('; ')}`,
+            `Priorities: ${(coachBrief.priorities || []).join(‘; ‘)}`,
             `Next action: ${coachBrief.nextAction}`,
-          ].join('\n'))}
-          onOpenWeak={() => navigate('subjects')}
+          ].join(‘\n’))}
+          onOpenWeak={() => navigate(‘subjects’)}
         />
       )}
-
-      <section className="grid grid-cols-2 gap-2 md:grid-cols-5 md:gap-3">
-        <Stat label="Open tasks" value={stats.open} icon="task" tone="rose" onClick={() => navigate('assignments')} />
-        <Stat label="Cards due" value={dueCards} icon="cards" tone="brand" onClick={() => navigate('revision')} />
-        <Stat label="Study today" value={`${stats.studyToday}m`} icon="timer" tone="amber" onClick={() => navigate('study')} />
-        <Stat label="Habit streaks" value={stats.streaks} icon="fire" tone="emerald" onClick={() => navigate('habits')} />
-        <Stat label="Avg grade" value={weeklyGrade != null ? `${weeklyGrade}%` : '-'} icon="grade" tone="violet" onClick={() => navigate('grades')} />
-      </section>
 
       <section className="card p-5">
         <Header title="This week" action={{ label: 'Study', on: () => navigate('study') }} icon="grade" />
@@ -421,6 +421,26 @@ function SetupNudges({ state, navigate, setSettings }) {
   )
 }
 
+function PriorityRing({ label }) {
+  const r = 16
+  const circ = 2 * Math.PI * r
+  return (
+    <div className="flex items-center gap-3 py-1">
+      <svg width="40" height="40" className="shrink-0" style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx="20" cy="20" r={r} fill="none" stroke="rgba(77,115,244,0.18)" strokeWidth="3.5" />
+        <circle
+          cx="20" cy="20" r={r} fill="none"
+          stroke="rgba(77,115,244,0.7)" strokeWidth="3.5"
+          strokeDasharray={circ}
+          strokeDashoffset={circ * 0.92}
+          strokeLinecap="round"
+        />
+      </svg>
+      <span className="text-sm leading-snug">{label.replace(/^[-•]\s*/, '')}</span>
+    </div>
+  )
+}
+
 function CoachCard({ brief, busy, onRefresh, onDismiss, onApply, onOpenWeak }) {
   return (
     <section className="card p-4 md:p-5 border-brand-100 dark:border-brand-900">
@@ -443,9 +463,11 @@ function CoachCard({ brief, busy, onRefresh, onDismiss, onApply, onOpenWeak }) {
       <div className="grid grid-cols-1 gap-3 mt-4 md:grid-cols-2">
         <div className="rounded-2xl bg-brand-50 p-3 dark:bg-brand-900/20">
           <div className="text-xs font-semibold text-brand-700 dark:text-brand-200">Priorities</div>
-          <ul className="mt-2 space-y-1 text-sm">
-            {(brief.priorities || []).map((item) => <li key={item}>- {item}</li>)}
-          </ul>
+          <div className="space-y-0.5 mt-2">
+            {(brief.priorities || []).slice(0, 3).map((p, i) => (
+              <PriorityRing key={i} label={p} />
+            ))}
+          </div>
         </div>
         <div className="rounded-2xl bg-amber-50 p-3 dark:bg-amber-900/20">
           <div className="text-xs font-semibold text-amber-800 dark:text-amber-200">Watch-outs</div>
@@ -478,7 +500,26 @@ function statusWeight(status) {
   return { reading: 0, queued: 1, done: 2 }[status] ?? 3
 }
 
-function Stat({ label, value, icon, tone, onClick }) {
+function MiniSparkline({ points, color }) {
+  if (!points || points.length < 2 || points.every((p) => p === 0)) return null
+  const max = Math.max(...points, 1)
+  const W = 44, H = 14
+  const xs = points.map((_, i) => (i / (points.length - 1)) * W)
+  const ys = points.map((p) => H - (p / max) * H)
+  const ptStr = xs.map((x, i) => `${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ')
+  return (
+    <svg width={W} height={H} className="mt-1 opacity-70" style={{ display: 'block' }}>
+      <polyline fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" points={ptStr} />
+    </svg>
+  )
+}
+
+function toneColor(tone) {
+  const map = { brand: '#4d73f4', rose: '#f43f5e', amber: '#f59e0b', emerald: '#10b981', violet: '#8b5cf6' }
+  return map[tone] || '#4d73f4'
+}
+
+function Stat({ label, value, icon, tone, onClick, sparkline }) {
   const Ic = Icon[icon]
   const tones = {
     rose: 'text-rose-600 dark:text-rose-300 bg-rose-100/60 dark:bg-rose-900/30',
@@ -493,6 +534,7 @@ function Stat({ label, value, icon, tone, onClick }) {
         <Ic className="w-5 h-5" />
       </div>
       <div className="text-2xl font-display font-semibold">{value}</div>
+      <MiniSparkline points={sparkline} color={toneColor(tone)} />
       <div className="text-xs text-ink-500 mt-0.5">{label}</div>
     </button>
   )

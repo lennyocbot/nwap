@@ -95,6 +95,8 @@ function LiquidBackdrop() {
       <div className="liquid-spec liquid-spec-a" />
       <div className="liquid-spec liquid-spec-b" />
       <div className="liquid-spec liquid-spec-c" />
+      <div className="liquid-spec liquid-spec-d" />
+      <div className="liquid-spec liquid-spec-e" />
     </div>
   )
 }
@@ -102,10 +104,20 @@ function LiquidBackdrop() {
 function LiquidGlassFilter() {
   return (
     <svg aria-hidden="true" className="pointer-events-none fixed h-0 w-0">
-      <filter id="syllabi-liquid-glass" x="-20%" y="-20%" width="140%" height="140%" colorInterpolationFilters="sRGB">
-        <feTurbulence type="fractalNoise" baseFrequency="0.018 0.028" numOctaves="2" seed="7" result="noise" />
-        <feGaussianBlur in="noise" stdDeviation="1.2" result="softNoise" />
-        <feDisplacementMap in="SourceGraphic" in2="softNoise" scale="18" xChannelSelector="R" yChannelSelector="G" />
+      {/* Primary glass refraction — displacement scale raised, 3 octaves for finer detail */}
+      <filter id="syllabi-liquid-glass" x="-30%" y="-30%" width="160%" height="160%" colorInterpolationFilters="sRGB">
+        <feTurbulence type="fractalNoise" baseFrequency="0.012 0.020" numOctaves="3" seed="7" result="noise" />
+        <feGaussianBlur in="noise" stdDeviation="1.6" result="softNoise" />
+        <feDisplacementMap in="SourceGraphic" in2="softNoise" scale="34" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+      {/* Caustic light filter */}
+      <filter id="syllabi-caustic" x="-20%" y="-20%" width="140%" height="140%" colorInterpolationFilters="sRGB">
+        <feTurbulence type="turbulence" baseFrequency="0.035 0.065" numOctaves="2" seed="19" result="causticNoise" />
+        <feColorMatrix in="causticNoise" type="saturate" values="0" result="grey" />
+        <feComponentTransfer in="grey" result="bright">
+          <feFuncA type="linear" slope="3" intercept="-1.4" />
+        </feComponentTransfer>
+        <feComposite in="SourceGraphic" in2="bright" operator="in" />
       </filter>
     </svg>
   )
