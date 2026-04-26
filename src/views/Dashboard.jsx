@@ -81,6 +81,7 @@ export default function Dashboard() {
     if (!state.settings.onboardingComplete || coachBrief) return
     const brief = buildLocalCoachBrief(state)
     set('coachBriefs', upsertBrief(state.coachBriefs || [], brief))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.settings.onboardingComplete, coachBrief?.date])
 
   const toggleHabit = (h) => {
@@ -426,7 +427,7 @@ function PriorityRing({ label }) {
   const circ = 2 * Math.PI * r
   return (
     <div className="flex items-center gap-3 py-1">
-      <svg width="40" height="40" className="shrink-0" style={{ transform: 'rotate(-90deg)' }}>
+      <svg aria-hidden="true" focusable="false" width="40" height="40" className="shrink-0" style={{ transform: 'rotate(-90deg)' }}>
         <circle cx="20" cy="20" r={r} fill="none" stroke="rgba(77,115,244,0.18)" strokeWidth="3.5" />
         <circle
           cx="20" cy="20" r={r} fill="none"
@@ -508,7 +509,7 @@ function MiniSparkline({ points, color }) {
   const ys = points.map((p) => H - (p / max) * H)
   const ptStr = xs.map((x, i) => `${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ')
   return (
-    <svg width={W} height={H} className="mt-1 opacity-70" style={{ display: 'block' }}>
+    <svg aria-hidden="true" focusable="false" width={W} height={H} className="mt-1 opacity-70" style={{ display: 'block' }}>
       <polyline fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" points={ptStr} />
     </svg>
   )

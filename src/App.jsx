@@ -115,7 +115,9 @@ function LiquidGlassFilter() {
         <feTurbulence type="turbulence" baseFrequency="0.035 0.065" numOctaves="2" seed="19" result="causticNoise" />
         <feColorMatrix in="causticNoise" type="saturate" values="0" result="grey" />
         <feComponentTransfer in="grey" result="bright">
-          <feFuncA type="linear" slope="3" intercept="-1.4" />
+          <feFuncR type="linear" slope="3" intercept="-1.4" />
+          <feFuncG type="linear" slope="3" intercept="-1.4" />
+          <feFuncB type="linear" slope="3" intercept="-1.4" />
         </feComponentTransfer>
         <feComposite in="SourceGraphic" in2="bright" operator="in" />
       </filter>
