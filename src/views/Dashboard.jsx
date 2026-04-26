@@ -205,11 +205,11 @@ export default function Dashboard() {
       <SetupNudges state={state} navigate={navigate} setSettings={setSettings} />
 
       <section className="grid grid-cols-2 gap-2 md:grid-cols-5 md:gap-3">
-        <Stat label="Open tasks" value={stats.open} icon="task" tone="rose" onClick={() => navigate(‘assignments’)} />
-        <Stat label="Cards due" value={dueCards} icon="cards" tone="brand" onClick={() => navigate(‘revision’)} />
-        <Stat label="Study today" value={`${stats.studyToday}m`} icon="timer" tone="amber" onClick={() => navigate(‘study’)} sparkline={week?.days?.map((d) => d.study)} />
-        <Stat label="Habit streaks" value={stats.streaks} icon="fire" tone="emerald" onClick={() => navigate(‘habits’)} />
-        <Stat label="Avg grade" value={weeklyGrade != null ? `${weeklyGrade}%` : ‘-’} icon="grade" tone="violet" onClick={() => navigate(‘grades’)} />
+        <Stat label="Open tasks" value={stats.open} icon="task" tone="rose" onClick={() => navigate('assignments')} />
+        <Stat label="Cards due" value={dueCards} icon="cards" tone="brand" onClick={() => navigate('revision')} />
+        <Stat label="Study today" value={`${stats.studyToday}m`} icon="timer" tone="amber" onClick={() => navigate('study')} sparkline={week?.days?.map((d) => d.study)} />
+        <Stat label="Habit streaks" value={stats.streaks} icon="fire" tone="emerald" onClick={() => navigate('habits')} />
+        <Stat label="Avg grade" value={weeklyGrade != null ? `${weeklyGrade}%` : '-'} icon="grade" tone="violet" onClick={() => navigate('grades')} />
       </section>
 
       {coachBrief && !coachBrief.dismissed && (
@@ -219,13 +219,13 @@ export default function Dashboard() {
           onRefresh={refreshCoach}
           onDismiss={dismissCoach}
           onApply={() => openAI(null, [
-            ‘Turn today’s Study Coach brief into real app actions.’,
-            ‘Create sensible study/revision sessions or calendar events only where useful.’,
+            "Turn today's Study Coach brief into real app actions.",
+            'Create sensible study/revision sessions or calendar events only where useful.',
             `Brief: ${coachBrief.summary}`,
-            `Priorities: ${(coachBrief.priorities || []).join(‘; ‘)}`,
+            `Priorities: ${(coachBrief.priorities || []).join('; ')}`,
             `Next action: ${coachBrief.nextAction}`,
-          ].join(‘\n’))}
-          onOpenWeak={() => navigate(‘subjects’)}
+          ].join('\n'))}
+          onOpenWeak={() => navigate('subjects')}
         />
       )}
 
