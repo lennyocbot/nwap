@@ -54,7 +54,7 @@ export default function CommandPalette() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/45 px-3 pt-[10vh] animate-fade-in">
-      <div className="w-full max-w-2xl rounded-3xl border border-ink-200 bg-white shadow-pop dark:border-ink-700 dark:bg-ink-900">
+      <div className="liquid-glass-strong w-full max-w-2xl rounded-3xl border border-ink-200 shadow-pop dark:border-ink-700">
         <div className="flex items-center gap-3 border-b border-ink-100 px-4 py-3 dark:border-ink-800">
           <Icon.search className="w-5 h-5 text-ink-400" />
           <input

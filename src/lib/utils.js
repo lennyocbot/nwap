@@ -58,6 +58,12 @@ export const subjectColors = [
 
 export const colorFor = (name) => subjectColors.find((c) => c.name === name) || subjectColors[0]
 
+export const subjectInitial = (name = '') => {
+  const cleaned = String(name || '').trim()
+  const match = cleaned.match(/[A-Za-z0-9]/)
+  return (match?.[0] || 'S').toUpperCase()
+}
+
 export const sortBy = (key, dir = 1) => (a, b) => (a[key] > b[key] ? dir : a[key] < b[key] ? -dir : 0)
 
 export const groupBy = (arr, key) =>

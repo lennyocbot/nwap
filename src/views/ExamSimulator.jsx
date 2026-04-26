@@ -5,6 +5,7 @@ import Markdown from '../components/Markdown.jsx'
 import { buildSystemPrompt, callAI } from '../lib/ai.js'
 import { normalizeAIText } from '../lib/text.js'
 import { uid } from '../lib/utils.js'
+import { clampMark, scoreExamAttempt } from '../lib/exam.js'
 
 const paperTypes = {
   short: { label: 'Short practice', minutes: 20, questions: 4 },
@@ -104,16 +105,26 @@ export default function ExamSimulator() {
           content: `Mark this exam attempt. Return JSON only: {"percentage":72,"feedback":"...","questionFeedback":[{"id":"q1","marksAwarded":2,"marksAvailable":4,"feedback":"...","wrong":true,"flashcard":{"front":"...","back":"..."}}]}.\n\nQUESTIONS:\n${JSON.stringify(target.questions)}\n\nANSWERS:\n${JSON.stringify(target.answers || {})}`,
         }],
       })
+      const questionFeedback = (data?.questionFeedback || []).map((item) => {
+        const question = target.questions.find((q) => q.id === item.id)
+        const marksAvailable = Number(item.marksAvailable ?? question?.marks ?? 0) || 0
+        return {
+          ...item,
+          marksAvailable,
+          marksAwarded: clampMark(item.marksAwarded, marksAvailable),
+          feedback: normalizeAIText(item.feedback || ''),
+        }
+      })
+      const scored = scoreExamAttempt({ ...target, score: Number(data?.percentage) || 0, questionFeedback })
       const marked = {
         ...target,
         status: 'submitted',
         submittedAt: Date.now(),
-        score: Number(data?.percentage) || 0,
+        score: scored.score,
+        marksAwarded: scored.marks,
+        marksAvailable: scored.available,
         feedback: normalizeAIText(data?.feedback || 'Marked.'),
-        questionFeedback: (data?.questionFeedback || []).map((item) => ({
-          ...item,
-          feedback: normalizeAIText(item.feedback || ''),
-        })),
+        questionFeedback,
       }
       update('examAttempts', marked)
       setAttempt(marked)

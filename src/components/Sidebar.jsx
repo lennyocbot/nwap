@@ -49,7 +49,7 @@ export default function Sidebar({ open, onClose }) {
   }
 
   const panel = (
-    <aside className="h-full w-[272px] shrink-0 flex flex-col bg-white/62 backdrop-blur-2xl border-r border-white/70 shadow-[18px_0_60px_-50px_rgba(32,57,143,0.45)]">
+    <aside className="liquid-glass h-full w-[272px] shrink-0 flex flex-col border-r border-white/70 shadow-[18px_0_60px_-50px_rgba(32,57,143,0.45)]">
       <div className="px-5 py-5 flex items-center gap-3">
         <Avatar className="w-11 h-11" />
         <div>

@@ -149,11 +149,11 @@ export default function Dashboard() {
           }
         }
       }
-      if (!next) next = { ...buildLocalCoachBrief(state), refreshedAt: Date.now() }
+      if (!next) next = { ...buildLocalCoachBrief(state), source: 'offline', refreshedAt: Date.now() }
       set('coachBriefs', upsertBrief(state.coachBriefs || [], next))
       showToast('Coach brief refreshed', 'success')
     } catch (error) {
-      const fallback = { ...buildLocalCoachBrief(state), refreshedAt: Date.now() }
+      const fallback = { ...buildLocalCoachBrief(state), source: 'offline', refreshedAt: Date.now() }
       set('coachBriefs', upsertBrief(state.coachBriefs || [], fallback))
       showToast(error.message || 'Used local coach brief instead', 'info')
     } finally {
@@ -169,7 +169,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-6 animate-fade-in">
       <section className={cx(
-        'card p-5 md:p-7 text-white border-transparent',
+        'liquid-glass-strong liquid-sheen p-5 md:p-7 text-white border-transparent rounded-[30px]',
         nextWorkLate
           ? 'bg-gradient-to-br from-rose-700 via-rose-600 to-amber-600'
           : 'bg-gradient-to-br from-brand-700 via-brand-500 to-brand-300'
@@ -236,11 +236,16 @@ export default function Dashboard() {
           <MiniMetric label="Assignments done" value={`${week.assignmentPct}%`} />
           <MiniMetric label="Cards reviewed" value={week.reviewedCards || week.dueCards} />
         </div>
-        <div className="flex items-end gap-2 h-24">
+        <div className="relative flex items-end gap-2 h-24">
+          {week.studyTotal === 0 && (
+            <div className="absolute inset-0 flex items-center justify-center text-sm text-ink-500">
+              Start a focus session to see activity.
+            </div>
+          )}
           {week.days.map((day) => (
             <div key={day.key} className="flex-1 flex flex-col items-center gap-1">
-              <div className="w-full rounded-t-lg bg-brand-500/20 dark:bg-brand-500/30 relative overflow-hidden" style={{ height: `${Math.max(8, (day.study / week.maxStudy) * 100)}%` }}>
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-brand-600 to-brand-400" style={{ height: '100%' }} />
+              <div className="w-full rounded-t-lg bg-brand-500/10 dark:bg-brand-500/20 relative overflow-hidden" style={{ height: `${Math.max(8, (day.study / week.maxStudy) * 100)}%` }}>
+                <div className={cx('absolute inset-x-0 bottom-0 bg-gradient-to-t from-brand-600 to-brand-400', day.study === 0 && 'opacity-20')} style={{ height: day.study === 0 ? '100%' : '100%' }} />
               </div>
               <div className="text-[10px] text-ink-500">{day.label}</div>
             </div>
@@ -288,7 +293,7 @@ export default function Dashboard() {
                     onClick={() => navigate('assignments', { id: a.id })}>
                     <span className={cx('w-2 h-2 rounded-full', priorityDot(a.priority))} />
                     <div className="flex-1 min-w-0">
-                      <div className="truncate font-medium">{a.title}</div>
+                      <div className="line-clamp-2 font-medium" title={a.title}>{a.title}</div>
                       <div className="text-xs text-ink-500 truncate">{s?.name || 'General'}</div>
                     </div>
                     <span className={cx('pill', late ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200' : 'bg-ink-100 dark:bg-ink-800')}>
@@ -377,11 +382,14 @@ export default function Dashboard() {
 
 function SetupNudges({ state, navigate, setSettings }) {
   const items = []
-  if (!state.user.avatarLocalData && !state.user.avatarStoragePath) items.push({ id: 'avatar', icon: 'subject', title: 'Add profile picture', text: 'Make the workspace feel like yours.', action: () => navigate('account') })
-  if ((state.subjects || []).length <= 3) items.push({ id: 'subjects', icon: 'subject', title: 'Confirm subjects', text: 'Edit your A-level subjects and colours.', action: () => navigate('subjects') })
-  if ((state.subjects || []).some((subject) => !subject.target)) items.push({ id: 'targets', icon: 'grade', title: 'Set grade targets', text: 'Targets power better coach recommendations.', action: () => navigate('subjects') })
-  if (state.settings.timetableOrientation !== 'days-left') items.push({ id: 'layout', icon: 'timetable', title: 'Try days-down timetable', text: 'Use the iPad-friendly timetable layout.', action: () => navigate('timetable') })
-  if (!state.settings.reminders?.enabled) items.push({ id: 'reminders', icon: 'flag', title: 'Enable reminders', text: 'Get nudges for due work and flashcards.', action: () => navigate('settings') })
+  const dismissed = state.settings.dismissedNudges || []
+  const dismiss = (id) => setSettings({ dismissedNudges: [...new Set([...dismissed, id])] })
+  const addNudge = (item) => { if (!dismissed.includes(item.id)) items.push({ ...item, dismiss: () => dismiss(item.id) }) }
+  if (!state.user.avatarLocalData && !state.user.avatarStoragePath) addNudge({ id: 'avatar', icon: 'subject', title: 'Add profile picture', text: 'Make the workspace feel like yours.', action: () => navigate('account') })
+  if ((state.subjects || []).length === 0) addNudge({ id: 'subjects', icon: 'subject', title: 'Add your first subject', text: 'Create your A-level subjects and colours.', action: () => navigate('subjects') })
+  if ((state.subjects || []).some((subject) => !subject.target)) addNudge({ id: 'targets', icon: 'grade', title: 'Set grade targets', text: 'Targets power better coach recommendations.', action: () => navigate('subjects') })
+  if (state.settings.timetableOrientation !== 'days-left') addNudge({ id: 'layout', icon: 'timetable', title: 'Try days-down timetable', text: 'Use the iPad-friendly timetable layout.', action: () => navigate('timetable') })
+  if (!state.settings.reminders?.enabled) addNudge({ id: 'reminders', icon: 'flag', title: 'Enable reminders', text: 'Get nudges for due work and flashcards.', action: () => navigate('settings') })
   if (!items.length) return null
   return (
     <section className="card p-4">
@@ -423,7 +431,7 @@ function CoachCard({ brief, busy, onRefresh, onDismiss, onApply, onOpenWeak }) {
         <div className="flex-1 min-w-[220px]">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-display text-xl font-extrabold">{brief.title || "Today's study brief"}</h3>
-            <span className="chip">{brief.source === 'ai' ? 'AI coach' : 'Local coach'}</span>
+            <span className="chip">{brief.source === 'ai' ? 'AI coach' : 'Offline coach'}</span>
           </div>
           <p className="mt-2 text-sm text-ink-600 dark:text-ink-300">{brief.summary}</p>
         </div>

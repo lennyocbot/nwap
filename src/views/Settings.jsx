@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext.jsx'
 import { Icon } from '../components/Icons.jsx'
 import { cx, downloadJSON, subjectColors } from '../lib/utils.js'
 import { pushSupport, sendTestPush, subscribeToPush, unsubscribeFromPush } from '../lib/push.js'
-import { fetchAIUsage } from '../lib/ai.js'
+import { fetchAIHealth, fetchAIUsage } from '../lib/ai.js'
 
 export default function Settings() {
   const { state, setSettings, setUser, showToast, reset, replaceAll, account, signIn, signUp, signOut, retrySync } = useApp()
@@ -15,6 +15,8 @@ export default function Settings() {
   const [authMessage, setAuthMessage] = useState('')
   const [usage, setUsage] = useState(null)
   const [usageError, setUsageError] = useState('')
+  const [aiHealth, setAiHealth] = useState(null)
+  const [aiHealthError, setAiHealthError] = useState('')
   const fileRef = useRef(null)
   const push = typeof window === 'undefined' ? { supported: false, permission: 'unsupported' } : pushSupport()
   const reminders = state.settings.reminders || {}
@@ -88,6 +90,9 @@ export default function Settings() {
     fetchAIUsage()
       .then((data) => { if (!cancelled) setUsage(data) })
       .catch((error) => { if (!cancelled) setUsageError(error.message || 'Could not load AI usage') })
+    fetchAIHealth()
+      .then((data) => { if (!cancelled) setAiHealth(data) })
+      .catch((error) => { if (!cancelled) setAiHealthError(error.message || 'AI server needs attention') })
     return () => { cancelled = true }
   }, [account.user?.id])
 
@@ -207,6 +212,15 @@ export default function Settings() {
       <Section title="AI" icon="sparkle">
         <div className="rounded-2xl bg-brand-50 p-3 text-sm text-brand-900 ring-1 ring-brand-100 dark:bg-brand-900/30 dark:text-brand-100 dark:ring-brand-800">
           Syllabi AI is built into this workspace. Choose how much extra thinking power to use.
+        </div>
+        <div className={cx(
+          'rounded-2xl p-3 text-sm ring-1',
+          aiHealth?.ok
+            ? 'bg-emerald-50 text-emerald-900 ring-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-100 dark:ring-emerald-900'
+            : 'bg-amber-50 text-amber-900 ring-amber-100 dark:bg-amber-900/20 dark:text-amber-100 dark:ring-amber-900'
+        )}>
+          <div className="font-semibold">{aiHealth?.ok ? 'AI server ready' : 'AI server check'}</div>
+          <div className="text-xs mt-1">{aiHealth?.ok ? 'Server-side AI, Supabase, and model routing are available.' : aiHealthError || 'Sign in to check server AI status.'}</div>
         </div>
         <div className="inline-flex rounded-2xl bg-ink-100 p-1 text-sm dark:bg-ink-800">
           {[
@@ -361,17 +375,19 @@ function AIUsage({ usage, error, signedIn }) {
   const pct = Math.min(100, (used / 35) * 100)
   const resetAt = usage?.window_5hr_start ? new Date(new Date(usage.window_5hr_start).getTime() + 5 * 60 * 60 * 1000) : null
   const full = used >= 35 || Number(usage?.cost_usd_5hr || 0) >= 0.10
+  const fill = used === 0 ? 4 : pct
+  const tone = full ? 'bg-rose-500' : pct >= 70 ? 'bg-amber-500' : 'bg-emerald-500'
   return (
     <div className="rounded-2xl bg-white/70 p-3 ring-1 ring-ink-100 dark:bg-ink-900/70 dark:ring-ink-800">
       <div className="flex items-center justify-between gap-3 text-sm">
         <span className="font-semibold">AI Usage</span>
         <span className={cx('font-semibold', full ? 'text-amber-700 dark:text-amber-200' : 'text-ink-500')}>{used} / 35 boosts used</span>
       </div>
-      <div className="mt-2 h-2 overflow-hidden rounded-full bg-ink-100 dark:bg-ink-800">
-        <div className={cx('h-full transition-all', full ? 'bg-amber-500' : 'bg-brand-500')} style={{ width: `${pct}%` }} />
+      <div className="mt-2 h-3 overflow-hidden rounded-full bg-ink-100 ring-1 ring-white/70 dark:bg-ink-800 dark:ring-ink-700">
+        <div className={cx('h-full min-w-1 transition-all', tone)} style={{ width: `${fill}%` }} />
       </div>
       <div className="mt-2 text-xs text-ink-500">
-        {full ? 'High intelligence is resting. ' : ''}Resets {resetAt ? `in ${remaining(resetAt)}` : 'after your first boost'}.
+        {used === 0 ? 'No High intelligence boosts used yet. ' : full ? 'High intelligence is resting. ' : ''}Resets {resetAt ? `in ${remaining(resetAt)}` : 'after your first boost'}.
       </div>
       <div className="text-xs text-ink-500">Weekly: {weekly} / 175 boosts. Normal mode has no limit.</div>
     </div>

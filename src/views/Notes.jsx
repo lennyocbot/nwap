@@ -6,6 +6,7 @@ import Modal from '../components/Modal.jsx'
 import { cx, colorFor } from '../lib/utils.js'
 import { aiSummarizeNote, aiGenerateFlashcards, aiGenerateQuiz, callAI, buildSystemPrompt } from '../lib/ai.js'
 import { normalizeAIText } from '../lib/text.js'
+import { hasRawMath } from '../lib/math.js'
 
 const noteTemplates = [
   {
@@ -157,7 +158,7 @@ export default function Notes() {
 
   const handleContentChange = (content) => {
     const patchData = { content }
-    if (!note.title || /^(untitled|quick note)$/i.test(note.title.trim())) {
+    if (shouldAutoTitle(note.title, content)) {
       const nextTitle = titleFromContent(content)
       if (nextTitle) patchData.title = nextTitle
     }
@@ -380,12 +381,19 @@ export default function Notes() {
             {preview ? (
               <div className="flex-1 overflow-y-auto"><Markdown text={note.content || '*Empty*'} /></div>
             ) : (
-              <textarea
-                value={note.content}
-                onChange={(e) => handleContentChange(e.target.value)}
-                placeholder="# Start writing...  markdown supported"
-                className="flex-1 resize-none bg-transparent focus:outline-none text-[15px] leading-relaxed"
-              />
+              <>
+                {hasRawMath(note.content) && (
+                  <div className="mb-2 rounded-2xl bg-brand-50 px-3 py-2 text-xs text-brand-800 ring-1 ring-brand-100 dark:bg-brand-900/20 dark:text-brand-100 dark:ring-brand-800">
+                    Math renders in Preview. Use $...$ for inline maths or $$...$$ for display maths.
+                  </div>
+                )}
+                <textarea
+                  value={note.content}
+                  onChange={(e) => handleContentChange(e.target.value)}
+                  placeholder="# Start writing...  markdown supported"
+                  className="flex-1 resize-none bg-transparent focus:outline-none text-[15px] leading-relaxed"
+                />
+              </>
             )}
 
             {/* AI toolbar */}
@@ -522,4 +530,13 @@ function titleFromContent(content) {
     .replace(/[*_`>#\[\]()]/g, '')
     .replace(/\s+/g, ' ')
     .slice(0, 60)
+}
+
+function shouldAutoTitle(title = '', content = '') {
+  const clean = String(title || '').trim()
+  if (!clean) return true
+  if (/^(untitled|quick note|new note)$/i.test(clean)) return true
+  if (clean.length <= 2) return true
+  const derived = titleFromContent(content)
+  return Boolean(derived && clean.length < 8 && derived.toLowerCase().startsWith(clean.toLowerCase()) && derived !== clean)
 }

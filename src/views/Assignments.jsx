@@ -77,13 +77,17 @@ export default function Assignments() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {lists.map((col) => (
-          <div key={col.key} className="card p-3">
+          <div key={col.key} className={cx('card p-3', col.items.length === 0 && 'bg-white/58 dark:bg-ink-900/70')}>
             <div className="flex items-center justify-between px-2 py-1">
               <div className="font-display font-semibold">{col.label}</div>
               <span className="chip">{col.items.length}</span>
             </div>
             <div className="space-y-2 mt-2">
-              {col.items.length === 0 && <div className="text-center text-ink-500 text-sm py-6">Nothing here</div>}
+              {col.items.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-ink-200/80 bg-white/45 px-3 py-5 text-center text-sm text-ink-400 dark:border-ink-700 dark:bg-ink-900/40">
+                  {col.key === 'todo' ? 'Add a task to get started.' : col.key === 'doing' ? 'Drag work here when you start.' : 'Completed work lands here.'}
+                </div>
+              )}
               {col.items.map((a) => {
                 const s = state.subjects.find((x) => x.id === a.subjectId)
                 const c = colorFor(s?.color)
@@ -98,7 +102,7 @@ export default function Assignments() {
                           a.status === 'done' ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-ink-300')}
                       >{a.status === 'done' && <Icon.check className="w-3 h-3" />}</button>
                       <button className="flex-1 text-left" onClick={() => setOpen(a)}>
-                        <div className={cx('font-medium', a.status === 'done' && 'line-through text-ink-400')}>{a.title}</div>
+                        <div className={cx('font-medium line-clamp-2', a.status === 'done' && 'line-through text-ink-400')} title={a.title}>{a.title}</div>
                         <div className="flex flex-wrap gap-1 mt-1 items-center">
                           {s && <span className={cx('chip', c.soft)}>{s.emoji} {s.name}</span>}
                           <span className={cx('chip', priorityTone(a.priority))}>{a.priority}</span>

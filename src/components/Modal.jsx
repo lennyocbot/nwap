@@ -11,7 +11,7 @@ export default function Modal({ open, onClose, title, children, footer, wide = f
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-6 animate-fade-in">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className={`relative card w-full ${wide ? 'md:max-w-3xl' : 'md:max-w-xl'} max-h-[92vh] flex flex-col animate-slide-up rounded-b-none md:rounded-3xl`}>
+      <div className={`relative liquid-glass-strong w-full ${wide ? 'md:max-w-3xl' : 'md:max-w-xl'} max-h-[92vh] flex flex-col animate-slide-up rounded-b-none md:rounded-3xl`}>
         <div className="flex items-center px-5 py-4 border-b border-ink-100 dark:border-ink-800">
           <h3 className="font-display font-semibold text-lg">{title}</h3>
           <div className="flex-1" />

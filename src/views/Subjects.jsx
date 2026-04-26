@@ -2,14 +2,14 @@ import { useState } from 'react'
 import { useApp } from '../context/AppContext.jsx'
 import { Icon } from '../components/Icons.jsx'
 import Modal from '../components/Modal.jsx'
-import { cx, colorFor, subjectColors } from '../lib/utils.js'
+import { cx, colorFor, subjectColors, subjectInitial } from '../lib/utils.js'
 
 export default function Subjects() {
   const { state, add, update, remove, navigate, openAI } = useApp()
   const [edit, setEdit] = useState(null)
 
   const create = () => {
-    const s = add('subjects', { name: 'New subject', teacher: '', room: '', color: 'brand', emoji: 'S', target: 85 })
+    const s = add('subjects', { name: 'New subject', teacher: '', room: '', color: 'brand', emoji: subjectInitial('New subject'), target: 85 })
     setEdit(s)
   }
 
@@ -43,25 +43,27 @@ export default function Subjects() {
           return (
             <div key={s.id} className="card p-4">
               <div className="flex items-center gap-3">
-                <div className={cx('w-12 h-12 rounded-2xl flex items-center justify-center text-white text-2xl', c.bg)}>{s.emoji || 'S'}</div>
+                <div className={cx('w-12 h-12 rounded-2xl flex items-center justify-center text-white text-2xl', c.bg)}>{s.emoji || subjectInitial(s.name)}</div>
                 <div className="flex-1 min-w-0">
                   <div className="font-display font-semibold truncate">{s.name}</div>
                   <div className="text-xs text-ink-500 truncate">{s.teacher} {s.room && `- ${s.room}`}</div>
                 </div>
                 <button className="btn-ghost" onClick={() => setEdit(s)}><Icon.dots className="w-5 h-5" /></button>
               </div>
-              <div className="grid grid-cols-4 gap-1 mt-4 text-center">
+              <div className="grid grid-cols-3 gap-1 mt-4 text-center">
                 <Stat label="Notes" value={count.notes} onClick={() => navigate('notes', { subject: s.id })} />
                 <Stat label="Open" value={count.assignments} onClick={() => navigate('assignments')} />
-                <Stat label="Decks" value={count.decks} onClick={() => navigate('revision')} />
                 <Stat label="Avg" value={avg != null ? `${avg}%` : '-'} onClick={() => navigate('grades')} />
               </div>
-              <div className="grid grid-cols-4 gap-1 mt-1 text-center">
-                <Stat label="Read" value={count.reading} onClick={() => navigate('reading')} />
-                <Stat label="Files" value={count.files} onClick={() => navigate('files')} />
-                <Stat label="Maps" value={count.maps} onClick={() => navigate('mindmap')} />
-                <Stat label="Goals" value={count.goals} onClick={() => navigate('goals')} />
-              </div>
+              {[count.decks, count.reading, count.files, count.maps, count.goals].some(Boolean) && (
+                <div className="grid grid-cols-5 gap-1 mt-1 text-center">
+                  {count.decks > 0 && <Stat label="Decks" value={count.decks} onClick={() => navigate('revision')} />}
+                  {count.reading > 0 && <Stat label="Read" value={count.reading} onClick={() => navigate('reading')} />}
+                  {count.files > 0 && <Stat label="Files" value={count.files} onClick={() => navigate('files')} />}
+                  {count.maps > 0 && <Stat label="Maps" value={count.maps} onClick={() => navigate('mindmap')} />}
+                  {count.goals > 0 && <Stat label="Goals" value={count.goals} onClick={() => navigate('goals')} />}
+                </div>
+              )}
               {s.target && (
                 <div className="mt-3">
                   <div className="flex items-center justify-between text-xs text-ink-500 mb-1">
@@ -105,7 +107,13 @@ export default function Subjects() {
               <input className="input text-2xl w-16 text-center" maxLength={3} value={edit.emoji}
                 onChange={(e) => { update('subjects', { id: edit.id, emoji: e.target.value }); setEdit({ ...edit, emoji: e.target.value }) }} />
               <input className="input text-lg font-semibold" value={edit.name}
-                onChange={(e) => { update('subjects', { id: edit.id, name: e.target.value }); setEdit({ ...edit, name: e.target.value }) }} />
+                onChange={(e) => {
+                  const nextName = e.target.value
+                  const staleIcon = !edit.emoji || edit.emoji === subjectInitial(edit.name)
+                  const patch = { id: edit.id, name: nextName, ...(staleIcon ? { emoji: subjectInitial(nextName) } : {}) }
+                  update('subjects', patch)
+                  setEdit({ ...edit, ...patch })
+                }} />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <input className="input" placeholder="Teacher" value={edit.teacher}

@@ -316,7 +316,7 @@ export default function AIAssistant({ floating = true }) {
       {!aiPanel.open && (
         <button
           onClick={() => openAI()}
-          className="fixed z-30 bottom-5 right-5 w-14 h-14 rounded-full bg-white text-brand-700 shadow-pop ring-1 ring-brand-100 flex items-center justify-center overflow-hidden"
+          className="liquid-rim fixed z-30 bottom-5 right-5 w-14 h-14 rounded-full bg-white text-brand-700 shadow-pop ring-1 ring-brand-100 flex items-center justify-center overflow-hidden"
           aria-label="Ask AI"
           style={{ bottom: 'calc(env(safe-area-inset-bottom) + 1.25rem)' }}
         >
@@ -326,7 +326,7 @@ export default function AIAssistant({ floating = true }) {
       {aiPanel.open && (
         <div className="fixed inset-0 z-40 flex items-stretch md:items-center md:justify-end md:p-6 animate-fade-in">
           <div className="absolute inset-0 bg-black/40" onClick={closeAI} />
-          <div className="relative w-full md:w-[560px] h-full md:h-[82vh] card rounded-b-none md:rounded-3xl animate-slide-up flex flex-col min-h-0">
+          <div className="relative w-full md:w-[560px] h-full md:h-[82vh] liquid-glass-strong rounded-b-none md:rounded-3xl animate-slide-up flex flex-col min-h-0">
             {body}
           </div>
         </div>

@@ -88,7 +88,7 @@ export default function Study() {
           <Tab label={`Long Break (${long}m)`} active={mode === 'long'} onClick={() => { setMode('long'); setRunning(false) }} />
         </div>
 
-        <div className="relative w-64 h-64 md:w-80 md:h-80">
+        <div className="liquid-rim relative w-64 h-64 md:w-80 md:h-80 rounded-full p-3">
           <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
             <circle cx="50" cy="50" r="45" stroke="currentColor" strokeWidth="6" fill="none" className="text-ink-200 dark:text-ink-800" />
             <circle cx="50" cy="50" r="45" stroke="currentColor" strokeWidth="6" fill="none" strokeLinecap="round"
@@ -110,10 +110,12 @@ export default function Study() {
             {running ? <Icon.pause className="w-5 h-5" /> : <Icon.play className="w-5 h-5" />}
             {running ? 'Pause' : 'Start'}
           </button>
-          <button className="btn-soft" onClick={() => setDistraction((d) => d + 1)} title="Log distraction">
-            <Icon.flag className="w-5 h-5" />
-            Log distraction
-          </button>
+          {running && mode === 'focus' && (
+            <button className="btn-soft" onClick={() => setDistraction((d) => d + 1)} title="Log distraction">
+              <Icon.flag className="w-5 h-5" />
+              Log distraction
+            </button>
+          )}
         </div>
 
         <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
@@ -127,7 +129,7 @@ export default function Study() {
               <option key={assignment.id} value={assignment.id}>{assignment.title}</option>
             ))}
           </select>
-          <span className="chip">Distractions: {distraction}</span>
+          {distraction > 0 && <span className="chip">Distractions: {distraction}</span>}
         </div>
       </div>
 
@@ -142,11 +144,16 @@ export default function Study() {
         </div>
         <div className="card p-5">
           <div className="font-display font-semibold mb-3">Last 7 days</div>
-          <div className="flex items-end gap-2 h-28">
+          <div className="relative flex items-end gap-2 h-28">
+            {stats.minutesToday === 0 && stats.last7.every((d) => d.m === 0) && (
+              <div className="absolute inset-0 flex items-center justify-center text-sm text-ink-500">
+                Start a focus session to see activity.
+              </div>
+            )}
             {stats.last7.map((d) => (
               <div key={d.key} className="flex-1 flex flex-col items-center gap-1">
-                <div className="w-full bg-brand-500/20 dark:bg-brand-500/30 rounded-t-lg relative overflow-hidden" style={{ height: `${(d.m / stats.max) * 100}%` }}>
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-brand-600 to-brand-400" style={{ height: '100%' }} />
+                <div className="w-full bg-brand-500/10 dark:bg-brand-500/20 rounded-t-lg relative overflow-hidden" style={{ height: `${Math.max(8, (d.m / stats.max) * 100)}%` }}>
+                  <div className={cx('absolute inset-x-0 bottom-0 bg-gradient-to-t from-brand-600 to-brand-400', d.m === 0 && 'opacity-20')} style={{ height: '100%' }} />
                 </div>
                 <div className="text-[10px] text-ink-500">{d.label}</div>
                 <div className="text-[10px] font-semibold">{d.m}m</div>

@@ -135,6 +135,18 @@ export async function fetchAIUsage() {
   return data
 }
 
+export async function fetchAIHealth() {
+  if (isLocalVite()) return null
+  const token = await getAccessToken()
+  if (!token) return null
+  const res = await fetch('/api/health/ai', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const data = await res.json().catch(() => null)
+  if (!res.ok) throw new Error(data?.error || `AI health check failed: ${res.status}`)
+  return data
+}
+
 async function getAccessToken() {
   if (!supabase) return ''
   const { data } = await supabase.auth.getSession()

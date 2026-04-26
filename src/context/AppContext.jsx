@@ -3,6 +3,7 @@ import { defaultState, loadState, saveState, resetState, migrateState } from '..
 import { hasSupabase, supabase } from '../lib/supabase.js'
 import { uid } from '../lib/utils.js'
 import { ACHIEVEMENTS, nextAchievements } from '../lib/achievements.js'
+import { scoreExamAttempt } from '../lib/exam.js'
 
 const AppCtx = createContext(null)
 
@@ -86,6 +87,12 @@ export function AppProvider({ children }) {
     }
     navigator.serviceWorker?.addEventListener?.('message', onMessage)
     return () => navigator.serviceWorker?.removeEventListener?.('message', onMessage)
+  }, [])
+
+  useEffect(() => {
+    const onPopState = () => setRoute(routeFromLocation())
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
   }, [])
 
   useEffect(() => {
@@ -175,6 +182,39 @@ export function AppProvider({ children }) {
     state.achievements,
   ])
 
+  useEffect(() => {
+    if (state.settings.examScoreRepairApplied) return
+    const attempts = state.examAttempts || []
+    let changed = false
+    const repairedAttempts = attempts.map((attempt) => {
+      if (attempt.status !== 'submitted' || !(attempt.questionFeedback || []).length) return attempt
+      const result = scoreExamAttempt(attempt)
+      if (!result.hasMarks || Math.round(Number(attempt.score || 0)) === result.score) return attempt
+      changed = true
+      return { ...attempt, score: result.score, marksAwarded: result.marks, marksAvailable: result.available }
+    })
+    const repairedGrades = (state.grades || []).map((grade) => {
+      const attempt = repairedAttempts.find((item) =>
+        item.status === 'submitted'
+        && item.title === grade.name
+        && item.subjectId === grade.subjectId
+        && Number(grade.outOf || 100) === 100
+      )
+      if (!attempt || Math.round(Number(grade.score || 0)) === Math.round(Number(attempt.score || 0))) return grade
+      changed = true
+      return { ...grade, score: Math.round(Number(attempt.score || 0)), outOf: 100 }
+    })
+    dispatch({
+      type: 'merge',
+      value: {
+        examAttempts: repairedAttempts,
+        grades: repairedGrades,
+        settings: { ...state.settings, examScoreRepairApplied: true },
+      },
+    })
+    if (changed) showToast('Fixed previous exam score calculations.', 'success')
+  }, [state.examAttempts, state.grades, state.settings.examScoreRepairApplied, state.settings])
+
   // CRUD helpers
   const add = useCallback((key, item) => {
     const withId = { id: uid(), ...item }
@@ -189,7 +229,16 @@ export function AppProvider({ children }) {
   const setSettings = useCallback((patch) => dispatch({ type: 'set', key: 'settings', value: { ...state.settings, ...patch } }), [state.settings])
   const setUser = useCallback((patch) => dispatch({ type: 'set', key: 'user', value: { ...state.user, ...patch } }), [state.user])
 
-  const navigate = useCallback((name, params = {}) => setRoute({ name, params }), [])
+  const navigate = useCallback((name, params = {}) => {
+    const next = { name, params }
+    setRoute(next)
+    if (typeof window !== 'undefined') {
+      const url = routeToUrl(next)
+      if (window.location.pathname + window.location.search !== url) {
+        window.history.pushState({}, '', url)
+      }
+    }
+  }, [])
   const openAI = useCallback((context = null, initialPrompt = null) => {
     setAiPanel({ open: true, context, initialPrompt, requestId: uid() })
   }, [])
@@ -357,11 +406,23 @@ function withTimeout(promise, message, ms = 12000) {
 function routeFromLocation() {
   if (typeof window === 'undefined') return { name: 'dashboard', params: {} }
   const params = new URLSearchParams(window.location.search)
-  const name = params.get('view') || params.get('route') || 'dashboard'
+  const path = window.location.pathname.replace(/^\/+|\/+$/g, '')
+  const pathName = path || 'dashboard'
+  const name = params.get('view') || params.get('route') || pathName
   const id = params.get('id')
   const tag = params.get('tag')
   const routeParams = {}
   if (id) routeParams.id = id
   if (tag) routeParams.tag = tag
   return { name, params: routeParams }
+}
+
+function routeToUrl(route) {
+  const params = new URLSearchParams()
+  Object.entries(route.params || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') params.set(key, value)
+  })
+  const query = params.toString()
+  const path = route.name === 'dashboard' ? '/' : `/${route.name}`
+  return `${path}${query ? `?${query}` : ''}`
 }

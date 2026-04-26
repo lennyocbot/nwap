@@ -65,6 +65,24 @@ export default function Timetable() {
         <button className="btn-primary" onClick={() => addSlot(todayN)}><Icon.plus className="w-4 h-4" /> New slot</button>
       </div>
 
+      {state.timetable.length === 0 && (
+        <section className="liquid-glass p-5 rounded-[28px]">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center">
+            <div className="flex-1">
+              <h2 className="font-display text-xl font-bold">Build your first week.</h2>
+              <p className="mt-1 text-sm text-ink-500">Add lessons, free periods, study blocks, or clubs. Syllabi will use them when planning your day.</p>
+            </div>
+            <div className="rounded-2xl border border-dashed border-brand-200 bg-white/55 p-3 text-sm text-ink-500 dark:border-brand-800 dark:bg-ink-900/40">
+              <div className="font-semibold text-ink-700 dark:text-ink-100">Example</div>
+              <div>Mon 09:00-10:00 - Maths</div>
+            </div>
+            <button className="btn-primary" onClick={() => addSlot(todayN)} type="button">
+              <Icon.plus className="w-4 h-4" /> Add first lesson
+            </button>
+          </div>
+        </section>
+      )}
+
       <div className="card p-3 overflow-x-auto">
         {orientation === 'days-top' ? (
         <div className="grid" style={{ gridTemplateColumns: '56px repeat(7, minmax(120px,1fr))' }}>

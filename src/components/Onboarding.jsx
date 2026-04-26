@@ -51,7 +51,7 @@ export default function Onboarding() {
   return (
     <div className="fixed inset-0 z-[80] overflow-y-auto bg-[radial-gradient(circle_at_top,#dfe8ff_0%,#f7faff_42%,#eef4ff_100%)] dark:bg-[radial-gradient(circle_at_top,#1c2d62_0%,#09142c_55%,#050b18_100%)]">
       <div className="min-h-full flex items-center justify-center p-4">
-        <div className="card w-full max-w-xl p-6 md:p-8">
+        <div className="liquid-glass-strong w-full max-w-xl rounded-[30px] p-6 md:p-8">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-12 h-12 rounded-[20px] bg-white shadow-card ring-1 ring-brand-100 flex items-center justify-center overflow-hidden">
               <img src="/icon-192.png" alt="" className="w-11 h-11 object-cover" />

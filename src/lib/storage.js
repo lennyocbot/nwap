@@ -27,6 +27,7 @@ export const defaultState = {
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'local',
       devices: [],
     },
+    dismissedNudges: [],
     coachBriefTime: '07:00',
     timetableOrientation: 'days-left',
   },
@@ -110,14 +111,31 @@ export function migrateState(input, { existingState = false } = {}) {
       aiKey: '',
       onboardingComplete,
       reminders,
+      dismissedNudges: Array.isArray(settings.dismissedNudges) ? settings.dismissedNudges : [],
       timetableOrientation,
       pomodoro: { ...defaultState.settings.pomodoro, ...(settings.pomodoro || {}) },
     },
+    subjects: migrateSubjects(parsed.subjects || defaultState.subjects),
     notes: migrateNotes(parsed.notes || defaultState.notes),
     coachBriefs: parsed.coachBriefs || [],
     achievements: parsed.achievements || [],
     examAttempts: parsed.examAttempts || [],
   }
+}
+
+function subjectInitial(name = '') {
+  const match = String(name || '').trim().match(/[A-Za-z0-9]/)
+  return (match?.[0] || 'S').toUpperCase()
+}
+
+function migrateSubjects(subjects) {
+  return (subjects || []).map((subject) => {
+    const next = { ...subject }
+    const expected = subjectInitial(next.name)
+    const current = String(next.emoji || '').trim()
+    if (!current || (current === 'S' && expected !== 'S')) next.emoji = expected
+    return next
+  })
 }
 
 function migrateNotes(notes) {
