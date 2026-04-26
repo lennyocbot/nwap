@@ -6,9 +6,10 @@ import { pushSupport, sendTestPush, subscribeToPush, unsubscribeFromPush } from 
 import { fetchAIUsage } from '../lib/ai.js'
 
 export default function Settings() {
-  const { state, setSettings, setUser, showToast, reset, replaceAll, account, signIn, signOut, retrySync } = useApp()
+  const { state, setSettings, setUser, showToast, reset, replaceAll, account, signIn, signUp, signOut, retrySync } = useApp()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [authMode, setAuthMode] = useState('signin')
   const [pushBusy, setPushBusy] = useState(false)
   const [authBusy, setAuthBusy] = useState(false)
   const [authMessage, setAuthMessage] = useState('')
@@ -95,7 +96,7 @@ export default function Settings() {
     setAuthBusy(true)
     setAuthMessage('')
     try {
-      const result = await signIn(email, password)
+      const result = authMode === 'signup' ? await signUp(email, password) : await signIn(email, password)
       if (result?.needsEmailConfirmation) setAuthMessage('Check your email to confirm your account, then sign in here.')
       else if (result?.error) setAuthMessage(result.error)
     } finally {
@@ -165,14 +166,34 @@ export default function Settings() {
             className="grid gap-3"
             onSubmit={submitAuth}
           >
+            <div className="inline-flex rounded-2xl bg-ink-100 p-1 text-sm dark:bg-ink-800">
+              {[
+                ['signin', 'Sign in'],
+                ['signup', 'Create account'],
+              ].map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  className={cx('flex-1 rounded-xl px-4 py-2 font-semibold transition', authMode === mode ? 'bg-white text-brand-700 shadow-sm dark:bg-ink-900 dark:text-brand-100' : 'text-ink-500')}
+                  onClick={() => { setAuthMode(mode); setAuthMessage('') }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <Field label="Email">
               <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
             </Field>
             <Field label="Password">
               <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
             </Field>
-            <button className="btn-primary" disabled={authBusy}>{authBusy ? 'Working...' : 'Sign in or create account'}</button>
+            <button className="btn-primary" disabled={authBusy}>{authBusy ? 'Working...' : authMode === 'signup' ? 'Create account' : 'Sign in'}</button>
             {authMessage && <div className="rounded-2xl bg-amber-50 p-3 text-xs text-amber-900 ring-1 ring-amber-100 dark:bg-amber-900/20 dark:text-amber-100 dark:ring-amber-800">{authMessage}</div>}
+            {authMode === 'signup' && (
+              <div className="text-xs text-ink-500">
+                New accounts must confirm their email, then sign in. Wrong passwords will never create a new account.
+              </div>
+            )}
             <div className="rounded-2xl border border-amber-100 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-100">
               Local demo mode. Nothing here is shared across devices until you sign in.
             </div>

@@ -203,17 +203,44 @@ export function AppProvider({ children }) {
     setTimeout(() => setToast(null), 2500)
   }, [])
 
+  const clearActiveAccountIfDifferent = useCallback(async (targetEmail) => {
+    const current = await supabase.auth.getSession()
+    const currentEmail = current.data.session?.user?.email?.toLowerCase()
+    if (currentEmail && currentEmail !== targetEmail) {
+      await supabase.auth.signOut()
+      resetState()
+      replaceAll(defaultState)
+      setAccount({ user: null, ready: true, sync: 'Switching account...', error: null })
+    }
+  }, [replaceAll])
+
   const signIn = useCallback(async (email, password) => {
     if (!supabase) {
       showToast('Supabase is not configured yet', 'error')
       return { ok: false, error: 'Supabase is not configured yet' }
     }
+    const targetEmail = email.trim().toLowerCase()
+    await clearActiveAccountIfDifferent(targetEmail)
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (!error) {
       showToast('Signed in', 'success')
       const { data } = await supabase.auth.getSession()
       return { ok: true, user: data.session?.user || null }
     }
+    const message = /invalid login credentials/i.test(error.message)
+      ? 'Wrong email or password. If this is a new account, use Create account first.'
+      : error.message
+    showToast(message, 'error')
+    return { ok: false, error: message }
+  }, [clearActiveAccountIfDifferent, showToast])
+
+  const signUp = useCallback(async (email, password) => {
+    if (!supabase) {
+      showToast('Supabase is not configured yet', 'error')
+      return { ok: false, error: 'Supabase is not configured yet' }
+    }
+    const targetEmail = email.trim().toLowerCase()
+    await clearActiveAccountIfDifferent(targetEmail)
     const created = await supabase.auth.signUp({
       email,
       password,
@@ -225,13 +252,15 @@ export function AppProvider({ children }) {
       showToast(created.error.message, 'error')
       return { ok: false, error: created.error.message }
     }
-    if (created.data?.session?.user) {
-      showToast('Account created and signed in', 'success')
-      return { ok: true, user: created.data.session.user }
+    if (created.data?.session) {
+      await supabase.auth.signOut()
+      resetState()
+      replaceAll(defaultState)
     }
+    setAccount({ user: null, ready: true, sync: 'Check your email, then sign in', error: null })
     showToast('Account created. Check your email, then sign in.', 'success')
     return { ok: false, needsEmailConfirmation: true }
-  }, [showToast])
+  }, [clearActiveAccountIfDifferent, replaceAll, showToast])
 
   const signOut = useCallback(async () => {
     await supabase?.auth.signOut()
@@ -255,10 +284,10 @@ export function AppProvider({ children }) {
     state, dispatch, add, update, remove, set, merge, replaceAll, setSettings, setUser,
     route, navigate,
     aiPanel, openAI, closeAI, clearAIPrompt,
-    account, signIn, signOut, retrySync,
+    account, signIn, signUp, signOut, retrySync,
     toast, showToast,
     reset,
-  }), [state, add, update, remove, set, merge, replaceAll, setSettings, setUser, route, navigate, aiPanel, openAI, closeAI, clearAIPrompt, account, signIn, signOut, retrySync, toast, showToast, reset])
+  }), [state, add, update, remove, set, merge, replaceAll, setSettings, setUser, route, navigate, aiPanel, openAI, closeAI, clearAIPrompt, account, signIn, signUp, signOut, retrySync, toast, showToast, reset])
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>
 }
@@ -301,7 +330,7 @@ function restoreLocalSecrets(cloudState, localState, { existingState = Boolean(c
     user: {
       ...defaultState.user,
       ...(migrated.user || {}),
-      avatarLocalData: localState.user?.avatarLocalData || '',
+      avatarLocalData: '',
     },
     files: (migrated.files || []).map(stripFileForCloud)
   }
