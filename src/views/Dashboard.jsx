@@ -106,7 +106,7 @@ export default function Dashboard() {
         'card p-5 md:p-7 text-white border-transparent',
         nextWorkLate
           ? 'bg-gradient-to-br from-rose-700 via-rose-600 to-amber-600'
-          : 'bg-gradient-to-br from-brand-600 via-brand-500 to-violet-500'
+          : 'bg-gradient-to-br from-brand-700 via-brand-500 to-brand-300'
       )}>
         <div className="flex items-start gap-4">
           <div className="flex-1">

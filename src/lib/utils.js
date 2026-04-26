@@ -46,7 +46,7 @@ export const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDa
 export const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 export const subjectColors = [
-  { name: 'brand',   bg: 'bg-brand-500',   soft: 'bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-200', hex: '#3566ff' },
+  { name: 'brand',   bg: 'bg-brand-500',   soft: 'bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-200', hex: '#4d73f4' },
   { name: 'violet',  bg: 'bg-violet-500',  soft: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200', hex: '#8b5cf6' },
   { name: 'pink',    bg: 'bg-pink-500',    soft: 'bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-200', hex: '#ec4899' },
   { name: 'teal',    bg: 'bg-teal-500',    soft: 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-200', hex: '#14b8a6' },

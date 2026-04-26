@@ -132,17 +132,9 @@ export function AppProvider({ children }) {
 
   // Theme
   useEffect(() => {
-    const apply = () => {
-      const t = state.settings.theme
-      const dark = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
-      document.documentElement.classList.toggle('dark', dark)
-    }
-    apply()
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const h = () => state.settings.theme === 'system' && apply()
-    mq.addEventListener?.('change', h)
-    return () => mq.removeEventListener?.('change', h)
-  }, [state.settings.theme])
+    document.documentElement.classList.remove('dark')
+    document.documentElement.style.colorScheme = 'light'
+  }, [])
 
   // CRUD helpers
   const add = useCallback((key, item) => {
@@ -254,6 +246,7 @@ function restoreLocalSecrets(cloudState, localState) {
     settings: {
       ...defaultState.settings,
       ...(cloudState.settings || {}),
+      theme: 'light',
       aiKey: localState.settings?.aiKey || ''
     },
     files: (cloudState.files || []).map(stripFileForCloud)

@@ -63,13 +63,8 @@ export default function Settings() {
       </Section>
 
       <Section title="Appearance" icon="sparkle">
-        <div className="flex flex-wrap gap-2">
-          {['light', 'dark', 'system'].map((t) => (
-            <button key={t} onClick={() => setSettings({ theme: t })}
-              className={cx('btn-soft capitalize', state.settings.theme === t && 'ring-2 ring-brand-400')}>
-              {t}
-            </button>
-          ))}
+        <div className="rounded-2xl bg-brand-50 p-3 text-sm text-ink-700 ring-1 ring-brand-100">
+          Syllabi now uses a light Liquid Glass interface by default for better iPad readability and a cleaner home-screen feel.
         </div>
       </Section>
 

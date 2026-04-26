@@ -4,7 +4,7 @@ const LEGACY_KEY = 'scholarai.state.v1'
 export const defaultState = {
   user: { name: 'Student', avatar: null, school: '', year: 'A-level' },
   settings: {
-    theme: 'system',
+    theme: 'light',
     accent: 'brand',
     aiProvider: 'openrouter',
     aiModel: 'anthropic/claude-sonnet-4-5',
@@ -116,6 +116,7 @@ export const loadState = () => {
       settings: {
         ...defaultState.settings,
         ...(parsed.settings || {}),
+        theme: 'light',
         pomodoro: { ...defaultState.settings.pomodoro, ...(parsed.settings?.pomodoro || {}) },
       },
     }

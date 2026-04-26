@@ -46,13 +46,13 @@ export default function Sidebar({ open, onClose }) {
   }
 
   const panel = (
-    <aside className="h-full w-[272px] shrink-0 flex flex-col bg-white/80 dark:bg-ink-900/80 backdrop-blur border-r border-ink-100 dark:border-ink-800">
+    <aside className="h-full w-[272px] shrink-0 flex flex-col bg-white/62 backdrop-blur-2xl border-r border-white/70 shadow-[18px_0_60px_-50px_rgba(32,57,143,0.45)]">
       <div className="px-5 py-5 flex items-center gap-3">
-        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-brand-500 to-violet-500 flex items-center justify-center text-white">
-          <Icon.sparkle className="w-5 h-5" />
+        <div className="w-11 h-11 rounded-[18px] bg-white shadow-card ring-1 ring-brand-100 flex items-center justify-center overflow-hidden">
+          <img src="/icon-192.png" alt="" className="w-10 h-10 object-cover" />
         </div>
         <div>
-          <div className="font-display font-semibold text-ink-900 dark:text-ink-50 leading-tight">Syllabi</div>
+          <div className="font-display text-lg font-extrabold tracking-tight text-ink-900 dark:text-ink-50 leading-tight">Syllabi</div>
           <div className="text-xs text-ink-500">Hello, {state.user.name || 'Student'}</div>
         </div>
       </div>

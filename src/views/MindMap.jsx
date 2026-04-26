@@ -324,8 +324,8 @@ function treeToFlow(root, savedPositions, handlers) {
     target: link.target,
     type: 'smoothstep',
     animated: false,
-    style: { stroke: '#3566ff', strokeWidth: 2.5 },
-    markerEnd: { type: MarkerType.ArrowClosed, color: '#3566ff' },
+    style: { stroke: '#4d73f4', strokeWidth: 2.5 },
+    markerEnd: { type: MarkerType.ArrowClosed, color: '#4d73f4' },
     zIndex: 5,
   }))
 

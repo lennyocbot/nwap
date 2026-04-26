@@ -168,8 +168,8 @@ export default function AIAssistant({ floating = true }) {
   const body = (
     <div className="flex flex-col h-full min-h-0">
       <div className="flex flex-wrap items-center px-5 py-4 border-b border-ink-100 dark:border-ink-800 gap-2">
-        <div className="w-8 h-8 rounded-2xl bg-gradient-to-br from-brand-500 to-violet-500 flex items-center justify-center text-white">
-          <Icon.sparkle className="w-4 h-4" />
+        <div className="w-8 h-8 rounded-[14px] bg-white shadow-sm ring-1 ring-brand-100 flex items-center justify-center overflow-hidden">
+          <img src="/icon-192.png" alt="" className="w-7 h-7 object-cover" />
         </div>
         <div className="font-display font-semibold">Syllabi</div>
         <span className="chip">{state.settings.aiKey || state.settings.useServerProxy !== false ? state.settings.aiProvider : 'demo mode'}</span>
@@ -229,8 +229,8 @@ export default function AIAssistant({ floating = true }) {
         {messages.map((m, i) => (
           <div key={i} className={`flex gap-3 ${m.role === 'user' ? 'justify-end' : ''}`}>
             {m.role === 'assistant' && (
-              <div className="w-8 h-8 rounded-2xl bg-gradient-to-br from-brand-500 to-violet-500 flex items-center justify-center text-white shrink-0">
-                <Icon.sparkle className="w-4 h-4" />
+              <div className="w-8 h-8 rounded-[14px] bg-white shadow-sm ring-1 ring-brand-100 flex items-center justify-center overflow-hidden shrink-0">
+                <img src="/icon-192.png" alt="" className="w-7 h-7 object-cover" />
               </div>
             )}
             <div className={`max-w-[80%] rounded-3xl px-4 py-3 text-sm
@@ -284,11 +284,11 @@ export default function AIAssistant({ floating = true }) {
       {!aiPanel.open && (
         <button
           onClick={() => openAI()}
-          className="fixed z-30 bottom-5 right-5 w-14 h-14 rounded-full bg-gradient-to-br from-brand-500 to-violet-500 text-white shadow-pop flex items-center justify-center"
+          className="fixed z-30 bottom-5 right-5 w-14 h-14 rounded-full bg-white text-brand-700 shadow-pop ring-1 ring-brand-100 flex items-center justify-center overflow-hidden"
           aria-label="Ask AI"
           style={{ bottom: 'calc(env(safe-area-inset-bottom) + 1.25rem)' }}
         >
-          <Icon.sparkle className="w-6 h-6" />
+          <img src="/icon-192.png" alt="" className="w-12 h-12 object-cover" />
         </button>
       )}
       {aiPanel.open && (
