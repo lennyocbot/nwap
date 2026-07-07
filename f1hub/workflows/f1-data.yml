@@ -1,0 +1,72 @@
+# Auto-updates data/ + manifest.json with newly published F1 sessions.
+# Copy this file to .github/workflows/f1-data.yml in your hub repository.
+name: F1 data updater
+
+on:
+  schedule:
+    # every 2 hours — a finished session appears ~1-3h after it ends
+    - cron: "23 */2 * * *"
+  workflow_dispatch:
+    inputs:
+      year:
+        description: "Backfill season (e.g. 2024). Blank = auto (recent sessions only)"
+        required: false
+      round:
+        description: "Round number (blank = whole season)"
+        required: false
+      force:
+        description: "Re-extract files that already exist"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: f1-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install fastf1 numpy pandas
+
+      - name: Restore FastF1 API cache
+        uses: actions/cache@v4
+        with:
+          path: tools/f1cache
+          key: f1cache-${{ github.run_id }}
+          restore-keys: f1cache-
+
+      - name: Update data
+        working-directory: tools
+        run: |
+          ARGS=""
+          if [ -n "${{ inputs.year }}" ] && [ -n "${{ inputs.round }}" ]; then
+            ARGS="--year ${{ inputs.year }} --round ${{ inputs.round }}"
+          elif [ -n "${{ inputs.year }}" ]; then
+            ARGS="--year ${{ inputs.year }} --all"
+          fi
+          if [ "${{ inputs.force }}" = "true" ]; then ARGS="$ARGS --force"; fi
+          python update_data.py $ARGS
+
+      - name: Commit & push
+        run: |
+          git config user.name "f1hub-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data manifest.json
+          if git diff --cached --quiet; then
+            echo "no new sessions"
+          else
+            git commit -m "data: $(git diff --cached --name-only | grep -c 'json.gz$') new session file(s)"
+            git pull --rebase origin ${{ github.ref_name }}
+            git push
+          fi

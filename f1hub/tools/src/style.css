@@ -71,6 +71,8 @@ header.top {
 .top-inner { max-width:1440px; margin:0 auto; padding:10px 20px 0; }
 .title-row { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; }
 .title-row .gp { font-size:19px; font-weight:700; letter-spacing:-.01em; }
+.title-row .picker { display:inline-flex; gap:7px; }
+.title-row .picker select { font-size:15px; font-weight:700; padding:4px 8px; border-radius:7px; max-width:46vw; }
 .title-row .meta { color:var(--ink3); font-size:12.5px; }
 .title-row .brand { margin-left:auto; font-size:11px; letter-spacing:.14em; color:var(--ink3); text-transform:uppercase; font-weight:600; }
 .title-row .brand b { color:var(--accent); }

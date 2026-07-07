@@ -2,16 +2,24 @@
 "use strict";
 const HUB = window.HUB = {};
 
-/* ---- decode embedded gzip+base64 bundle ---- */
+/* ---- gzip decoding (embedded base64 or fetched .json.gz) ---- */
+async function gunzipJSON(bytes) {
+  const ds = new DecompressionStream("gzip");
+  const stream = new Blob([bytes]).stream().pipeThrough(ds);
+  const text = await new Response(stream).text();
+  return JSON.parse(text);
+}
 async function decodeBundle() {
   const b64 = document.getElementById("data").textContent.trim();
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  const ds = new DecompressionStream("gzip");
-  const stream = new Blob([bytes]).stream().pipeThrough(ds);
-  const text = await new Response(stream).text();
-  return JSON.parse(text);
+  return gunzipJSON(bytes);
+}
+async function fetchSession(url) {
+  const r = await fetch(url, { cache: "no-cache" });
+  if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
+  return gunzipJSON(new Uint8Array(await r.arrayBuffer()));
 }
 
 /* ---- formatting ---- */
@@ -129,11 +137,12 @@ HUB.S = {
   telZoom: null,           // [r0, r1]
   telPanels: { delta: true, v: true, th: true, b: true, g: true, n: false, d: true },
 };
-HUB.save = () => { try { localStorage.setItem("f1hub", JSON.stringify({ compare: HUB.S.compare, fuelK: HUB.S.fuelK })); } catch (e) { } };
+HUB.storeKey = () => `f1hub_${HUB.data.year}_${HUB.data.round}`;
+HUB.save = () => { try { localStorage.setItem(HUB.storeKey(), JSON.stringify({ compare: HUB.S.compare, fuelK: HUB.S.fuelK })); } catch (e) { } };
 HUB.restore = () => {
   try {
-    const s = JSON.parse(localStorage.getItem("f1hub") || "{}");
-    if (s.compare) HUB.S.compare = s.compare.filter(c => HUB.session(c.sid)?.tel[c.drv + "-" + c.lap]);
+    const s = JSON.parse(localStorage.getItem(HUB.storeKey()) || "{}");
+    HUB.S.compare = (s.compare || []).filter(c => HUB.session(c.sid)?.tel[c.drv + "-" + c.lap]);
     if (s.fuelK) HUB.S.fuelK = s.fuelK;
   } catch (e) { }
 };

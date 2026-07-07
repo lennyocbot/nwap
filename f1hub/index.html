@@ -1,0 +1,2100 @@
+<meta charset="utf-8">
+<title>F1 Analysis Hub</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏎️</text></svg>">
+<style>
+/* ---------- tokens ---------- */
+:root {
+  --bg:#f4f5f7; --surface:#ffffff; --surface2:#eef0f3; --surface3:#e4e7eb;
+  --line:#dcdfe4; --line2:#c9cdd4;
+  --ink:#191c21; --ink2:#5b6470; --ink3:#8b939e;
+  --accent:#d60500; --accent-soft:rgba(214,5,0,.09);
+  --purple:#8b2fd6; --green:#0f8a3d; --yellow:#b58900; --red:#c62828;
+  --grid:#e7e9ed; --band-sc:rgba(181,137,0,.14); --band-vsc:rgba(181,137,0,.08); --band-red:rgba(198,40,40,.12);
+  --shadow:0 1px 2px rgba(15,18,24,.06), 0 4px 16px rgba(15,18,24,.05);
+  --cmp-SOFT:#dc2626; --cmp-MEDIUM:#d97706; --cmp-HARD:#6b7280;
+  --cmp-INTERMEDIATE:#16a34a; --cmp-WET:#2563eb; --cmp-UNKNOWN:#9ca3af;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg:#101216; --surface:#171a20; --surface2:#1e2229; --surface3:#262b33;
+  --line:#2a2f38; --line2:#39404b;
+  --ink:#e7eaee; --ink2:#98a1ac; --ink3:#69727e;
+  --accent:#ff3b30; --accent-soft:rgba(255,59,48,.12);
+  --purple:#c084fc; --green:#4ade80; --yellow:#facc15; --red:#f87171;
+  --grid:#20242c; --band-sc:rgba(250,204,21,.10); --band-vsc:rgba(250,204,21,.05); --band-red:rgba(248,113,113,.10);
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25);
+  --cmp-SOFT:#ef4444; --cmp-MEDIUM:#fbbf24; --cmp-HARD:#e5e7eb;
+  --cmp-INTERMEDIATE:#22c55e; --cmp-WET:#3b82f6; --cmp-UNKNOWN:#6b7280;
+} }
+:root[data-theme="dark"] {
+  --bg:#101216; --surface:#171a20; --surface2:#1e2229; --surface3:#262b33;
+  --line:#2a2f38; --line2:#39404b;
+  --ink:#e7eaee; --ink2:#98a1ac; --ink3:#69727e;
+  --accent:#ff3b30; --accent-soft:rgba(255,59,48,.12);
+  --purple:#c084fc; --green:#4ade80; --yellow:#facc15; --red:#f87171;
+  --grid:#20242c; --band-sc:rgba(250,204,21,.10); --band-vsc:rgba(250,204,21,.05); --band-red:rgba(248,113,113,.10);
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25);
+  --cmp-SOFT:#ef4444; --cmp-MEDIUM:#fbbf24; --cmp-HARD:#e5e7eb;
+  --cmp-INTERMEDIATE:#22c55e; --cmp-WET:#3b82f6; --cmp-UNKNOWN:#6b7280;
+}
+:root[data-theme="light"] {
+  --bg:#f4f5f7; --surface:#ffffff; --surface2:#eef0f3; --surface3:#e4e7eb;
+  --line:#dcdfe4; --line2:#c9cdd4;
+  --ink:#191c21; --ink2:#5b6470; --ink3:#8b939e;
+  --accent:#d60500; --accent-soft:rgba(214,5,0,.09);
+  --purple:#8b2fd6; --green:#0f8a3d; --yellow:#b58900; --red:#c62828;
+  --grid:#e7e9ed; --band-sc:rgba(181,137,0,.14); --band-vsc:rgba(181,137,0,.08); --band-red:rgba(198,40,40,.12);
+  --shadow:0 1px 2px rgba(15,18,24,.06), 0 4px 16px rgba(15,18,24,.05);
+  --cmp-SOFT:#dc2626; --cmp-MEDIUM:#d97706; --cmp-HARD:#6b7280;
+  --cmp-INTERMEDIATE:#16a34a; --cmp-WET:#2563eb; --cmp-UNKNOWN:#9ca3af;
+}
+
+* { box-sizing:border-box; }
+html,body { margin:0; padding:0; }
+body {
+  background:var(--bg); color:var(--ink);
+  font:14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.mono, .num { font-family:ui-monospace, "SF Mono", "Cascadia Code", Consolas, Menlo, monospace; font-variant-numeric:tabular-nums; }
+svg text.num, svg text.mono { font-family:ui-monospace,"SF Mono","Cascadia Code",Consolas,Menlo,monospace; }
+h1,h2,h3 { margin:0; text-wrap:balance; }
+button { font:inherit; color:inherit; background:none; border:none; cursor:pointer; padding:0; }
+button:focus-visible, .chip:focus-visible, select:focus-visible, input:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:4px; }
+
+/* ---------- shell ---------- */
+#loading { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:70vh; gap:14px; color:var(--ink2); }
+#loading .bar { width:220px; height:3px; background:var(--surface3); overflow:hidden; border-radius:2px; }
+#loading .bar i { display:block; height:100%; width:40%; background:var(--accent); animation:load 1.1s ease-in-out infinite; }
+@keyframes load { 0%{transform:translateX(-100%)} 100%{transform:translateX(560px)} }
+@media (prefers-reduced-motion: reduce) { #loading .bar i { animation:none; width:100%; } }
+
+header.top {
+  position:sticky; top:0; z-index:40; background:var(--bg);
+  border-bottom:1px solid var(--line);
+}
+.top-inner { max-width:1440px; margin:0 auto; padding:10px 20px 0; }
+.title-row { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; }
+.title-row .gp { font-size:19px; font-weight:700; letter-spacing:-.01em; }
+.title-row .picker { display:inline-flex; gap:7px; }
+.title-row .picker select { font-size:15px; font-weight:700; padding:4px 8px; border-radius:7px; max-width:46vw; }
+.title-row .meta { color:var(--ink3); font-size:12.5px; }
+.title-row .brand { margin-left:auto; font-size:11px; letter-spacing:.14em; color:var(--ink3); text-transform:uppercase; font-weight:600; }
+.title-row .brand b { color:var(--accent); }
+.ctrl-row { display:flex; align-items:flex-end; gap:18px; margin-top:8px; flex-wrap:wrap; }
+
+.seg { display:inline-flex; background:var(--surface2); border:1px solid var(--line); border-radius:7px; padding:2px; gap:2px; }
+.seg button { padding:4px 12px; border-radius:5px; font-size:12.5px; font-weight:600; color:var(--ink2); white-space:nowrap; }
+.seg button:hover { color:var(--ink); }
+.seg button.on { background:var(--surface); color:var(--ink); box-shadow:0 1px 3px rgba(0,0,0,.18); }
+.seg.mini button { padding:2px 9px; font-size:11.5px; }
+
+nav.tabs { display:flex; gap:2px; overflow-x:auto; scrollbar-width:none; }
+nav.tabs::-webkit-scrollbar { display:none; }
+nav.tabs button {
+  padding:9px 13px 10px; font-size:13px; font-weight:600; color:var(--ink2);
+  border-bottom:2px solid transparent; white-space:nowrap;
+}
+nav.tabs button:hover { color:var(--ink); }
+nav.tabs button.on { color:var(--ink); border-bottom-color:var(--accent); }
+
+main { max-width:1440px; margin:0 auto; padding:16px 20px 80px; }
+
+/* ---------- driver rail ---------- */
+.drv-rail { display:flex; flex-wrap:wrap; gap:5px; align-items:center; margin:0 0 14px; }
+.drv-rail .lbl { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink3); font-weight:600; margin-right:4px; }
+.chip {
+  display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:14px;
+  background:var(--surface2); border:1px solid var(--line); font-size:12px; font-weight:600;
+  color:var(--ink2); cursor:pointer; user-select:none;
+}
+.chip .dot { width:9px; height:9px; border-radius:2.5px; flex:none; }
+.chip.on { color:var(--ink); background:var(--surface); border-color:var(--line2); }
+.chip.off .dot { opacity:.25; }
+.chip.off { opacity:.62; }
+.chip.act { border-color:var(--accent); }
+.chip.sm { padding:2px 7px; font-size:11px; }
+.rail-btn { font-size:11px; color:var(--ink3); padding:3px 6px; font-weight:600; }
+.rail-btn:hover { color:var(--ink); }
+
+/* ---------- cards & layout ---------- */
+.card { background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); padding:14px 16px; margin-bottom:14px; overflow:hidden; }
+.card h3 { font-size:11.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink2); font-weight:700; margin-bottom:10px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.card h3 .sub { text-transform:none; letter-spacing:0; font-weight:500; color:var(--ink3); font-size:11.5px; }
+.card h3 .right { margin-left:auto; display:flex; gap:8px; align-items:center; text-transform:none; letter-spacing:0; }
+.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.grid3 { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+@media (max-width:980px) { .grid2,.grid3 { grid-template-columns:1fr; } }
+.stat-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:14px; }
+.stat { background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:10px 13px; }
+.stat .k { font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink3); font-weight:600; }
+.stat .v { font-size:19px; font-weight:700; margin-top:2px; display:flex; align-items:center; gap:7px; }
+.stat .v .dot { width:10px; height:10px; border-radius:3px; }
+.stat .s { font-size:11.5px; color:var(--ink2); margin-top:1px; }
+
+.note { font-size:12px; color:var(--ink3); margin:6px 0 0; }
+.insights { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
+.insight { background:var(--surface); border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:7px; padding:6px 11px; font-size:12.5px; color:var(--ink2); }
+.insight b { color:var(--ink); }
+
+/* ---------- tables ---------- */
+.tblwrap { overflow-x:auto; }
+table.t { border-collapse:collapse; width:100%; font-size:12.5px; }
+table.t th { text-align:left; font-size:10.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--ink3); font-weight:600; padding:5px 9px; border-bottom:1px solid var(--line); white-space:nowrap; }
+table.t th.r, table.t td.r { text-align:right; }
+table.t td { padding:4.5px 9px; border-bottom:1px solid var(--grid); white-space:nowrap; }
+table.t tr:last-child td { border-bottom:none; }
+table.t tbody tr:hover { background:var(--surface2); }
+table.t .num { font-size:12px; }
+.tag { display:inline-block; padding:1px 6px; border-radius:4px; font-size:10.5px; font-weight:700; letter-spacing:.03em; }
+.pos-gain { color:var(--green); } .pos-loss { color:var(--red); } .pos-same { color:var(--ink3); }
+td.best { color:var(--purple); font-weight:700; }
+td.pb { color:var(--green); font-weight:600; }
+.cmp-dot { display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; border-radius:50%; border:1.6px solid; font-size:9px; font-weight:800; vertical-align:-3px; }
+.drv-cell { display:inline-flex; align-items:center; gap:7px; font-weight:600; }
+.drv-cell .dot { width:4px; height:14px; border-radius:2px; }
+.drv-cell .team { color:var(--ink3); font-weight:400; font-size:11.5px; }
+
+/* ---------- charts ---------- */
+.chart { position:relative; width:100%; }
+.chart svg { display:block; width:100%; height:auto; }
+.chart .xlab, .chart .ylab { font-size:10.5px; fill:var(--ink3); letter-spacing:.05em; text-transform:uppercase; font-weight:600; }
+.tip {
+  position:fixed; z-index:90; pointer-events:none; background:var(--surface); border:1px solid var(--line2);
+  border-radius:8px; box-shadow:var(--shadow); padding:7px 10px; font-size:12px; max-width:320px;
+  opacity:0; transition:opacity .08s;
+}
+.tip.show { opacity:1; }
+.tip .t-title { font-weight:700; margin-bottom:3px; }
+.tip table { border-collapse:collapse; }
+.tip td { padding:1px 5px 1px 0; }
+.legend { display:flex; flex-wrap:wrap; gap:4px 12px; font-size:11.5px; color:var(--ink2); margin-top:6px; }
+.legend .li { display:inline-flex; align-items:center; gap:5px; }
+.legend .sw { width:14px; height:3px; border-radius:2px; }
+.legend .swd { width:9px; height:9px; border-radius:3px; }
+
+/* controls */
+.toggle { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--ink2); cursor:pointer; font-weight:500; }
+.toggle input { accent-color:var(--accent); margin:0; }
+input[type=range] { accent-color:var(--accent); }
+select {
+  background:var(--surface2); color:var(--ink); border:1px solid var(--line); border-radius:6px;
+  padding:3px 7px; font:inherit; font-size:12.5px;
+}
+.btn { background:var(--surface2); border:1px solid var(--line); border-radius:6px; padding:4px 11px; font-size:12px; font-weight:600; color:var(--ink2); }
+.btn:hover { color:var(--ink); border-color:var(--line2); }
+.btn.pri { background:var(--accent-soft); color:var(--accent); border-color:transparent; }
+.hint { font-size:11.5px; color:var(--ink3); }
+kbd.k { background:var(--surface3); border-radius:3px; padding:0 4px; font-size:10.5px; font-family:inherit; }
+
+/* telemetry compare */
+.cmp-bar { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:10px; }
+.lapchip { display:inline-flex; align-items:center; gap:7px; padding:4px 8px 4px 10px; border-radius:8px; background:var(--surface); border:1px solid var(--line2); font-size:12px; font-weight:600; }
+.lapchip .sw { width:12px; height:12px; border-radius:4px; }
+.lapchip .x { color:var(--ink3); font-size:13px; padding:0 2px; }
+.lapchip .x:hover { color:var(--red); }
+.lapchip.ref { border-color:var(--accent); }
+.lapchip .refmark { font-size:9.5px; letter-spacing:.06em; color:var(--accent); font-weight:800; }
+.addlap { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+.empty { padding:40px 20px; text-align:center; color:var(--ink3); font-size:13px; }
+.empty b { color:var(--ink2); }
+
+footer { max-width:1440px; margin:30px auto 0; padding:0 20px 30px; font-size:11.5px; color:var(--ink3); }
+footer a { color:var(--ink2); }
+
+</style>
+<div id="app"><div id="loading"><div style="font-size:15px;font-weight:700;letter-spacing:.12em;text-transform:uppercase">F1 Analysis Hub</div><div class="bar"><i></i></div><div style="font-size:12px" id="loadmsg">loading weekend data…</div></div></div>
+<script type="application/octet-stream" id="data"></script>
+<script>const HUB_MODE = "site";</script>
+<script>
+/* ============ core: data decode, state, helpers ============ */
+"use strict";
+const HUB = window.HUB = {};
+
+/* ---- gzip decoding (embedded base64 or fetched .json.gz) ---- */
+async function gunzipJSON(bytes) {
+  const ds = new DecompressionStream("gzip");
+  const stream = new Blob([bytes]).stream().pipeThrough(ds);
+  const text = await new Response(stream).text();
+  return JSON.parse(text);
+}
+async function decodeBundle() {
+  const b64 = document.getElementById("data").textContent.trim();
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return gunzipJSON(bytes);
+}
+async function fetchSession(url) {
+  const r = await fetch(url, { cache: "no-cache" });
+  if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
+  return gunzipJSON(new Uint8Array(await r.arrayBuffer()));
+}
+
+/* ---- formatting ---- */
+function fmtLap(ms) {
+  if (ms == null) return "—";
+  const h = Math.floor(ms / 3600000), m = Math.floor(ms % 3600000 / 60000), s = (ms % 60000) / 1000;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${s.toFixed(3).padStart(6, "0")}`;
+  return m > 0 ? `${m}:${s.toFixed(3).padStart(6, "0")}` : s.toFixed(3);
+}
+function fmtSec(ms, dp = 3) { return ms == null ? "—" : (ms / 1000).toFixed(dp); }
+function fmtDelta(ms, dp = 3) {
+  if (ms == null) return "—";
+  const v = ms / 1000;
+  return (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(dp);
+}
+function fmtClock(ms) {
+  if (ms == null) return "—";
+  const h = Math.floor(ms / 3600000), m = Math.floor(ms % 3600000 / 60000), s = Math.floor(ms % 60000 / 1000);
+  return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+/* ---- color helpers ---- */
+function hexRgb(h) { h = h.replace("#", ""); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+function rgbHex(r, g, b) { return "#" + [r, g, b].map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, "0")).join(""); }
+function lum(h) { const [r, g, b] = hexRgb(h).map(v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }); return .2126 * r + .7152 * g + .0722 * b; }
+function mix(h, target, k) { const a = hexRgb(h), b = hexRgb(target); return rgbHex(a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k); }
+function isDark() {
+  const t = document.documentElement.getAttribute("data-theme");
+  if (t) return t === "dark";
+  return matchMedia("(prefers-color-scheme: dark)").matches;
+}
+/* team colors tuned per theme so they hold contrast on both grounds */
+function teamCol(hex) {
+  if (!hex) return "#888";
+  let h = hex;
+  if (isDark()) { let n = 0; while (lum(h) < 0.10 && n++ < 6) h = mix(h, "#ffffff", 0.22); }
+  else { let n = 0; while (lum(h) > 0.62 && n++ < 6) h = mix(h, "#0a0d12", 0.18); }
+  return h;
+}
+const CMP_LETTER = { SOFT: "S", MEDIUM: "M", HARD: "H", INTERMEDIATE: "I", WET: "W", UNKNOWN: "?", TEST_UNKNOWN: "T" };
+function cmpCol(c) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue("--cmp-" + (c || "UNKNOWN"));
+  return v.trim() || "#9ca3af";
+}
+function cmpDot(c, sz) {
+  const l = CMP_LETTER[c] || "?";
+  return `<span class="cmp-dot" style="border-color:${cmpCol(c)};color:${cmpCol(c)};${sz ? `width:${sz}px;height:${sz}px;` : ""}" title="${esc(c)}">${l}</span>`;
+}
+
+/* ---- track status ---- */
+function tsFlags(ts) {
+  const s = String(ts || "1");
+  return { yellow: s.includes("2"), sc: s.includes("4"), red: s.includes("5"), vsc: s.includes("6") || s.includes("7"), green: !/[24567]/.test(s) };
+}
+
+/* ---- session helpers ---- */
+const SNAMES = { FP1: "FP1", FP2: "FP2", FP3: "FP3", SQ: "Sprint Quali", S: "Sprint", Q: "Qualifying", R: "Race" };
+HUB.session = id => HUB.data.sessions.find(s => s.id === (id ?? HUB.S.sid));
+HUB.driver = (abbr, sid) => (HUB.session(sid) || {}).drivers.find(d => d.abbr === abbr) || HUB.session("R")?.drivers.find(d => d.abbr === abbr);
+function drvColor(abbr, sid) { const d = HUB.driver(abbr, sid); return teamCol(d ? d.color : "#888"); }
+function drvDash(abbr, sid) { const d = HUB.driver(abbr, sid); return d && d.style === 1 ? "6 3" : null; }
+function lapsOf(sid, drv) {
+  const s = HUB.session(sid);
+  if (!s) return [];
+  return drv ? s.laps.filter(l => l.drv === drv) : s.laps;
+}
+/* clean = representative racing lap */
+function isClean(l) {
+  return l.t != null && !l.in && !l.out && !l.del && tsFlags(l.ts).green && l.acc;
+}
+function fuelCorr(l, sid) {
+  /* fuel-corrected time: remove the advantage of a lighter car late in the race */
+  const S = HUB.S, s = HUB.session(sid);
+  if (!S.fuelOn || !s || !(s.id === "R" || s.id === "S") || !s.totalLaps) return l.t;
+  return l.t - (s.totalLaps - l.lap) * S.fuelK * 1000;
+}
+
+/* ---- linear fit (least squares) -> {a intercept, b slope, n} ---- */
+function linfit(pts) {
+  const n = pts.length;
+  if (n < 3) return null;
+  let sx = 0, sy = 0, sxx = 0, sxy = 0;
+  for (const [x, y] of pts) { sx += x; sy += y; sxx += x * x; sxy += x * y; }
+  const den = n * sxx - sx * sx;
+  if (Math.abs(den) < 1e-9) return null;
+  const b = (n * sxy - sx * sy) / den, a = (sy - b * sx) / n;
+  return { a, b, n };
+}
+function median(arr) {
+  if (!arr.length) return null;
+  const s = [...arr].sort((a, b) => a - b), m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+function quantile(arr, q) {
+  if (!arr.length) return null;
+  const s = [...arr].sort((a, b) => a - b);
+  const p = (s.length - 1) * q, lo = Math.floor(p);
+  return s[lo] + (s[Math.min(lo + 1, s.length - 1)] - s[lo]) * (p - lo);
+}
+
+/* ---- state ---- */
+HUB.S = {
+  sid: "R",
+  tab: "overview",
+  sel: new Set(),          // selected driver abbrs (driver rail)
+  colorMode: "team",       // team | compound (pace chart)
+  fuelOn: false, fuelK: 0.06,
+  showOff: false,          // include slow/outlier laps
+  compare: [],             // [{sid, drv, lap}] telemetry basket (max 6)
+  degCmp: null,            // compound filter on deg tab
+  qseg: 3,                 // quali segment
+  raceView: "trace",
+  mapMode: "dom",
+  telZoom: null,           // [r0, r1]
+  telPanels: { delta: true, v: true, th: true, b: true, g: true, n: false, d: true },
+};
+HUB.storeKey = () => `f1hub_${HUB.data.year}_${HUB.data.round}`;
+HUB.save = () => { try { localStorage.setItem(HUB.storeKey(), JSON.stringify({ compare: HUB.S.compare, fuelK: HUB.S.fuelK })); } catch (e) { } };
+HUB.restore = () => {
+  try {
+    const s = JSON.parse(localStorage.getItem(HUB.storeKey()) || "{}");
+    HUB.S.compare = (s.compare || []).filter(c => HUB.session(c.sid)?.tel[c.drv + "-" + c.lap]);
+    if (s.fuelK) HUB.S.fuelK = s.fuelK;
+  } catch (e) { }
+};
+
+/* ---- toast ---- */
+let toastT;
+function toast(msg) {
+  let el = document.getElementById("toast");
+  if (!el) {
+    el = document.createElement("div"); el.id = "toast";
+    el.style.cssText = "position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:8px;font-size:12.5px;font-weight:600;z-index:99;opacity:0;transition:opacity .15s";
+    document.body.appendChild(el);
+  }
+  el.textContent = msg; el.style.opacity = "1";
+  clearTimeout(toastT); toastT = setTimeout(() => el.style.opacity = "0", 1900);
+}
+function addCompare(sid, drv, lap) {
+  const S = HUB.S;
+  if (S.compare.some(c => c.sid === sid && c.drv === drv && c.lap === lap)) { toast("Already in compare"); return; }
+  if (!HUB.session(sid)?.tel[drv + "-" + lap]) { toast("No telemetry for this lap"); return; }
+  if (S.compare.length >= 6) { toast("Compare is full (6 laps max)"); return; }
+  S.compare.push({ sid, drv, lap });
+  HUB.save();
+  toast(`Added ${drv} L${lap} (${SNAMES[sid]}) — ${S.compare.length} in Telemetry`);
+  if (S.tab === "tel") HUB.render();
+  const b = document.querySelector('nav.tabs button[data-tab="tel"]');
+  if (b) { b.style.color = "var(--accent)"; setTimeout(() => b.style.color = "", 1200); }
+}
+
+/* ============ charts: minimal SVG toolkit ============ */
+"use strict";
+const NS = "http://www.w3.org/2000/svg";
+function svgEl(tag, attrs, parent) {
+  const el = document.createElementNS(NS, tag);
+  for (const k in attrs || {}) el.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(el);
+  return el;
+}
+function cvar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+function niceTicks(lo, hi, n = 6) {
+  if (!(hi > lo)) return [lo];
+  const span = hi - lo, step0 = span / n, mag = 10 ** Math.floor(Math.log10(step0));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => span / s <= n) || 10 * mag;
+  const t = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) t.push(+v.toFixed(10));
+  return t;
+}
+
+/*
+ * Chart(container, opts):
+ *   h, mt/mr/mb/ml margins, xd [lo,hi], yd [lo,hi], xfmt/yfmt tick formatters,
+ *   xlab/ylab axis labels, yflip (true => smaller at top), xticks/yticks counts
+ * Returns { svg, plot, x(), y(), W, H, iw, ih, hover(), bands(), clip }
+ */
+let CLIP_ID = 0;
+function Chart(container, o) {
+  const W = o.w || Math.max(320, container.clientWidth || 800);
+  const H = o.h || 300;
+  const mt = o.mt ?? 12, mr = o.mr ?? 14, mb = o.mb ?? (o.xlab ? 40 : 26), ml = o.ml ?? 58;
+  const iw = W - ml - mr, ih = H - mt - mb;
+  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, null);
+  if (o.label) svg.setAttribute("aria-label", o.label);
+  container.appendChild(svg);
+  const [x0, x1] = o.xd, [y0, y1] = o.yd;
+  const x = v => ml + (v - x0) / (x1 - x0 || 1) * iw;
+  const y = o.yflip
+    ? v => mt + (v - y0) / (y1 - y0 || 1) * ih
+    : v => mt + ih - (v - y0) / (y1 - y0 || 1) * ih;
+
+  const gGrid = svgEl("g", {}, svg);
+  const clipId = "clip" + (++CLIP_ID);
+  const defs = svgEl("defs", {}, svg);
+  const cp = svgEl("clipPath", { id: clipId }, defs);
+  svgEl("rect", { x: ml, y: mt, width: iw, height: ih }, cp);
+  const plot = svgEl("g", { "clip-path": `url(#${clipId})` }, svg);
+  const gAxis = svgEl("g", {}, svg);
+
+  // gridlines + ticks
+  const yt = o.yticksArr || niceTicks(Math.min(y0, y1), Math.max(y0, y1), o.yticks || 6);
+  for (const v of yt) {
+    if (v < Math.min(y0, y1) - 1e-9 || v > Math.max(y0, y1) + 1e-9) continue;
+    svgEl("line", { x1: ml, x2: ml + iw, y1: y(v), y2: y(v), stroke: cvar("--grid"), "stroke-width": 1 }, gGrid);
+    svgEl("text", { x: ml - 7, y: y(v) + 3.5, "text-anchor": "end", "font-size": 10.5, fill: cvar("--ink3"), class: "num" }, gAxis).textContent = o.yfmt ? o.yfmt(v) : v;
+  }
+  const xt = o.xticksArr || niceTicks(x0, x1, o.xticks || 8);
+  for (const v of xt) {
+    if (v < x0 - 1e-9 || v > x1 + 1e-9) continue;
+    if (o.xgrid !== false) svgEl("line", { x1: x(v), x2: x(v), y1: mt, y2: mt + ih, stroke: cvar("--grid"), "stroke-width": 1 }, gGrid);
+    svgEl("text", { x: x(v), y: mt + ih + 15, "text-anchor": "middle", "font-size": 10.5, fill: cvar("--ink3"), class: "num" }, gAxis).textContent = o.xfmt ? o.xfmt(v) : v;
+  }
+  // frame baseline
+  svgEl("line", { x1: ml, x2: ml + iw, y1: mt + ih, y2: mt + ih, stroke: cvar("--line"), "stroke-width": 1 }, gAxis);
+  if (o.xlab) svgEl("text", { x: ml + iw / 2, y: H - 6, "text-anchor": "middle", class: "xlab" }, gAxis).textContent = o.xlab;
+  if (o.ylab) {
+    const t = svgEl("text", { x: 0, y: 0, "text-anchor": "middle", class: "ylab", transform: `translate(12,${mt + ih / 2}) rotate(-90)` }, gAxis);
+    t.textContent = o.ylab;
+  }
+  return { svg, plot, defs, x, y, W, H, iw, ih, ml, mt, mr, mb, xd: o.xd, yd: o.yd };
+}
+
+function linePath(pts, x, y) {
+  let d = "";
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    if (p == null || p[1] == null) { continue; }
+    d += (d && pts[i - 1] && pts[i - 1][1] != null ? "L" : "M") + x(p[0]).toFixed(1) + "," + y(p[1]).toFixed(1);
+  }
+  return d;
+}
+function stepPath(pts, x, y) {
+  let d = "", prev = null;
+  for (const p of pts) {
+    if (p == null || p[1] == null) { prev = null; continue; }
+    const px = x(p[0]).toFixed(1), py = y(p[1]).toFixed(1);
+    d += prev == null ? `M${px},${py}` : `H${px}V${py}`;
+    prev = p;
+  }
+  return d;
+}
+
+/* spread label y-positions so they don't collide; items: [{y,...}] mutated in place */
+function spreadLabels(items, gap, lo, hi) {
+  if (!items.length) return items;
+  items.sort((a, b) => a.y - b.y);
+  for (let i = 1; i < items.length; i++) if (items[i].y < items[i - 1].y + gap) items[i].y = items[i - 1].y + gap;
+  if (hi != null && items.at(-1).y > hi) {
+    items.at(-1).y = hi;
+    for (let i = items.length - 2; i >= 0; i--) if (items[i].y > items[i + 1].y - gap) items[i].y = items[i + 1].y - gap;
+  }
+  if (lo != null) {
+    if (items[0].y < lo) items[0].y = lo;
+    for (let i = 1; i < items.length; i++) if (items[i].y < items[i - 1].y + gap) items[i].y = items[i - 1].y + gap;
+  }
+  return items;
+}
+
+/* shared tooltip */
+let TIP;
+function tip() {
+  if (!TIP) { TIP = document.createElement("div"); TIP.className = "tip"; document.body.appendChild(TIP); }
+  return TIP;
+}
+function tipShow(html, ev) {
+  const t = tip(); t.innerHTML = html; t.classList.add("show");
+  const pad = 14, w = t.offsetWidth, h = t.offsetHeight;
+  let X = ev.clientX + pad, Y = ev.clientY + pad;
+  if (X + w > innerWidth - 8) X = ev.clientX - w - pad;
+  if (Y + h > innerHeight - 8) Y = ev.clientY - h - pad;
+  t.style.left = X + "px"; t.style.top = Y + "px";
+}
+function tipHide() { if (TIP) TIP.classList.remove("show"); }
+
+/* attach per-mark hover to a set of svg nodes */
+function hoverMarks(nodes, html) {
+  nodes.forEach((n, i) => {
+    n.addEventListener("pointerenter", ev => tipShow(html(i), ev));
+    n.addEventListener("pointermove", ev => tipShow(html(i), ev));
+    n.addEventListener("pointerleave", tipHide);
+  });
+}
+
+/* legend */
+function legend(container, items) {
+  const el = document.createElement("div"); el.className = "legend";
+  el.innerHTML = items.map(it =>
+    `<span class="li"><span class="${it.dot ? "swd" : "sw"}" style="background:${it.color};${it.dash ? "background:repeating-linear-gradient(90deg," + it.color + " 0 4px,transparent 4px 7px);" : ""}"></span>${esc(it.label)}</span>`).join("");
+  container.appendChild(el);
+  return el;
+}
+
+/* horizontal drag-zoom on a chart; cb([v0,v1]) in x-domain units, cb(null) on reset */
+function dragZoom(ch, cb) {
+  const { svg, ml, mt, iw, ih } = ch;
+  let sx = null, rect = null;
+  const toVal = px => ch.xd[0] + (px - ml) / iw * (ch.xd[1] - ch.xd[0]);
+  svg.style.cursor = "crosshair";
+  svg.addEventListener("pointerdown", e => {
+    const p = pt(e); if (p.x < ml || p.x > ml + iw) return;
+    sx = p.x; svg.setPointerCapture(e.pointerId);
+    rect = svgEl("rect", { x: sx, y: mt, width: 0, height: ih, fill: "var(--accent)", opacity: .12 }, svg);
+  });
+  svg.addEventListener("pointermove", e => {
+    if (sx == null || !rect) return;
+    const p = pt(e), a = Math.min(sx, p.x), w = Math.abs(p.x - sx);
+    rect.setAttribute("x", a); rect.setAttribute("width", w);
+  });
+  svg.addEventListener("pointerup", e => {
+    if (sx == null) return;
+    const p = pt(e), a = Math.min(sx, p.x), b = Math.max(sx, p.x);
+    if (rect) rect.remove(); rect = null;
+    const s0 = sx; sx = null;
+    if (b - a > 12) cb([toVal(a), toVal(b)]);
+  });
+  svg.addEventListener("dblclick", () => cb(null));
+  function pt(e) {
+    const r = svg.getBoundingClientRect();
+    return { x: (e.clientX - r.left) / r.width * ch.W, y: (e.clientY - r.top) / r.height * ch.H };
+  }
+  ch.toVal = toVal; ch.pt = pt;
+}
+
+/* ============ views A: driver rail, overview, pace ============ */
+"use strict";
+
+/* ---------- driver rail ---------- */
+function driverRail(root, opts = {}) {
+  const s = HUB.session();
+  const wrap = document.createElement("div");
+  wrap.className = "drv-rail";
+  wrap.innerHTML = `<span class="lbl">Drivers</span>`;
+  const order = [...s.drivers].sort((a, b) => (a.pos ?? 99) - (b.pos ?? 99));
+  for (const d of order) {
+    const on = HUB.S.sel.has(d.abbr);
+    const c = document.createElement("button");
+    c.className = "chip " + (on ? "on" : "off");
+    c.innerHTML = `<span class="dot" style="background:${teamCol(d.color)}"></span>${d.abbr}`;
+    c.title = `${d.name} — ${d.team} (double-click to solo)`;
+    c.addEventListener("click", () => { HUB.S.sel.has(d.abbr) ? HUB.S.sel.delete(d.abbr) : HUB.S.sel.add(d.abbr); HUB.render(); });
+    c.addEventListener("dblclick", () => { HUB.S.sel = new Set([d.abbr]); HUB.render(); });
+    wrap.appendChild(c);
+  }
+  const mk = (label, fn) => {
+    const b = document.createElement("button"); b.className = "rail-btn"; b.textContent = label;
+    b.addEventListener("click", fn); wrap.appendChild(b);
+  };
+  mk("All", () => { HUB.S.sel = new Set(s.drivers.map(d => d.abbr)); HUB.render(); });
+  mk("None", () => { HUB.S.sel = new Set(); HUB.render(); });
+  mk("Top 10", () => { HUB.S.sel = new Set(order.slice(0, 10).map(d => d.abbr)); HUB.render(); });
+  mk("Leaders", () => {
+    const seen = new Set(), pick = [];
+    for (const d of order) { if (!seen.has(d.team)) { seen.add(d.team); pick.push(d.abbr); } }
+    HUB.S.sel = new Set(pick); HUB.render();
+  });
+  root.appendChild(wrap);
+}
+function selDrivers() {
+  const s = HUB.session();
+  return [...s.drivers].sort((a, b) => (a.pos ?? 99) - (b.pos ?? 99)).filter(d => HUB.S.sel.has(d.abbr));
+}
+function card(root, title, subtitle) {
+  const c = document.createElement("div"); c.className = "card";
+  if (title) {
+    const h = document.createElement("h3");
+    h.innerHTML = esc(title) + (subtitle ? ` <span class="sub">${esc(subtitle)}</span>` : "") + `<span class="right"></span>`;
+    c.appendChild(h);
+  }
+  root.appendChild(c);
+  return c;
+}
+function drvCell(d) {
+  return `<span class="drv-cell"><span class="dot" style="background:${teamCol(d.color)}"></span>${esc(d.abbr)} <span class="team">${esc(d.team)}</span></span>`;
+}
+function insights(root, arr) {
+  if (!arr.length) return;
+  const el = document.createElement("div"); el.className = "insights";
+  el.innerHTML = arr.map(t => `<div class="insight">${t}</div>`).join("");
+  root.appendChild(el);
+}
+
+/* ---------- practice standings (computed from laps) ---------- */
+function practiceStandings(s) {
+  const rows = [];
+  for (const d of s.drivers) {
+    const laps = s.laps.filter(l => l.drv === d.abbr);
+    const timed = laps.filter(l => l.t != null && !l.del);
+    const best = timed.length ? timed.reduce((a, b) => a.t < b.t ? a : b) : null;
+    rows.push({ d, best, n: laps.length });
+  }
+  rows.sort((a, b) => (a.best ? a.best.t : 1e12) - (b.best ? b.best.t : 1e12));
+  return rows;
+}
+
+/* ---------- OVERVIEW ---------- */
+function viewOverview(root) {
+  const s = HUB.session();
+  const isRace = s.id === "R" || s.id === "S";
+  const isQ = s.id === "Q" || s.id === "SQ";
+
+  // ---- headline stats ----
+  const stats = [];
+  const timed = s.laps.filter(l => l.t != null && !l.del);
+  const fl = timed.length ? timed.reduce((a, b) => a.t < b.t ? a : b) : null;
+  const flD = fl && HUB.driver(fl.drv);
+  if (isRace) {
+    const p1 = s.drivers.find(d => d.pos === 1), p2 = s.drivers.find(d => d.pos === 2);
+    if (p1) stats.push({ k: s.id === "R" ? "Winner" : "Sprint winner", v: p1.abbr, c: teamCol(p1.color), s: p1.team });
+    if (p2 && p2.time != null) stats.push({ k: "Margin", v: fmtDelta(p2.time) + "s", s: "to " + p2.abbr });
+    if (fl) stats.push({ k: "Fastest lap", v: fmtLap(fl.t), c: flD && teamCol(flD.color), s: `${fl.drv} · lap ${fl.lap}` });
+    const movers = s.drivers.filter(d => d.grid && d.pos).map(d => ({ d, g: d.grid - d.pos })).sort((a, b) => b.g - a.g);
+    if (movers.length && movers[0].g > 0) stats.push({ k: "Biggest mover", v: `+${movers[0].g}`, c: teamCol(movers[0].d.color), s: `${movers[0].d.abbr} · P${movers[0].d.grid}→P${movers[0].d.pos}` });
+    const scLaps = new Set(), vscLaps = new Set();
+    for (const l of s.laps) { const f = tsFlags(l.ts); if (f.sc) scLaps.add(l.lap); else if (f.vsc) vscLaps.add(l.lap); }
+    stats.push({ k: "SC / VSC laps", v: `${scLaps.size} / ${vscLaps.size}`, s: scLaps.size ? "laps " + [...scLaps].sort((a, b) => a - b).join(", ").slice(0, 24) : "clean race" });
+    const dnf = s.drivers.filter(d => d.status && !/Finished|\+/.test(d.status));
+    stats.push({ k: "Retirements", v: String(dnf.length), s: dnf.map(d => d.abbr).join(", ") || "none" });
+  } else if (isQ) {
+    const p1 = s.drivers.find(d => d.pos === 1);
+    if (p1) stats.push({ k: s.id === "Q" ? "Pole" : "Sprint pole", v: p1.abbr, c: teamCol(p1.color), s: fmtLap(p1.q3 ?? p1.q2 ?? p1.q1) });
+    const p2 = s.drivers.find(d => d.pos === 2);
+    if (p1 && p2) { const t1 = p1.q3 ?? p1.q2, t2 = p2.q3 ?? p2.q2; if (t1 && t2) stats.push({ k: "Gap to P2", v: fmtDelta(t2 - t1) + "s", s: p2.abbr }); }
+    if (fl) stats.push({ k: "Best lap", v: fmtLap(fl.t), s: `${fl.drv} · ${fl.cmp || ""}` });
+  } else {
+    const st = practiceStandings(s)[0];
+    if (st && st.best) stats.push({ k: "P1", v: st.d.abbr, c: teamCol(st.d.color), s: fmtLap(st.best.t) });
+    if (fl) stats.push({ k: "Best lap", v: fmtLap(fl.t), s: `${fl.drv} · ${fl.cmp || ""}` });
+    stats.push({ k: "Laps run", v: String(s.laps.length), s: "all drivers" });
+  }
+  if (s.weather.length) {
+    const air = s.weather.map(w => w[1]).filter(v => v != null), trk = s.weather.map(w => w[2]).filter(v => v != null);
+    const rain = s.weather.some(w => w[6]);
+    stats.push({ k: "Air / Track", v: `${Math.min(...air).toFixed(0)}–${Math.max(...air).toFixed(0)}° / ${Math.min(...trk).toFixed(0)}–${Math.max(...trk).toFixed(0)}°`, s: rain ? "rain during session" : "dry" });
+  }
+  const sr = document.createElement("div"); sr.className = "stat-row";
+  sr.innerHTML = stats.map(st => `<div class="stat"><div class="k">${esc(st.k)}</div><div class="v">${st.c ? `<span class="dot" style="background:${st.c}"></span>` : ""}<span class="num">${esc(st.v)}</span></div><div class="s num">${esc(st.s || "")}</div></div>`).join("");
+  root.appendChild(sr);
+
+  // ---- results table ----
+  const c1 = card(root, SNAMES[s.id] + " classification");
+  const wrap = document.createElement("div"); wrap.className = "tblwrap"; c1.appendChild(wrap);
+  let html = "";
+  if (isRace) {
+    html = `<table class="t"><thead><tr><th class="r">P</th><th>Driver</th><th class="r">Grid</th><th class="r">+/−</th><th class="r">Time / Gap</th><th class="r">Best lap</th><th>Stops</th><th class="r">Pts</th><th>Status</th></tr></thead><tbody>` +
+      s.drivers.filter(d => d.pos).sort((a, b) => a.pos - b.pos).map(d => {
+        const laps = s.laps.filter(l => l.drv === d.abbr);
+        const best = laps.filter(l => l.t != null && !l.del).reduce((a, b) => !a || b.t < a.t ? b : a, null);
+        const stops = laps.filter(l => l.in).length;
+        const stints = [...new Map(laps.filter(l => l.cmp).map(l => [l.stint, l.cmp])).values()];
+        const diff = d.grid ? d.grid - d.pos : null;
+        const diffH = diff == null ? "" : diff > 0 ? `<span class="pos-gain">▲${diff}</span>` : diff < 0 ? `<span class="pos-loss">▼${-diff}</span>` : `<span class="pos-same">•</span>`;
+        const t = d.pos === 1 ? fmtLap(d.time) : (d.time != null ? fmtDelta(d.time) : (d.status || ""));
+        return `<tr><td class="r num">${d.pos}</td><td>${drvCell(d)}</td><td class="r num">${d.grid ?? "—"}</td><td class="r">${diffH}</td><td class="r num">${t}</td><td class="r num ${best && fl && best.t === fl.t ? "best" : ""}">${best ? fmtLap(best.t) : "—"}</td><td>${stints.map(c => cmpDot(c)).join(" ")}</td><td class="r num">${d.points || ""}</td><td class="num" style="color:var(--ink3)">${esc(d.status || "")}</td></tr>`;
+      }).join("") + "</tbody></table>";
+  } else if (isQ) {
+    const seg = s.id === "SQ" ? "SQ" : "Q";
+    const best = { 1: null, 2: null, 3: null };
+    for (const d of s.drivers) { for (const i of [1, 2, 3]) { const v = d["q" + i]; if (v != null && (!best[i] || v < best[i])) best[i] = v; } }
+    html = `<table class="t"><thead><tr><th class="r">P</th><th>Driver</th><th class="r">${seg}1</th><th class="r">${seg}2</th><th class="r">${seg}3</th><th class="r">Gap</th></tr></thead><tbody>` +
+      s.drivers.filter(d => d.pos).sort((a, b) => a.pos - b.pos).map(d => {
+        const bt = d.q3 ?? d.q2 ?? d.q1, p1 = s.drivers.find(x => x.pos === 1), p1t = p1 && (p1.q3 ?? p1.q2 ?? p1.q1);
+        const cell = i => { const v = d["q" + i]; return `<td class="r num ${v != null && v === best[i] ? "best" : ""}">${fmtLap(v)}</td>`; };
+        const cut = (s.id === "Q" || s.id === "SQ") && (d.pos === 15 || d.pos === 10) ? ' style="border-bottom:2px solid var(--line2)"' : "";
+        return `<tr${cut}><td class="r num">${d.pos}</td><td>${drvCell(d)}</td>${cell(1)}${cell(2)}${cell(3)}<td class="r num">${d.pos === 1 ? "—" : (bt != null && p1t != null && d.q3 != null ? fmtDelta(bt - p1t) : "")}</td></tr>`;
+      }).join("") + "</tbody></table>";
+  } else {
+    const rows = practiceStandings(s);
+    const p1t = rows[0] && rows[0].best ? rows[0].best.t : null;
+    html = `<table class="t"><thead><tr><th class="r">P</th><th>Driver</th><th class="r">Best</th><th class="r">Gap</th><th>Tyre</th><th class="r">Laps</th></tr></thead><tbody>` +
+      rows.map((r, i) => `<tr><td class="r num">${i + 1}</td><td>${drvCell(r.d)}</td><td class="r num ${i === 0 ? "best" : ""}">${r.best ? fmtLap(r.best.t) : "—"}</td><td class="r num">${r.best && p1t != null && i > 0 ? fmtDelta(r.best.t - p1t) : ""}</td><td>${r.best && r.best.cmp ? cmpDot(r.best.cmp) : ""}</td><td class="r num">${r.n}</td></tr>`).join("") + "</tbody></table>";
+  }
+  wrap.innerHTML = html;
+
+  // ---- race control ----
+  if (s.rcm.length) {
+    const c2 = card(root, "Race control", s.rcm.length + " messages");
+    const seg = document.createElement("div"); seg.className = "seg mini";
+    const cats = [["All", () => true], ["Flags", m => m.flag], ["SC/VSC", m => /SAFETY|VSC/i.test(m.msg || "")], ["Penalties", m => /PENALTY|INVESTIGATION|WARNING/i.test(m.msg || "")], ["Deleted laps", m => /DELETED/i.test(m.msg || "")]];
+    let cur = 0;
+    const wrap2 = document.createElement("div"); wrap2.className = "tblwrap"; wrap2.style.maxHeight = "340px"; wrap2.style.overflowY = "auto";
+    const draw = () => {
+      const rows = s.rcm.filter(cats[cur][1]);
+      wrap2.innerHTML = `<table class="t"><thead><tr><th>Time</th><th class="r">Lap</th><th>Flag</th><th>Message</th></tr></thead><tbody>` +
+        rows.map(m => `<tr><td class="num" style="color:var(--ink3)">${esc((m.time || "").slice(11, 19))}</td><td class="r num">${m.lap ?? ""}</td><td>${m.flag ? `<span class="tag" style="background:var(--surface3)">${esc(m.flag)}</span>` : ""}</td><td style="white-space:normal">${esc(m.msg)}</td></tr>`).join("") + "</tbody></table>";
+      seg.querySelectorAll("button").forEach((b, i) => b.classList.toggle("on", i === cur));
+    };
+    cats.forEach(([label], i) => {
+      const b = document.createElement("button"); b.textContent = label;
+      b.addEventListener("click", () => { cur = i; draw(); });
+      seg.appendChild(b);
+    });
+    c2.querySelector(".right").appendChild(seg);
+    c2.appendChild(wrap2);
+    draw();
+  }
+}
+
+/* ---------- PACE ---------- */
+function paceFilter(l, medByDrv) {
+  const S = HUB.S;
+  if (l.t == null) return false;
+  if (S.showOff) return true;
+  if (l.in || l.out || l.del) return false;
+  const med = medByDrv[l.drv];
+  return !(med && l.t > med * 1.07);
+}
+function viewPace(root) {
+  const s = HUB.session(), S = HUB.S;
+  const isRace = s.id === "R" || s.id === "S";
+  driverRail(root);
+
+  const c = card(root, "Lap times", "click any lap to add it to Telemetry compare");
+  const right = c.querySelector(".right");
+  right.innerHTML = `
+    <div class="seg mini" id="cmode"><button ${S.colorMode === "team" ? 'class="on"' : ""}>Team</button><button ${S.colorMode === "compound" ? 'class="on"' : ""}>Compound</button></div>
+    ${isRace ? `<label class="toggle"><input type="checkbox" id="fuel" ${S.fuelOn ? "checked" : ""}>fuel-corr</label>
+    <input type="range" id="fuelk" min="0" max="0.12" step="0.005" value="${S.fuelK}" style="width:70px" title="fuel effect s/lap">
+    <span class="hint num" id="fuelv">${S.fuelK.toFixed(3)} s/lap</span>` : ""}
+    <label class="toggle"><input type="checkbox" id="outl" ${S.showOff ? "checked" : ""}>all laps</label>`;
+  const [bTeam, bCmp] = right.querySelectorAll("#cmode button");
+  bTeam.addEventListener("click", () => { S.colorMode = "team"; HUB.render(); });
+  bCmp.addEventListener("click", () => { S.colorMode = "compound"; HUB.render(); });
+  right.querySelector("#outl").addEventListener("change", e => { S.showOff = e.target.checked; HUB.render(); });
+  if (isRace) {
+    right.querySelector("#fuel").addEventListener("change", e => { S.fuelOn = e.target.checked; HUB.render(); });
+    right.querySelector("#fuelk").addEventListener("input", e => { S.fuelK = +e.target.value; right.querySelector("#fuelv").textContent = S.fuelK.toFixed(3) + " s/lap"; });
+    right.querySelector("#fuelk").addEventListener("change", () => { HUB.save(); if (S.fuelOn) HUB.render(); });
+  }
+
+  const drvs = selDrivers();
+  if (!drvs.length) { c.insertAdjacentHTML("beforeend", `<div class="empty">No drivers selected — pick some above.</div>`); return; }
+
+  const medByDrv = {};
+  for (const d of s.drivers) {
+    const v = s.laps.filter(l => l.drv === d.abbr && isClean(l)).map(l => l.t);
+    medByDrv[d.abbr] = median(v);
+  }
+  const pts = [];
+  for (const d of drvs) for (const l of s.laps) if (l.drv === d.abbr && paceFilter(l, medByDrv)) pts.push(l);
+  if (!pts.length) { c.insertAdjacentHTML("beforeend", `<div class="empty">No representative laps.</div>`); return; }
+
+  const fc = l => fuelCorr(l, s.id);
+  const vals = pts.map(fc);
+  const maxLap = Math.max(...pts.map(l => l.lap));
+  const lo = Math.min(...vals) - 400;
+  const hi = S.showOff ? Math.max(...vals) + 400 : quantile(vals, 0.94) + 900;
+
+  const div = document.createElement("div"); div.className = "chart"; c.appendChild(div);
+  const ch = Chart(div, {
+    h: 380, mr: 42, xd: [0.5, maxLap + 0.5], yd: [lo, hi],
+    xfmt: v => Number.isInteger(v) ? v : "", yfmt: v => fmtLap(Math.round(v)),
+    xlab: "Lap", ylab: S.fuelOn && isRace ? "fuel-corrected lap time" : "lap time", label: "Lap time chart"
+  });
+
+  // SC / VSC bands
+  if (isRace) {
+    const worst = {};
+    for (const l of s.laps) {
+      const f = tsFlags(l.ts);
+      const w = f.red ? 3 : f.sc ? 2 : f.vsc ? 1 : 0;
+      worst[l.lap] = Math.max(worst[l.lap] || 0, w);
+    }
+    for (const lap in worst) {
+      if (!worst[lap]) continue;
+      const fill = worst[lap] === 3 ? "var(--band-red)" : worst[lap] === 2 ? "var(--band-sc)" : "var(--band-vsc)";
+      svgEl("rect", { x: ch.x(lap - 0.5), y: ch.mt, width: ch.x(+lap + 0.5) - ch.x(lap - 0.5), height: ch.ih, fill }, ch.plot);
+    }
+  }
+  // lines + dots
+  const dotNodes = [], dotLaps = [];
+  for (const d of drvs) {
+    const laps = pts.filter(l => l.drv === d.abbr).sort((a, b) => a.lap - b.lap);
+    const lp = [];
+    let prev = null;
+    for (const l of laps) { if (prev != null && l.lap - prev > 1) lp.push(null); lp.push([l.lap, fc(l)]); prev = l.lap; }
+    const col = teamCol(d.color);
+    const path = svgEl("path", { d: linePath(lp, ch.x, ch.y), fill: "none", stroke: col, "stroke-width": 1.6, opacity: .85 }, ch.plot);
+    if (drvDash(d.abbr)) path.setAttribute("stroke-dasharray", drvDash(d.abbr));
+    for (const l of laps) {
+      const fillc = S.colorMode === "compound" ? cmpCol(l.cmp) : col;
+      const n = svgEl("circle", { cx: ch.x(l.lap), cy: ch.y(fc(l)), r: pts.length > 400 ? 2.6 : 3.4, fill: fillc, stroke: "var(--surface)", "stroke-width": 1.2, cursor: "pointer" }, ch.plot);
+      if (l.pb) n.setAttribute("stroke", "var(--green)");
+      dotNodes.push(n); dotLaps.push(l);
+      n.addEventListener("click", () => addCompare(s.id, l.drv, l.lap));
+    }
+  }
+  // direct labels at line ends, de-collided
+  const endLabels = [];
+  for (const d of drvs) {
+    const laps = pts.filter(l => l.drv === d.abbr).sort((a, b) => a.lap - b.lap);
+    if (!laps.length) continue;
+    const last = laps.at(-1);
+    endLabels.push({ y: ch.y(fc(last)), x: ch.x(last.lap) + 6, txt: d.abbr, col: teamCol(d.color) });
+  }
+  spreadLabels(endLabels, 11, ch.mt + 4, ch.mt + ch.ih - 2);
+  for (const L of endLabels)
+    svgEl("text", { x: Math.min(L.x, ch.ml + ch.iw + 4), y: L.y + 3.5, "font-size": 10, "font-weight": 700, fill: L.col, class: "num" }, ch.svg).textContent = L.txt;
+  hoverMarks(dotNodes, i => {
+    const l = dotLaps[i], d = HUB.driver(l.drv), f = tsFlags(l.ts);
+    return `<div class="t-title">${esc(l.drv)} — lap ${l.lap}${l.pb ? " · PB" : ""}${l.del ? " · DELETED" : ""}</div>
+      <table><tr><td>Time</td><td class="num"><b>${fmtLap(l.t)}</b>${S.fuelOn && isRace ? ` <span style="color:var(--ink3)">(fc ${fmtLap(Math.round(fc(l)))})</span>` : ""}</td></tr>
+      <tr><td>Sectors</td><td class="num">${fmtSec(l.s1)} / ${fmtSec(l.s2)} / ${fmtSec(l.s3)}</td></tr>
+      <tr><td>Tyre</td><td>${l.cmp ? `${esc(l.cmp)} · ${l.life} laps` : "—"}</td></tr>
+      ${l.pos ? `<tr><td>Position</td><td class="num">P${l.pos}</td></tr>` : ""}
+      ${!f.green ? `<tr><td>Track</td><td>${f.sc ? "Safety Car" : f.vsc ? "VSC" : f.red ? "Red flag" : "Yellow"}</td></tr>` : ""}
+      <tr><td colspan="2" style="color:var(--ink3)">click to add to Telemetry</td></tr></table>`;
+  });
+  legend(div.parentElement, S.colorMode === "compound"
+    ? ["SOFT", "MEDIUM", "HARD", "INTERMEDIATE", "WET"].filter(cc => pts.some(l => l.cmp === cc)).map(cc => ({ color: cmpCol(cc), label: cc, dot: true }))
+    : [...new Map(drvs.map(d => [d.team, d])).values()].map(d => ({ color: teamCol(d.color), label: d.team, dot: true })));
+  if (isRace) legend(div.parentElement, [{ color: "var(--band-sc)", label: "SC band", dot: true }, { color: "var(--band-vsc)", label: "VSC band", dot: true }]);
+
+  // ---- pace distribution ----
+  const c2 = card(root, "Race pace distribution", "clean green-flag laps only" + (S.fuelOn && isRace ? " · fuel-corrected" : ""));
+  const rows = [];
+  for (const d of drvs) {
+    const v = s.laps.filter(l => l.drv === d.abbr && isClean(l)).map(l => fuelCorr(l, s.id));
+    if (v.length >= 3) rows.push({ d, v, med: median(v), q1: quantile(v, .25), q3: quantile(v, .75), p5: quantile(v, .05), p95: quantile(v, .95) });
+  }
+  rows.sort((a, b) => a.med - b.med);
+  if (rows.length < 2) { c2.insertAdjacentHTML("beforeend", `<div class="empty">Not enough clean laps.</div>`); }
+  else {
+    const div2 = document.createElement("div"); div2.className = "chart"; c2.appendChild(div2);
+    const xlo = Math.min(...rows.map(r => r.p5)) - 250, xhi = Math.max(...rows.map(r => r.p95)) + 250;
+    const rh = 26, H = rows.length * rh + 46;
+    const ch2 = Chart(div2, { h: H, xd: [xlo, xhi], yd: [0, rows.length], ml: 100, mb: 30, yticksArr: [], xfmt: v => fmtLap(Math.round(v)), xlab: "lap time", label: "Pace distribution box plot" });
+    const boxes = [];
+    rows.forEach((r, i) => {
+      const cy = ch2.mt + (i + .5) * (ch2.ih / rows.length), col = teamCol(r.d.color);
+      svgEl("text", { x: ch2.ml - 10, y: cy + 4, "text-anchor": "end", "font-size": 11.5, "font-weight": 700, fill: col, class: "num" }, ch2.svg).textContent = r.d.abbr;
+      svgEl("line", { x1: ch2.x(r.p5), x2: ch2.x(r.p95), y1: cy, y2: cy, stroke: col, "stroke-width": 1.4, opacity: .7 }, ch2.plot);
+      const bx = svgEl("rect", { x: ch2.x(r.q1), y: cy - 7, width: Math.max(2, ch2.x(r.q3) - ch2.x(r.q1)), height: 14, fill: col, opacity: .38, rx: 3, stroke: col, "stroke-width": 1 }, ch2.plot);
+      svgEl("line", { x1: ch2.x(r.med), x2: ch2.x(r.med), y1: cy - 8, y2: cy + 8, stroke: col, "stroke-width": 2.4 }, ch2.plot);
+      svgEl("text", { x: Math.min(ch2.x(r.p95) + 7, ch2.ml + ch2.iw - 108), y: cy + 3.5, "font-size": 10, fill: "var(--ink3)", class: "num" }, ch2.svg).textContent = `${fmtLap(Math.round(r.med))} · n=${r.v.length}`;
+      boxes.push(bx);
+    });
+    hoverMarks(boxes, i => {
+      const r = rows[i];
+      return `<div class="t-title">${esc(r.d.abbr)} — ${esc(r.d.team)}</div><table>
+        <tr><td>Median</td><td class="num"><b>${fmtLap(Math.round(r.med))}</b></td></tr>
+        <tr><td>IQR</td><td class="num">${fmtSec(r.q3 - r.q1, 3)}s</td></tr>
+        <tr><td>P5–P95</td><td class="num">${fmtLap(Math.round(r.p5))} – ${fmtLap(Math.round(r.p95))}</td></tr>
+        <tr><td>Clean laps</td><td class="num">${r.v.length}</td></tr></table>`;
+    });
+  }
+
+  // insights
+  const ins = [];
+  const bestL = pts.reduce((a, b) => fc(b) < fc(a) ? b : a);
+  ins.push(`Fastest: <b>${bestL.drv}</b> ${fmtLap(bestL.t)} (lap ${bestL.lap}${bestL.cmp ? ", " + bestL.cmp : ""})`);
+  if (rows && rows.length >= 2) {
+    const cons = [...rows].filter(r => r.v.length >= 8).sort((a, b) => (a.q3 - a.q1) - (b.q3 - b.q1))[0];
+    if (cons) ins.push(`Most consistent: <b>${cons.d.abbr}</b> (IQR ${fmtSec(cons.q3 - cons.q1, 2)}s over ${cons.v.length} laps)`);
+    ins.push(`Pace spread P1→P${rows.length}: <b>${fmtSec(rows.at(-1).med - rows[0].med, 2)}s</b>/lap on median`);
+  }
+  insights(root, ins);
+  root.insertBefore(root.lastChild, root.children[1]);
+}
+
+/* ============ views B: tyres & degradation, long runs ============ */
+"use strict";
+
+function stintsOf(s) {
+  const map = new Map();
+  for (const l of s.laps) {
+    if (l.stint == null) continue;
+    const k = l.drv + "#" + l.stint;
+    if (!map.has(k)) map.set(k, { drv: l.drv, stint: l.stint, laps: [] });
+    map.get(k).laps.push(l);
+  }
+  for (const st of map.values()) {
+    st.laps.sort((a, b) => a.lap - b.lap);
+    st.from = st.laps[0].lap; st.to = st.laps.at(-1).lap;
+    st.cmp = (st.laps.find(l => l.cmp) || {}).cmp || "UNKNOWN";
+    st.startLife = Math.min(...st.laps.map(l => l.life ?? 99));
+    st.fresh = st.laps[0].fresh;
+  }
+  return [...map.values()];
+}
+
+/* robust linear fit of (tyre life, fuel-corrected ms) for one stint */
+function stintFit(st, sid) {
+  const pts0 = st.laps.filter(l => isClean(l) && l.life != null)
+    .filter((l, i, arr) => l.lap > st.from)             // drop first lap of stint
+    .map(l => [l.life, fuelCorrWith(l, sid)]);
+  if (pts0.length < 4) return null;
+  let fit = linfit(pts0);
+  if (!fit) return null;
+  const pts = pts0.filter(([x, y]) => Math.abs(y - (fit.a + fit.b * x)) < 1200);
+  if (pts.length >= 4) fit = linfit(pts) || fit;
+  fit.pts = pts;
+  return fit;
+}
+/* fuel correction that is always on for deg analysis of race sessions */
+function fuelCorrWith(l, sid) {
+  const s = HUB.session(sid);
+  if (!s || !(s.id === "R" || s.id === "S") || !s.totalLaps) return l.t;
+  return l.t - (s.totalLaps - l.lap) * HUB.S.fuelK * 1000;
+}
+
+function degSessionId() {
+  return ["R", "S", "FP1", "FP2", "FP3"].includes(HUB.S.sid) ? HUB.S.sid : "R";
+}
+
+function viewDeg(root) {
+  const sid = degSessionId(), s = HUB.session(sid);
+  const isRace = sid === "R" || sid === "S";
+  if (sid !== HUB.S.sid) root.insertAdjacentHTML("beforeend", `<p class="note">Showing <b>${SNAMES[sid]}</b> — degradation needs long running (Race, Sprint or practice).</p>`);
+
+  const stints = stintsOf(s);
+
+  /* ---- strategy timeline ---- */
+  if (isRace) {
+    const c = card(root, "Strategy", "stint compound + length; hover pit markers for pit-lane time");
+    const drivers = s.drivers.filter(d => d.pos).sort((a, b) => a.pos - b.pos);
+    const total = s.totalLaps || Math.max(...s.laps.map(l => l.lap));
+    const div = document.createElement("div"); div.className = "chart"; c.appendChild(div);
+    const rh = 21, H = drivers.length * rh + 40;
+    const ch = Chart(div, { h: H, xd: [0, total], yd: [0, 1], ml: 88, mb: 28, yticksArr: [], xlab: "lap", label: "Strategy timeline" });
+    const stNodes = [], stData = [];
+    drivers.forEach((d, i) => {
+      const cy = ch.mt + i * (ch.ih / drivers.length) + (ch.ih / drivers.length) / 2;
+      svgEl("text", { x: ch.ml - 8, y: cy + 3.5, "text-anchor": "end", "font-size": 10.5, "font-weight": 700, fill: teamCol(d.color), class: "num" }, ch.svg).textContent = `P${d.pos} ${d.abbr}`;
+      const dst = stints.filter(t => t.drv === d.abbr).sort((a, b) => a.from - b.from);
+      for (const t of dst) {
+        const x0 = ch.x(t.from - 1), x1 = ch.x(t.to);
+        const r = svgEl("rect", { x: x0 + 1, y: cy - 7, width: Math.max(1, x1 - x0 - 2), height: 14, rx: 3.5, fill: cmpCol(t.cmp), opacity: .88, stroke: "var(--surface)", "stroke-width": 1 }, ch.plot);
+        if (x1 - x0 > 26) svgEl("text", { x: (x0 + x1) / 2, y: cy + 3.2, "text-anchor": "middle", "font-size": 9, "font-weight": 800, fill: "#0b0d10" }, ch.plot).textContent = (CMP_LETTER[t.cmp] || "?") + (t.startLife > 1 ? "•" : "") + (t.to - t.from + 1);
+        stNodes.push(r); stData.push({ t, d });
+      }
+      // pit markers
+      const inLaps = s.laps.filter(l => l.drv === d.abbr && l.in);
+      for (const l of inLaps) {
+        const nx = s.laps.find(n => n.drv === d.abbr && n.lap === l.lap + 1 && n.pitOut != null);
+        const dur = nx && l.pitIn != null ? nx.pitOut - l.pitIn : null;
+        const m = svgEl("path", { d: `M${ch.x(l.lap)},${cy - 10} l4,-5 l-8,0 Z`, fill: "var(--ink2)" }, ch.plot);
+        m.style.cursor = "default";
+        m.addEventListener("pointermove", ev => tipShow(`<div class="t-title">${d.abbr} — pit lap ${l.lap}</div>pit lane: <b class="num">${dur ? fmtSec(dur, 1) + "s" : "?"}</b>`, ev));
+        m.addEventListener("pointerleave", tipHide);
+      }
+    });
+    hoverMarks(stNodes, i => {
+      const { t, d } = stData[i];
+      const clean = t.laps.filter(isClean).map(l => l.t);
+      const fit = stintFit(t, sid);
+      return `<div class="t-title">${d.abbr} stint ${t.stint} — ${esc(t.cmp)}${t.startLife > 1 ? " (used, " + t.startLife + " laps old)" : " (new)"}</div><table>
+        <tr><td>Laps</td><td class="num">${t.from}–${t.to} (${t.to - t.from + 1})</td></tr>
+        <tr><td>Median pace</td><td class="num">${clean.length ? fmtLap(Math.round(median(clean))) : "—"}</td></tr>
+        <tr><td>Deg (fuel-corr)</td><td class="num">${fit ? "+" + (fit.b / 1000).toFixed(3) + " s/lap" : "—"}</td></tr></table>`;
+    });
+    legend(div, ["SOFT", "MEDIUM", "HARD", "INTERMEDIATE", "WET"].filter(cc => stints.some(t => t.cmp === cc)).map(cc => ({ color: cmpCol(cc), label: cc, dot: true })).concat([{ color: "var(--ink2)", label: "▲ pit stop", dot: true }]));
+  }
+
+  /* ---- degradation model ---- */
+  const cmps = [...new Set(stints.map(t => t.cmp))].filter(cc => cc !== "UNKNOWN" && stints.filter(t => t.cmp === cc).some(t => stintFit(t, sid)));
+  if (!cmps.length) { card(root, "Tyre degradation").insertAdjacentHTML("beforeend", `<div class="empty">Not enough clean stint running to fit degradation.</div>`); return; }
+  if (!HUB.S.degCmp || !cmps.includes(HUB.S.degCmp)) HUB.S.degCmp = cmps.includes("MEDIUM") ? "MEDIUM" : cmps[0];
+
+  const c2 = card(root, "Tyre degradation", `per-stint baseline removed · first lap of stint dropped · traffic/SC laps excluded${isRace ? ` · fuel-corrected at ${HUB.S.fuelK.toFixed(3)} s/lap` : ""}`);
+  const segEl = document.createElement("div"); segEl.className = "seg mini";
+  for (const cc of cmps) {
+    const b = document.createElement("button");
+    b.innerHTML = cmpDot(cc) + " " + cc;
+    if (cc === HUB.S.degCmp) b.classList.add("on");
+    b.addEventListener("click", () => { HUB.S.degCmp = cc; HUB.render(); });
+    segEl.appendChild(b);
+  }
+  c2.querySelector(".right").appendChild(segEl);
+
+  // pooled normalized points per team
+  const teams = new Map(); // team -> {col, pts:[[life, dMs]], drvs:Set}
+  for (const t of stints.filter(t => t.cmp === HUB.S.degCmp)) {
+    const fit = stintFit(t, sid);
+    if (!fit) continue;
+    const d = HUB.driver(t.drv, sid);
+    if (!d) continue;
+    if (!teams.has(d.team)) teams.set(d.team, { col: teamCol(d.color), pts: [], drvs: new Set(), stints: 0 });
+    const T = teams.get(d.team);
+    T.stints++;
+    T.drvs.add(t.drv);
+    for (const [x, y] of fit.pts) T.pts.push([x, y - fit.a, t.drv, t.stint]);
+  }
+  const rows = [...teams.entries()].map(([team, T]) => ({ team, ...T, fit: linfit(T.pts.map(p => [p[0], p[1]])) }))
+    .filter(r => r.fit && r.pts.length >= 6).sort((a, b) => a.fit.b - b.fit.b);
+
+  if (!rows.length) { c2.insertAdjacentHTML("beforeend", `<div class="empty">Not enough data on this compound.</div>`); }
+  else {
+    const div2 = document.createElement("div"); div2.className = "chart"; c2.appendChild(div2);
+    const allPts = rows.flatMap(r => r.pts);
+    const xmax = Math.max(...allPts.map(p => p[0])) + 1;
+    const ylo = Math.min(quantile(allPts.map(p => p[1]), 0.02), -200), yhi = Math.max(quantile(allPts.map(p => p[1]), 0.985) + 300, 800);
+    const ch2 = Chart(div2, { h: 360, xd: [0, xmax], yd: [ylo, yhi], yfmt: v => (v / 1000).toFixed(1), xlab: "tyre life (laps)", ylab: "Δ pace vs stint baseline (s)", label: "Degradation scatter" });
+    const nodes = [], data = [];
+    const labels = [];
+    for (const r of rows) {
+      for (const p of r.pts) {
+        const n = svgEl("circle", { cx: ch2.x(p[0]), cy: ch2.y(p[1]), r: 2.8, fill: r.col, opacity: .5 }, ch2.plot);
+        nodes.push(n); data.push({ p, r });
+      }
+      const f = r.fit;
+      svgEl("line", { x1: ch2.x(0), y1: ch2.y(f.a), x2: ch2.x(xmax), y2: ch2.y(f.a + f.b * xmax), stroke: r.col, "stroke-width": 2.4 }, ch2.plot);
+      const yEnd = Math.min(Math.max(f.a + f.b * xmax, ylo + 100), yhi - 100);
+      labels.push({ y: ch2.y(yEnd) - 6, txt: r.team, col: r.col });
+    }
+    spreadLabels(labels, 12, ch2.mt + 8, ch2.mt + ch2.ih - 4);
+    for (const L of labels)
+      svgEl("text", { x: ch2.ml + ch2.iw - 4, y: L.y, "text-anchor": "end", "font-size": 10, "font-weight": 700, fill: L.col }, ch2.svg).textContent = L.txt;
+    hoverMarks(nodes, i => {
+      const { p, r } = data[i];
+      return `<div class="t-title">${esc(p[2])} stint ${p[3]} — ${esc(r.team)}</div>tyre life ${p[0]} · Δ <b class="num">${(p[1] / 1000).toFixed(3)}s</b> vs stint baseline`;
+    });
+    legend(div2, rows.map(r => ({ color: r.col, label: r.team })));
+
+    const wrap = document.createElement("div"); wrap.className = "tblwrap"; c2.appendChild(wrap);
+    wrap.innerHTML = `<table class="t"><thead><tr><th>Team</th><th class="r">Deg (s/lap)</th><th class="r">±10 laps costs</th><th class="r">Stints</th><th class="r">Laps</th><th>Drivers</th></tr></thead><tbody>` +
+      rows.map((r, i) => `<tr><td><span class="drv-cell"><span class="dot" style="background:${r.col}"></span>${esc(r.team)}</span></td>
+        <td class="r num" style="${i === 0 ? "color:var(--green);font-weight:700" : i === rows.length - 1 ? "color:var(--red);font-weight:700" : ""}">+${(r.fit.b / 1000).toFixed(3)}</td>
+        <td class="r num">${(r.fit.b / 100).toFixed(2)}s</td>
+        <td class="r num">${r.stints}</td><td class="r num">${r.pts.length}</td><td>${[...r.drvs].join(" ")}</td></tr>`).join("") + "</tbody></table>";
+
+    insights(root, [
+      `Kindest to the ${HUB.S.degCmp.toLowerCase()}: <b>${rows[0].team}</b> at +${(rows[0].fit.b / 1000).toFixed(3)} s/lap`,
+      rows.length > 1 ? `Highest deg: <b>${rows.at(-1).team}</b> (+${(rows.at(-1).fit.b / 1000).toFixed(3)} s/lap) — ${((rows.at(-1).fit.b - rows[0].fit.b) / 100).toFixed(2)}s more over a 10-lap stint` : "",
+    ].filter(Boolean));
+  }
+
+  /* ---- stint explorer ---- */
+  const c3 = card(root, "All stints", "every stint with a fit; sorted by pace");
+  const srows = stints.map(t => {
+    const clean = t.laps.filter(isClean);
+    const fit = stintFit(t, sid);
+    const d = HUB.driver(t.drv, sid);
+    return { t, d, fit, med: clean.length ? median(clean.map(l => fuelCorrWith(l, sid))) : null, best: clean.length ? Math.min(...clean.map(l => l.t)) : null, n: clean.length };
+  }).filter(r => r.n >= 3 && r.med != null && r.d).sort((a, b) => a.med - b.med);
+  const w3 = document.createElement("div"); w3.className = "tblwrap"; w3.style.maxHeight = "420px"; w3.style.overflowY = "auto"; c3.appendChild(w3);
+  w3.innerHTML = `<table class="t"><thead><tr><th>Driver</th><th>Tyre</th><th class="r">Laps</th><th class="r">Stint len</th><th class="r">Median${isRace ? " (fc)" : ""}</th><th class="r">Best</th><th class="r">Deg s/lap</th></tr></thead><tbody>` +
+    srows.map(r => `<tr><td>${drvCell(r.d)}</td><td>${cmpDot(r.t.cmp)} ${r.t.startLife > 1 ? `<span class="hint">+${r.t.startLife - 1} old</span>` : ""}</td>
+      <td class="r num">${r.t.from}–${r.t.to}</td><td class="r num">${r.t.to - r.t.from + 1}</td>
+      <td class="r num">${fmtLap(Math.round(r.med))}</td><td class="r num">${fmtLap(r.best)}</td>
+      <td class="r num">${r.fit ? "+" + (r.fit.b / 1000).toFixed(3) : "—"}</td></tr>`).join("") + "</tbody></table>";
+}
+
+/* ---------- LONG RUNS (practice) ---------- */
+function viewLongRuns(root) {
+  const practiceIds = HUB.data.sessions.filter(s => s.id.startsWith("FP")).map(s => s.id);
+  if (!practiceIds.length) { root.innerHTML = `<div class="empty">No practice session in this weekend.</div>`; return; }
+  const sid = practiceIds.includes(HUB.S.sid) ? HUB.S.sid : practiceIds[0];
+  const s = HUB.session(sid);
+  if (sid !== HUB.S.sid) root.insertAdjacentHTML("beforeend", `<p class="note">Long-run detection uses <b>${SNAMES[sid]}</b>.</p>`);
+
+  // detect runs
+  const runs = [];
+  for (const t of stintsOf(s)) {
+    const laps = t.laps.filter(l => l.t != null && !l.in && !l.out && !l.del);
+    if (laps.length < 5) continue;
+    const med = median(laps.map(l => l.t));
+    const run = laps.filter(l => l.t < med * 1.035);   // strip cool-down / traffic laps
+    if (run.length < 5) continue;
+    const d = HUB.driver(t.drv, sid);
+    if (!d) continue;
+    const fit = linfit(run.map((l, i) => [i, l.t]));
+    runs.push({ t, d, run, med: median(run.map(l => l.t)), best: Math.min(...run.map(l => l.t)), fit, key: t.drv + "#" + t.stint });
+  }
+  runs.sort((a, b) => a.med - b.med);
+  // drop junk "runs" (constant-speed running, aero rakes, traffic sims) far off genuine long-run pace
+  if (runs.length > 1) {
+    const ref = runs[0].med;
+    for (let i = runs.length - 1; i >= 0; i--) if (runs[i].med > ref * 1.12) runs.splice(i, 1);
+  }
+  if (!runs.length) { root.insertAdjacentHTML("beforeend", `<div class="empty">No stint of 5+ representative laps found — nobody did race sims here.</div>`); return; }
+
+  if (!HUB.S.lrSel) {
+    const seen = new Set(); HUB.S.lrSel = new Set();
+    for (const r of runs) { if (!seen.has(r.d.team)) { seen.add(r.d.team); HUB.S.lrSel.add(r.key); } if (HUB.S.lrSel.size >= 6) break; }
+  }
+
+  const c = card(root, "Long runs", `stints of 5+ laps in ${SNAMES[sid]} · out/in and cool-down laps stripped · fuel loads unknown`);
+  const chips = document.createElement("div"); chips.className = "drv-rail"; c.appendChild(chips);
+  for (const r of runs) {
+    const on = HUB.S.lrSel.has(r.key);
+    const b = document.createElement("button");
+    b.className = "chip sm " + (on ? "on" : "off");
+    b.innerHTML = `<span class="dot" style="background:${teamCol(r.d.color)}"></span>${r.d.abbr} ${cmpDot(r.t.cmp, 13)} <span class="num">${r.run.length}L</span>`;
+    b.addEventListener("click", () => { on ? HUB.S.lrSel.delete(r.key) : HUB.S.lrSel.add(r.key); HUB.render(); });
+    chips.appendChild(b);
+  }
+  const sel = runs.filter(r => HUB.S.lrSel.has(r.key));
+  if (sel.length) {
+    const div = document.createElement("div"); div.className = "chart"; c.appendChild(div);
+    const allT = sel.flatMap(r => r.run.map(l => l.t));
+    const maxN = Math.max(...sel.map(r => r.run.length));
+    const ch = Chart(div, {
+      h: 340, xd: [0.6, maxN + 0.4], yd: [Math.min(...allT) - 300, quantile(allT, 0.97) + 500],
+      yfmt: v => fmtLap(Math.round(v)), xfmt: v => Number.isInteger(v) ? v : "", xlab: "lap in run", ylab: "lap time", label: "Long run comparison"
+    });
+    const nodes = [], data = [];
+    for (const r of sel) {
+      const col = teamCol(r.d.color);
+      const pts = r.run.map((l, i) => [i + 1, l.t]);
+      const p = svgEl("path", { d: linePath(pts, ch.x, ch.y), fill: "none", stroke: col, "stroke-width": 1.8, opacity: .9 }, ch.plot);
+      if (drvDash(r.d.abbr, sid)) p.setAttribute("stroke-dasharray", "6 3");
+      pts.forEach(([xx, yy], i) => {
+        const n = svgEl("circle", { cx: ch.x(xx), cy: ch.y(yy), r: 3.4, fill: cmpCol(r.t.cmp), stroke: col, "stroke-width": 1.4 }, ch.plot);
+        nodes.push(n); data.push({ r, i });
+      });
+      const last = pts.at(-1);
+      svgEl("text", { x: ch.x(last[0]) + 6, y: ch.y(last[1]) + 3.5, "font-size": 10, "font-weight": 700, fill: col, class: "num" }, ch.svg).textContent = r.d.abbr;
+    }
+    hoverMarks(nodes, i => {
+      const { r, i: li } = data[i];
+      const l = r.run[li];
+      return `<div class="t-title">${r.d.abbr} — ${esc(r.t.cmp)} run, lap ${li + 1}/${r.run.length}</div>
+        <b class="num">${fmtLap(l.t)}</b> · tyre life ${l.life} · session lap ${l.lap}<br><span style="color:var(--ink3)">click dot in Pace view to add to telemetry</span>`;
+    });
+    legend(div, [...new Map(sel.map(r => [r.d.team, r])).values()].map(r => ({ color: teamCol(r.d.color), label: r.d.team })));
+  }
+
+  const c2 = card(root, "Run ranking");
+  const w = document.createElement("div"); w.className = "tblwrap"; c2.appendChild(w);
+  w.innerHTML = `<table class="t"><thead><tr><th class="r">#</th><th>Driver</th><th>Tyre</th><th class="r">Laps</th><th class="r">Median</th><th class="r">Best</th><th class="r">Trend s/lap</th><th class="r">Gap</th></tr></thead><tbody>` +
+    runs.map((r, i) => `<tr><td class="r num">${i + 1}</td><td>${drvCell(r.d)}</td><td>${cmpDot(r.t.cmp)}${r.t.startLife > 1 ? ` <span class="hint">used</span>` : ""}</td>
+      <td class="r num">${r.run.length}</td><td class="r num ${i === 0 ? "best" : ""}">${fmtLap(Math.round(r.med))}</td><td class="r num">${fmtLap(r.best)}</td>
+      <td class="r num">${r.fit ? (r.fit.b >= 0 ? "+" : "") + (r.fit.b / 1000).toFixed(3) : "—"}</td>
+      <td class="r num">${i === 0 ? "—" : fmtDelta(r.med - runs[0].med)}</td></tr>`).join("") + "</tbody></table>";
+  c2.insertAdjacentHTML("beforeend", `<p class="note">Median long-run pace, unknown fuel — treat gaps across teams as indicative, trends within a run as real.</p>`);
+
+  insights(root, [
+    `Best long-run pace: <b>${runs[0].d.abbr}</b> ${fmtLap(Math.round(runs[0].med))} on ${runs[0].t.cmp.toLowerCase()}s (${runs[0].run.length} laps)`,
+    runs.find(r => r.fit && r.fit.b < 20) ? `Flattest run: <b>${[...runs].filter(r => r.fit).sort((a, b) => a.fit.b - b.fit.b)[0].d.abbr}</b> — barely any drop-off` : "",
+  ].filter(Boolean));
+}
+
+/* ============ views C: qualifying, race ============ */
+"use strict";
+
+function viewQuali(root) {
+  const qids = HUB.data.sessions.filter(s => s.id === "Q" || s.id === "SQ").map(s => s.id);
+  if (!qids.length) { root.innerHTML = `<div class="empty">No qualifying session.</div>`; return; }
+  const sid = qids.includes(HUB.S.sid) ? HUB.S.sid : "Q";
+  const s = HUB.session(sid), pfx = sid === "SQ" ? "SQ" : "Q";
+  if (sid !== HUB.S.sid) root.insertAdjacentHTML("beforeend", `<p class="note">Showing <b>${SNAMES[sid]}</b> — switch the session picker to ${qids.filter(q => q !== sid).map(q => SNAMES[q]).join("/") || "…"} for the other one.</p>`);
+
+  const seg = HUB.S.qseg;
+  const c = card(root, "Gap ladder");
+  const segEl = document.createElement("div"); segEl.className = "seg mini";
+  [1, 2, 3].forEach(i => {
+    const b = document.createElement("button"); b.textContent = pfx + i;
+    if (i === seg) b.classList.add("on");
+    b.addEventListener("click", () => { HUB.S.qseg = i; HUB.render(); });
+    segEl.appendChild(b);
+  });
+  c.querySelector(".right").appendChild(segEl);
+
+  // best lap per driver in segment (laps table; fall back to results q1/q2/q3)
+  const rows = [];
+  for (const d of s.drivers) {
+    const laps = s.laps.filter(l => l.drv === d.abbr && l.q === seg && l.t != null && !l.del);
+    const best = laps.length ? laps.reduce((a, b) => a.t < b.t ? a : b) : null;
+    const t = best ? best.t : d["q" + seg];
+    if (t != null) rows.push({ d, t, best });
+  }
+  rows.sort((a, b) => a.t - b.t);
+  if (!rows.length) { c.insertAdjacentHTML("beforeend", `<div class="empty">No laps in this segment.</div>`); }
+  else {
+    const p1 = rows[0].t;
+    const div = document.createElement("div"); div.className = "chart"; c.appendChild(div);
+    const gmax = Math.max(...rows.map(r => r.t - p1), 800);
+    const rh = 23, H = rows.length * rh + 40;
+    const ch = Chart(div, { h: H, xd: [0, gmax * 1.15], yd: [0, 1], ml: 96, mb: 26, yticksArr: [], xfmt: v => "+" + (v / 1000).toFixed(2), xlab: "gap (s)", label: "Qualifying gap ladder" });
+    const bars = [];
+    rows.forEach((r, i) => {
+      const cy = ch.mt + i * (ch.ih / rows.length) + (ch.ih / rows.length) / 2, col = teamCol(r.d.color);
+      svgEl("text", { x: ch.ml - 8, y: cy + 3.5, "text-anchor": "end", "font-size": 11, "font-weight": 700, fill: col, class: "num" }, ch.svg).textContent = `${i + 1}. ${r.d.abbr}`;
+      const w = Math.max(2, ch.x(r.t - p1) - ch.x(0));
+      const bar = svgEl("rect", { x: ch.x(0), y: cy - 7.5, width: w, height: 15, rx: 3, fill: col, opacity: i === 0 ? 1 : .75 }, ch.plot);
+      svgEl("text", { x: ch.x(0) + w + 6, y: cy + 3.5, "font-size": 10.5, fill: "var(--ink2)", class: "num" }, ch.plot).textContent = i === 0 ? fmtLap(r.t) : "+" + ((r.t - p1) / 1000).toFixed(3);
+      bars.push(bar);
+      const cutN = pfx === "Q" || pfx === "SQ" ? (seg === 1 ? 15 : seg === 2 ? 10 : null) : null;
+      if (cutN && i === cutN - 1 && rows.length > cutN)
+        svgEl("line", { x1: ch.ml, x2: ch.ml + ch.iw, y1: cy + (ch.ih / rows.length) / 2, y2: cy + (ch.ih / rows.length) / 2, stroke: "var(--red)", "stroke-width": 1, "stroke-dasharray": "5 4" }, ch.plot);
+    });
+    hoverMarks(bars, i => {
+      const r = rows[i];
+      return `<div class="t-title">${r.d.abbr} — ${esc(r.d.team)}</div><b class="num">${fmtLap(r.t)}</b>${r.best ? ` · lap ${r.best.lap} · ${esc(r.best.cmp || "")}` : ""}${i > 0 ? `<br>+${((r.t - p1) / 1000).toFixed(3)}s to ${rows[0].d.abbr}` : ""}`;
+    });
+  }
+
+  /* ---- sectors ---- */
+  const c2 = card(root, "Sector analysis", `${pfx}${seg} · best individual sectors · purple = best overall`);
+  const secRows = [];
+  for (const d of s.drivers) {
+    const laps = s.laps.filter(l => l.drv === d.abbr && l.q === seg && !l.del);
+    const b1 = Math.min(...laps.map(l => l.s1 ?? 1e12)), b2 = Math.min(...laps.map(l => l.s2 ?? 1e12)), b3 = Math.min(...laps.map(l => l.s3 ?? 1e12));
+    const bl = laps.filter(l => l.t != null);
+    const best = bl.length ? Math.min(...bl.map(l => l.t)) : null;
+    if (b1 < 1e11 && b2 < 1e11 && b3 < 1e11) secRows.push({ d, b1, b2, b3, ideal: b1 + b2 + b3, best });
+  }
+  if (secRows.length) {
+    const m1 = Math.min(...secRows.map(r => r.b1)), m2 = Math.min(...secRows.map(r => r.b2)), m3 = Math.min(...secRows.map(r => r.b3));
+    secRows.sort((a, b) => a.ideal - b.ideal);
+    const w2 = document.createElement("div"); w2.className = "tblwrap"; c2.appendChild(w2);
+    w2.innerHTML = `<table class="t"><thead><tr><th>Driver</th><th class="r">Best S1</th><th class="r">Best S2</th><th class="r">Best S3</th><th class="r">Ideal lap</th><th class="r">Actual best</th><th class="r">Left on table</th></tr></thead><tbody>` +
+      secRows.map(r => `<tr><td>${drvCell(r.d)}</td>
+        <td class="r num ${r.b1 === m1 ? "best" : ""}">${fmtSec(r.b1)}</td>
+        <td class="r num ${r.b2 === m2 ? "best" : ""}">${fmtSec(r.b2)}</td>
+        <td class="r num ${r.b3 === m3 ? "best" : ""}">${fmtSec(r.b3)}</td>
+        <td class="r num">${fmtLap(r.ideal)}</td><td class="r num">${fmtLap(r.best)}</td>
+        <td class="r num" style="color:${r.best && r.best - r.ideal > 150 ? "var(--yellow)" : "var(--ink3)"}">${r.best ? fmtDelta(r.best - r.ideal) : "—"}</td></tr>`).join("") + "</tbody></table>";
+    const theo = secRows[0];
+    insights(root, [
+      `Theoretical best lap: <b>${theo.d.abbr}</b> ${fmtLap(theo.ideal)} (S1 ${fmtSec(theo.b1)} · S2 ${fmtSec(theo.b2)} · S3 ${fmtSec(theo.b3)})`,
+      (() => { const r = [...secRows].filter(r => r.best).sort((a, b) => (b.best - b.ideal) - (a.best - a.ideal))[0]; return r && r.best - r.ideal > 100 ? `Most time left on the table: <b>${r.d.abbr}</b> ${fmtDelta(r.best - r.ideal)}s vs his ideal lap` : ""; })(),
+    ].filter(Boolean));
+  }
+
+  /* ---- track evolution ---- */
+  const c3 = card(root, "Track evolution", "every timed lap vs session clock — watch the track ramp up");
+  const evo = s.laps.filter(l => l.t != null && !l.del && !l.in && !l.out);
+  if (evo.length > 5) {
+    const div3 = document.createElement("div"); div3.className = "chart"; c3.appendChild(div3);
+    const t0 = Math.min(...evo.map(l => l.st)), t1 = Math.max(...evo.map(l => l.st));
+    const vmin = Math.min(...evo.map(l => l.t));
+    const ch3 = Chart(div3, {
+      h: 300, xd: [(0), (t1 - t0) / 60000 + 2], yd: [vmin - 300, quantile(evo.map(l => l.t), 0.9) + 600],
+      xfmt: v => Math.round(v) + "m", yfmt: v => fmtLap(Math.round(v)), xlab: "session time", ylab: "lap time", label: "Track evolution"
+    });
+    const segCol = { 1: "var(--ink3)", 2: "var(--yellow)", 3: "var(--purple)" };
+    const nodes = [], data = [];
+    let bests = [];
+    let bmin = 1e12;
+    for (const l of [...evo].sort((a, b) => a.st - b.st)) {
+      if (l.t < bmin) { bmin = l.t; bests.push([(l.st - t0) / 60000, l.t]); }
+    }
+    for (const l of evo) {
+      const n = svgEl("circle", { cx: ch3.x((l.st - t0) / 60000), cy: ch3.y(l.t), r: 3, fill: segCol[l.q] || "var(--ink3)", opacity: .65 }, ch3.plot);
+      nodes.push(n); data.push(l);
+    }
+    bests.push([(t1 - t0) / 60000 + 2, bmin]);
+    svgEl("path", { d: stepPath(bests, ch3.x, ch3.y), fill: "none", stroke: "var(--green)", "stroke-width": 1.6, "stroke-dasharray": "2 3" }, ch3.plot);
+    hoverMarks(nodes, i => {
+      const l = data[i];
+      return `<div class="t-title">${l.drv} — ${pfx}${l.q || "?"} lap ${l.lap}</div><b class="num">${fmtLap(l.t)}</b> · ${esc(l.cmp || "")} ${l.life ? "(" + l.life + " laps)" : ""}`;
+    });
+    legend(div3, [{ color: "var(--ink3)", label: pfx + "1", dot: true }, { color: "var(--yellow)", label: pfx + "2", dot: true }, { color: "var(--purple)", label: pfx + "3", dot: true }, { color: "var(--green)", label: "session best so far" }]);
+  }
+
+  /* ---- speed traps ---- */
+  const c4 = card(root, "Speed traps", "session maximums per driver");
+  const sp = [];
+  for (const d of s.drivers) {
+    const laps = s.laps.filter(l => l.drv === d.abbr);
+    const mx = k => { const v = laps.map(l => l[k]).filter(v => v != null); return v.length ? Math.max(...v) : null; };
+    const r = { d, i1: mx("spI1"), i2: mx("spI2"), fl: mx("spFL"), st: mx("spST") };
+    if (r.st != null || r.fl != null) sp.push(r);
+  }
+  sp.sort((a, b) => (b.st ?? 0) - (a.st ?? 0));
+  if (sp.length) {
+    const bmax = { i1: Math.max(...sp.map(r => r.i1 ?? 0)), i2: Math.max(...sp.map(r => r.i2 ?? 0)), fl: Math.max(...sp.map(r => r.fl ?? 0)), st: Math.max(...sp.map(r => r.st ?? 0)) };
+    const w4 = document.createElement("div"); w4.className = "tblwrap"; c4.appendChild(w4);
+    const stmin = Math.min(...sp.map(r => r.st ?? 999));
+    w4.innerHTML = `<table class="t"><thead><tr><th>Driver</th><th class="r">Speed trap</th><th></th><th class="r">Intermediate 1</th><th class="r">Intermediate 2</th><th class="r">Finish line</th></tr></thead><tbody>` +
+      sp.map(r => `<tr><td>${drvCell(r.d)}</td>
+        <td class="r num ${r.st === bmax.st ? "best" : ""}">${r.st ?? "—"} km/h</td>
+        <td style="min-width:110px"><div style="height:5px;border-radius:3px;background:var(--surface3);overflow:hidden"><div style="height:100%;width:${r.st ? ((r.st - stmin + 3) / (bmax.st - stmin + 3) * 100).toFixed(0) : 0}%;background:${teamCol(r.d.color)}"></div></div></td>
+        <td class="r num ${r.i1 === bmax.i1 ? "best" : ""}">${r.i1 ?? "—"}</td>
+        <td class="r num ${r.i2 === bmax.i2 ? "best" : ""}">${r.i2 ?? "—"}</td>
+        <td class="r num ${r.fl === bmax.fl ? "best" : ""}">${r.fl ?? "—"}</td></tr>`).join("") + "</tbody></table>";
+  }
+}
+
+/* ---------- RACE ---------- */
+function viewRace(root) {
+  const rids = HUB.data.sessions.filter(s => s.id === "R" || s.id === "S").map(s => s.id);
+  if (!rids.length) { root.innerHTML = `<div class="empty">No race session.</div>`; return; }
+  const sid = rids.includes(HUB.S.sid) ? HUB.S.sid : "R";
+  const s = HUB.session(sid);
+  if (sid !== HUB.S.sid) root.insertAdjacentHTML("beforeend", `<p class="note">Showing <b>${SNAMES[sid]}</b> — use the session picker for the ${rids.filter(r => r !== sid).map(r => SNAMES[r]).join("/")}.</p>`);
+  driverRail(root);
+  const drvs = selDrivers();
+  const total = s.totalLaps || Math.max(...s.laps.map(l => l.lap));
+
+  // end-of-lap session time per driver
+  const endOf = {}; // drv -> Map(lap -> sessionTime ms)
+  let raceStart = Infinity;
+  for (const d of s.drivers) {
+    const m = new Map();
+    for (const l of s.laps.filter(l => l.drv === d.abbr)) {
+      if (l.st != null && l.t != null) m.set(l.lap, l.st + l.t);
+      if (l.lap === 1 && l.st != null) raceStart = Math.min(raceStart, l.st);
+    }
+    endOf[d.abbr] = m;
+  }
+  const leaderAt = new Map();
+  for (let lap = 1; lap <= total; lap++) {
+    let best = null;
+    for (const d of s.drivers) { const e = endOf[d.abbr].get(lap); if (e != null && (best == null || e < best)) best = e; }
+    if (best != null) leaderAt.set(lap, best);
+  }
+  const winner = s.drivers.find(d => d.pos === 1);
+  // reference = winner's clean-lap median, so green-flag running plots flat and
+  // SC/VSC phases read as shared dips instead of a session-long upward drift
+  const wClean = winner ? s.laps.filter(l => l.drv === winner.abbr && isClean(l)).map(l => l.t) : [];
+  const wEnd = winner && [...endOf[winner.abbr].values()].sort((a, b) => b - a)[0];
+  const wLaps = winner && Math.max(...[...endOf[winner.abbr].keys()]);
+  const refAvg = wClean.length >= 5 ? median(wClean)
+    : (winner && wEnd != null ? (wEnd - raceStart) / wLaps : 95000);
+
+  // SC bands helper
+  const worst = {};
+  for (const l of s.laps) { const f = tsFlags(l.ts); const w = f.red ? 3 : f.sc ? 2 : f.vsc ? 1 : 0; worst[l.lap] = Math.max(worst[l.lap] || 0, w); }
+  const drawBands = ch => {
+    for (const lap in worst) {
+      if (!worst[lap]) continue;
+      const fill = worst[lap] === 3 ? "var(--band-red)" : worst[lap] === 2 ? "var(--band-sc)" : "var(--band-vsc)";
+      svgEl("rect", { x: ch.x(lap - 1), y: ch.mt, width: ch.x(+lap) - ch.x(lap - 1), height: ch.ih, fill }, ch.plot);
+    }
+  };
+
+  /* ---- race trace ---- */
+  const c1 = card(root, "Race trace", `gap to a constant ${fmtLap(Math.round(refAvg))} reference (winner's clean-lap median) — flat = reference pace, pit stops and SC are the drops`);
+  if (drvs.length) {
+    const div = document.createElement("div"); div.className = "chart"; c1.appendChild(div);
+    const series = drvs.map(d => {
+      const pts = [[0, 0]];
+      for (let lap = 1; lap <= total; lap++) {
+        const e = endOf[d.abbr].get(lap);
+        pts.push(e == null ? null : [lap, (refAvg * lap - (e - raceStart)) / 1000]);
+      }
+      return { d, pts };
+    });
+    const ys = series.flatMap(sr => sr.pts.filter(Boolean).map(p => p[1]));
+    const ch = Chart(div, { h: 420, mr: 46, xd: [0, total], yd: [quantile(ys, 0.01) - 4, Math.max(...ys) + 4], xlab: "lap", ylab: "gap to reference (s)", yfmt: v => v.toFixed(0), label: "Race trace" });
+    drawBands(ch);
+    const nodes = [], data = [];
+    for (const sr of series) {
+      const col = teamCol(sr.d.color);
+      const p = svgEl("path", { d: linePath(sr.pts, ch.x, v => ch.y(v)), fill: "none", stroke: col, "stroke-width": 1.7, opacity: .9 }, ch.plot);
+      if (drvDash(sr.d.abbr)) p.setAttribute("stroke-dasharray", "6 3");
+      // pit markers
+      for (const l of s.laps.filter(l => l.drv === sr.d.abbr && l.in)) {
+        const pt = sr.pts[l.lap];
+        if (pt) { const n = svgEl("circle", { cx: ch.x(pt[0]), cy: ch.y(pt[1]), r: 3.6, fill: "var(--surface)", stroke: col, "stroke-width": 2 }, ch.plot); nodes.push(n); data.push({ d: sr.d, l }); }
+      }
+    }
+    const endL = series.map(sr => {
+      const last = sr.pts.filter(Boolean).at(-1);
+      return last ? { y: ch.y(last[1]) + 3.5, x: ch.x(last[0]) + 5, txt: sr.d.abbr, col: teamCol(sr.d.color) } : null;
+    }).filter(Boolean);
+    spreadLabels(endL, 11, ch.mt + 6, ch.mt + ch.ih);
+    for (const L of endL)
+      svgEl("text", { x: Math.min(L.x, ch.ml + ch.iw + 4), y: L.y, "font-size": 10, "font-weight": 700, fill: L.col, class: "num" }, ch.svg).textContent = L.txt;
+    hoverMarks(nodes, i => {
+      const { d, l } = data[i];
+      const nx = s.laps.find(n => n.drv === d.abbr && n.lap === l.lap + 1 && n.pitOut != null);
+      const dur = nx && l.pitIn != null ? nx.pitOut - l.pitIn : null;
+      return `<div class="t-title">${d.abbr} — pit stop, lap ${l.lap}</div>pit lane: <b class="num">${dur ? fmtSec(dur, 1) + "s" : "?"}</b> · from ${esc(l.cmp || "?")}`;
+    });
+    // crosshair with gap readout
+    raceCross(ch, div, series, s);
+    legend(div, [{ color: "var(--band-sc)", label: "SC", dot: true }, { color: "var(--band-vsc)", label: "VSC", dot: true }, { color: "var(--ink2)", label: "○ pit stop", dot: true }]);
+  } else c1.insertAdjacentHTML("beforeend", `<div class="empty">Select drivers above.</div>`);
+
+  /* ---- position chart ---- */
+  const c2 = card(root, "Position changes");
+  if (drvs.length) {
+    const div2 = document.createElement("div"); div2.className = "chart"; c2.appendChild(div2);
+    const N = s.drivers.filter(d => d.pos).length;
+    const ch2 = Chart(div2, { h: Math.max(320, N * 19), xd: [0, total], yd: [0.5, N + 0.5], yflip: true, ml: 64, mr: 64, yticksArr: [], xlab: "lap", label: "Position chart" });
+    drawBands(ch2);
+    const leftL = [], rightL = [];
+    for (const d of drvs) {
+      const col = teamCol(d.color);
+      const pts = [];
+      if (d.grid) pts.push([0, d.grid]);
+      for (let lap = 1; lap <= total; lap++) {
+        const l = s.laps.find(l => l.drv === d.abbr && l.lap === lap);
+        pts.push(l && l.pos ? [lap, l.pos] : null);
+      }
+      const p = svgEl("path", { d: stepPath(pts, ch2.x, ch2.y), fill: "none", stroke: col, "stroke-width": 2 }, ch2.plot);
+      if (drvDash(d.abbr)) p.setAttribute("stroke-dasharray", "6 3");
+      const first = pts.find(Boolean), last = pts.filter(Boolean).at(-1);
+      if (first) leftL.push({ y: ch2.y(first[1]) + 3.5, txt: `${first[1]}. ${d.abbr}`, col });
+      if (last) rightL.push({ y: ch2.y(last[1]) + 3.5, txt: `${d.abbr} ${last[1]}.`, col });
+    }
+    spreadLabels(leftL, 11, ch2.mt + 4, ch2.mt + ch2.ih);
+    spreadLabels(rightL, 11, ch2.mt + 4, ch2.mt + ch2.ih);
+    for (const L of leftL) svgEl("text", { x: ch2.ml - 8, y: L.y, "text-anchor": "end", "font-size": 10, "font-weight": 700, fill: L.col, class: "num" }, ch2.svg).textContent = L.txt;
+    for (const L of rightL) svgEl("text", { x: ch2.ml + ch2.iw + 6, y: L.y, "font-size": 10, "font-weight": 700, fill: L.col, class: "num" }, ch2.svg).textContent = L.txt;
+  }
+
+  const g = document.createElement("div"); g.className = "grid2"; root.appendChild(g);
+
+  /* ---- pit stops ---- */
+  const c3 = card(g, "Pit stops", "pit-lane time = pit entry to pit exit (not stationary time)");
+  const stops = [];
+  for (const l of s.laps.filter(l => l.in)) {
+    const nx = s.laps.find(n => n.drv === l.drv && n.lap === l.lap + 1);
+    const dur = nx && nx.pitOut != null && l.pitIn != null ? nx.pitOut - l.pitIn : null;
+    const d = HUB.driver(l.drv, sid);
+    if (d) stops.push({ d, l, dur, to: nx && nx.cmp, from: l.cmp });
+  }
+  stops.sort((a, b) => (a.dur ?? 9e9) - (b.dur ?? 9e9));
+  const medStop = median(stops.map(st => st.dur).filter(Boolean));
+  const w3 = document.createElement("div"); w3.className = "tblwrap"; w3.style.maxHeight = "400px"; w3.style.overflowY = "auto"; c3.appendChild(w3);
+  w3.innerHTML = `<table class="t"><thead><tr><th>Driver</th><th class="r">Lap</th><th>Change</th><th class="r">Pit lane</th><th class="r">vs median</th></tr></thead><tbody>` +
+    stops.map((st, i) => `<tr><td>${drvCell(st.d)}</td><td class="r num">${st.l.lap}</td>
+      <td>${st.from ? cmpDot(st.from) : "?"} → ${st.to ? cmpDot(st.to) : "?"}</td>
+      <td class="r num ${i === 0 ? "best" : ""}">${st.dur ? fmtSec(st.dur, 1) + "s" : "—"}</td>
+      <td class="r num" style="color:${st.dur && medStop && st.dur - medStop > 1500 ? "var(--red)" : "var(--ink3)"}">${st.dur && medStop ? fmtDelta(st.dur - medStop, 1) : ""}</td></tr>`).join("") + "</tbody></table>";
+  if (medStop) c3.insertAdjacentHTML("beforeend", `<p class="note">Median pit-lane time: <b class="num">${fmtSec(medStop, 1)}s</b> · ${stops.length} stops</p>`);
+
+  /* ---- start analysis ---- */
+  const c4 = card(g, "Lap 1", "positions gained and lost from the grid");
+  const l1 = s.drivers.filter(d => d.grid).map(d => {
+    const l = s.laps.find(l => l.drv === d.abbr && l.lap === 1);
+    return l && l.pos ? { d, delta: d.grid - l.pos, p1: l.pos } : null;
+  }).filter(Boolean).sort((a, b) => b.delta - a.delta);
+  if (l1.length) {
+    const div4 = document.createElement("div"); div4.className = "chart"; c4.appendChild(div4);
+    const mx = Math.max(...l1.map(r => Math.abs(r.delta)), 2);
+    const rh = 19, H = l1.length * rh + 36;
+    const ch4 = Chart(div4, { h: H, xd: [-mx - 0.5, mx + 0.5], yd: [0, 1], ml: 66, mb: 24, yticksArr: [], xfmt: v => (v > 0 ? "+" : "") + v, label: "Lap one gains" });
+    const bars = [];
+    l1.forEach((r, i) => {
+      const cy = ch4.mt + i * (ch4.ih / l1.length) + (ch4.ih / l1.length) / 2, col = teamCol(r.d.color);
+      svgEl("text", { x: ch4.ml - 8, y: cy + 3, "text-anchor": "end", "font-size": 10.5, "font-weight": 700, fill: col, class: "num" }, ch4.svg).textContent = r.d.abbr;
+      const x0 = ch4.x(0), x1 = ch4.x(r.delta);
+      const bar = svgEl("rect", { x: Math.min(x0, x1), y: cy - 6, width: Math.max(2, Math.abs(x1 - x0)), height: 12, rx: 3, fill: r.delta >= 0 ? "var(--green)" : "var(--red)", opacity: .8 }, ch4.plot);
+      svgEl("text", { x: r.delta >= 0 ? x1 + 5 : x1 - 5, y: cy + 3, "text-anchor": r.delta >= 0 ? "start" : "end", "font-size": 10, fill: "var(--ink2)", class: "num" }, ch4.plot).textContent = (r.delta > 0 ? "+" : "") + r.delta;
+      bars.push(bar);
+    });
+    svgEl("line", { x1: ch4.x(0), x2: ch4.x(0), y1: ch4.mt, y2: ch4.mt + ch4.ih, stroke: "var(--line2)", "stroke-width": 1 }, ch4.plot);
+    hoverMarks(bars, i => { const r = l1[i]; return `<div class="t-title">${r.d.abbr}</div>P${r.d.grid} grid → P${r.p1} after lap 1`; });
+  }
+
+  const movers = s.drivers.filter(d => d.grid && d.pos).map(d => ({ d, g: d.grid - d.pos })).sort((a, b) => b.g - a.g);
+  insights(root, [
+    stops.length && stops[0].dur ? `Fastest stop: <b>${stops[0].d.abbr}</b> ${fmtSec(stops[0].dur, 1)}s pit lane (lap ${stops[0].l.lap})` : "",
+    movers.length && movers[0].g > 0 ? `Drive of the day candidate: <b>${movers[0].d.abbr}</b> gained ${movers[0].g} places` : "",
+    l1.length ? `Best start: <b>${l1[0].d.abbr}</b> (${l1[0].delta > 0 ? "+" + l1[0].delta : l1[0].delta} on lap 1)` : "",
+  ].filter(Boolean));
+  root.insertBefore(root.lastChild, root.children[2] || null);
+}
+
+/* crosshair for race trace: shows lap + gaps between visible drivers */
+function raceCross(ch, container, series, s) {
+  const vline = svgEl("line", { y1: ch.mt, y2: ch.mt + ch.ih, stroke: "var(--ink3)", "stroke-width": 1, "stroke-dasharray": "3 3", opacity: 0 }, ch.svg);
+  ch.svg.addEventListener("pointermove", e => {
+    const p = pt(e);
+    if (p.x < ch.ml || p.x > ch.ml + ch.iw) { vline.setAttribute("opacity", 0); tipHide(); return; }
+    const lap = Math.round(ch.xd[0] + (p.x - ch.ml) / ch.iw * (ch.xd[1] - ch.xd[0]));
+    if (lap < 1) { vline.setAttribute("opacity", 0); return; }
+    vline.setAttribute("x1", ch.x(lap)); vline.setAttribute("x2", ch.x(lap)); vline.setAttribute("opacity", .7);
+    const at = series.map(sr => ({ sr, v: sr.pts[lap] })).filter(x => x.v).sort((a, b) => b.v[1] - a.v[1]);
+    if (!at.length) return;
+    tipShow(`<div class="t-title">Lap ${lap}</div><table>` + at.slice(0, 12).map((x, i) =>
+      `<tr><td><span class="drv-cell"><span class="dot" style="background:${teamCol(x.sr.d.color)}"></span>${x.sr.d.abbr}</span></td><td class="num">${i === 0 ? "leader" : "+" + (at[0].v[1] - x.v[1]).toFixed(1) + "s"}</td></tr>`).join("") + "</table>", e);
+  });
+  ch.svg.addEventListener("pointerleave", () => { vline.setAttribute("opacity", 0); tipHide(); });
+  function pt(e) { const r = ch.svg.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width * ch.W, y: (e.clientY - r.top) / r.height * ch.H }; }
+}
+
+/* ============ views D: telemetry compare, weather ============ */
+"use strict";
+
+const N_TEL = 280;
+function telEntries() {
+  const ents = [];
+  const teamCount = {};
+  for (const e of HUB.S.compare) {
+    const s = HUB.session(e.sid);
+    const tel = s && s.tel[e.drv + "-" + e.lap];
+    const lap = s && s.laps.find(l => l.drv === e.drv && l.lap === e.lap);
+    const d = HUB.driver(e.drv, e.sid);
+    if (!tel || !lap || !d) continue;
+    const k = d.team;
+    const nth = teamCount[k] = (teamCount[k] || 0) + 1;
+    let col = teamCol(d.color);
+    if (nth === 2) col = mix(col, isDark() ? "#ffffff" : "#000000", 0.35);
+    if (nth >= 3) col = mix(col, isDark() ? "#000000" : "#ffffff", 0.35);
+    ents.push({ e, tel, lap, d, col, dash: nth >= 2 ? "6 3" : null, label: `${e.drv} L${e.lap}${e.sid !== HUB.S.sid ? " · " + SNAMES[e.sid] : ""}` });
+  }
+  return ents;
+}
+function telAt(arr, r) {
+  const f = r * (N_TEL - 1), i = Math.floor(f), k = f - i;
+  if (i >= N_TEL - 1) return arr[N_TEL - 1];
+  return arr[i] + (arr[i + 1] - arr[i]) * k;
+}
+
+function viewTel(root) {
+  const S = HUB.S;
+  /* ---- basket / picker ---- */
+  const c = card(root, "Lap comparison", "up to 6 laps · first chip is the reference — click a chip to make it reference");
+  const bar = document.createElement("div"); bar.className = "cmp-bar"; c.appendChild(bar);
+  const ents = telEntries();
+  ents.forEach((en, i) => {
+    const chip = document.createElement("span");
+    chip.className = "lapchip" + (i === 0 ? " ref" : "");
+    chip.innerHTML = `<span class="sw" style="background:${en.col};${en.dash ? "outline:2px dashed " + en.col + ";outline-offset:1px;" : ""}"></span>
+      ${i === 0 ? '<span class="refmark">REF</span>' : ""}<span>${esc(en.label)}</span><span class="num" style="color:var(--ink3)">${fmtLap(en.lap.t)}</span><button class="x" title="remove">✕</button>`;
+    chip.querySelector(".x").addEventListener("click", ev => { ev.stopPropagation(); S.compare.splice(i, 1); HUB.save(); HUB.render(); });
+    chip.addEventListener("click", () => { if (i > 0) { const [e] = S.compare.splice(i, 1); S.compare.unshift(e); HUB.save(); HUB.render(); } });
+    chip.style.cursor = i > 0 ? "pointer" : "default";
+    bar.appendChild(chip);
+  });
+
+  // add controls
+  const add = document.createElement("div"); add.className = "addlap"; c.appendChild(add);
+  const s = HUB.session();
+  const drvSel = document.createElement("select");
+  drvSel.innerHTML = [...s.drivers].sort((a, b) => (a.pos ?? 99) - (b.pos ?? 99)).map(d => `<option value="${d.abbr}">${d.abbr} — ${esc(d.team)}</option>`).join("");
+  const lapSel = document.createElement("select");
+  const fillLaps = () => {
+    const laps = s.laps.filter(l => l.drv === drvSel.value && s.tel[l.drv + "-" + l.lap]).sort((a, b) => a.t - b.t);
+    lapSel.innerHTML = laps.map(l => `<option value="${l.lap}">L${l.lap} — ${fmtLap(l.t)}${l.pb ? " ·PB" : ""}${l.cmp ? " · " + CMP_LETTER[l.cmp] + (l.life ?? "") : ""}${l.del ? " ·DEL" : ""}</option>`).join("") || `<option value="">no telemetry laps</option>`;
+  };
+  fillLaps();
+  drvSel.addEventListener("change", fillLaps);
+  const addBtn = document.createElement("button"); addBtn.className = "btn pri"; addBtn.textContent = "Add lap";
+  addBtn.addEventListener("click", () => { if (lapSel.value) addCompare(s.id, drvSel.value, +lapSel.value); });
+  const fastBtn = document.createElement("button"); fastBtn.className = "btn"; fastBtn.textContent = "+ session fastest";
+  fastBtn.addEventListener("click", () => {
+    const cand = s.laps.filter(l => l.t != null && !l.del && s.tel[l.drv + "-" + l.lap]).sort((a, b) => a.t - b.t)[0];
+    if (cand) addCompare(s.id, cand.drv, cand.lap);
+  });
+  const clrBtn = document.createElement("button"); clrBtn.className = "btn"; clrBtn.textContent = "Clear";
+  clrBtn.addEventListener("click", () => { S.compare = []; S.telZoom = null; HUB.save(); HUB.render(); });
+  add.append("Add from " + SNAMES[s.id] + ": ", drvSel, lapSel, addBtn, fastBtn, clrBtn);
+  add.insertAdjacentHTML("beforeend", `<span class="hint">tip: click any dot in the Pace view · drag on a trace to zoom, double-click to reset</span>`);
+
+  if (!ents.length) {
+    const q = HUB.session("Q");
+    const empty = document.createElement("div"); empty.className = "empty";
+    empty.innerHTML = `<b>No laps selected yet.</b><br>Pick laps above, click dots in the Pace view, or start with a preset:<br><br>`;
+    const b = document.createElement("button"); b.className = "btn pri"; b.textContent = "Compare the qualifying top 3";
+    b.addEventListener("click", () => {
+      if (!q) return;
+      for (const d of q.drivers.filter(d => d.pos <= 3)) {
+        const laps = q.laps.filter(l => l.drv === d.abbr && l.t != null && !l.del && q.tel[l.drv + "-" + l.lap]).sort((a, b) => a.t - b.t);
+        if (laps.length) addCompare("Q", d.abbr, laps[0].lap);
+      }
+      HUB.render();
+    });
+    empty.appendChild(b); c.appendChild(empty);
+    return;
+  }
+
+  const ref = ents[0];
+  const L = ref.tel.len;      // metres, all laps mapped onto reference length
+  const map = HUB.session(ref.e.sid).map || HUB.session().map;
+  const zoom = S.telZoom || [0, 1];
+  const xd = [zoom[0] * L, zoom[1] * L];
+
+  /* ---- lap stats table ---- */
+  const w = document.createElement("div"); w.className = "tblwrap"; c.appendChild(w);
+  const bs = { s1: Math.min(...ents.map(e => e.lap.s1 ?? 1e12)), s2: Math.min(...ents.map(e => e.lap.s2 ?? 1e12)), s3: Math.min(...ents.map(e => e.lap.s3 ?? 1e12)) };
+  w.innerHTML = `<table class="t"><thead><tr><th></th><th>Lap</th><th class="r">Time</th><th class="r">Gap</th><th class="r">S1</th><th class="r">S2</th><th class="r">S3</th><th>Tyre</th><th class="r">Top speed</th><th class="r">Full throttle</th><th class="r">Braking</th></tr></thead><tbody>` +
+    ents.map((en, i) => {
+      const vmax = Math.max(...en.tel.v);
+      const ft = en.tel.th.filter(t => t >= 98).length / N_TEL * 100;
+      const br = en.tel.b.filter(b => b > 0).length / N_TEL * 100;
+      return `<tr><td><span class="swd" style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${en.col}"></span></td>
+      <td><b>${esc(en.label)}</b>${en.lap.del ? ' <span class="tag" style="background:var(--band-red);color:var(--red)">deleted</span>' : ""}</td>
+      <td class="r num"><b>${fmtLap(en.lap.t)}</b></td><td class="r num">${i === 0 ? "—" : fmtDelta(en.lap.t - ref.lap.t)}</td>
+      <td class="r num ${en.lap.s1 === bs.s1 ? "best" : ""}">${fmtSec(en.lap.s1)}</td>
+      <td class="r num ${en.lap.s2 === bs.s2 ? "best" : ""}">${fmtSec(en.lap.s2)}</td>
+      <td class="r num ${en.lap.s3 === bs.s3 ? "best" : ""}">${fmtSec(en.lap.s3)}</td>
+      <td>${en.lap.cmp ? cmpDot(en.lap.cmp) + ` <span class="hint num">${en.lap.life}L</span>` : "—"}</td>
+      <td class="r num">${vmax} km/h</td><td class="r num">${ft.toFixed(0)}%</td><td class="r num">${br.toFixed(0)}%</td></tr>`;
+    }).join("") + "</tbody></table>";
+
+  /* ---- dominance + map row ---- */
+  const g = document.createElement("div"); g.className = "grid2"; root.appendChild(g);
+  const cmap = card(g, "Track map", map ? `${map.corners.length} corners · hover traces to follow the cars` : "");
+  const cdom = card(g, ents.length >= 2 ? "Mini-sector dominance" : "Speed on the reference lap", ents.length >= 2 ? "who is fastest in each of 27 track segments" : "");
+
+  let mapAPI = null;
+  if (map) mapAPI = drawTrackMap(cmap, map, ents, L);
+
+  /* dominance strip + table */
+  const NSEG = 27;
+  let domWinner = [];
+  if (ents.length >= 2) {
+    const counts = ents.map(() => 0);
+    for (let k = 0; k < NSEG; k++) {
+      const r0 = k / NSEG, r1 = (k + 1) / NSEG;
+      let wi = 0, wt = Infinity;
+      ents.forEach((en, i) => { const dt = telAt(en.tel.t, r1) - telAt(en.tel.t, r0); if (dt < wt) { wt = dt; wi = i; } });
+      domWinner.push(wi); counts[wi]++;
+    }
+    const div = document.createElement("div"); div.className = "chart"; cdom.appendChild(div);
+    const ch = Chart(div, { h: 86, xd: [0, L], yd: [0, 1], ml: 10, mr: 10, mb: 24, mt: 8, yticksArr: [], xticksArr: [], xfmt: () => "", label: "Mini-sector dominance strip" });
+    for (let k = 0; k < NSEG; k++) {
+      svgEl("rect", { x: ch.x(k / NSEG * L) + 0.6, y: ch.mt, width: ch.x(1 / NSEG * L) - ch.x(0) - 1.2, height: 30, rx: 3, fill: ents[domWinner[k]].col }, ch.plot);
+    }
+    if (map) for (const cn of map.corners) {
+      const xx = ch.x(cn.d / map.len * L);
+      svgEl("line", { x1: xx, x2: xx, y1: ch.mt + 32, y2: ch.mt + 38, stroke: "var(--ink3)", "stroke-width": 1 }, ch.plot);
+      svgEl("text", { x: xx, y: ch.mt + 50, "text-anchor": "middle", "font-size": 8.5, fill: "var(--ink3)", class: "num" }, ch.plot).textContent = cn.n + (cn.l || "");
+    }
+    const tbl = document.createElement("div"); tbl.className = "tblwrap"; cdom.appendChild(tbl);
+    tbl.innerHTML = `<table class="t"><thead><tr><th>Lap</th><th class="r">Mini-sectors won</th><th class="r">Share</th></tr></thead><tbody>` +
+      ents.map((en, i) => `<tr><td><span class="drv-cell"><span class="dot" style="background:${en.col}"></span>${esc(en.label)}</span></td><td class="r num">${counts[i]}</td><td class="r num">${(counts[i] / NSEG * 100).toFixed(0)}%</td></tr>`).join("") + "</tbody></table>";
+  } else {
+    cdom.insertAdjacentHTML("beforeend", `<p class="note">Add a second lap to see mini-sector dominance and time deltas. The map is coloured by the reference lap's speed.</p>`);
+  }
+
+  /* ---- trace panels ---- */
+  const c3 = card(root, "Traces", "shared distance axis · drag to zoom all panels · double-click resets");
+  const right = c3.querySelector(".right");
+  const hasDrs = ents.some(en => en.tel.d.some(v => v));
+  const PANELS = [
+    ["delta", "Δ time"], ["v", "Speed"], ["th", "Throttle"], ["b", "Brake"], ["g", "Gear"], ["n", "RPM"], ["d", "DRS/OT"],
+  ];
+  for (const [id, label] of PANELS) {
+    if (id === "delta" && ents.length < 2) continue;
+    if (id === "d" && !hasDrs) continue;
+    const t = document.createElement("label"); t.className = "toggle";
+    t.innerHTML = `<input type="checkbox" ${S.telPanels[id] ? "checked" : ""}>${label}`;
+    t.querySelector("input").addEventListener("change", e => { S.telPanels[id] = e.target.checked; HUB.render(); });
+    right.appendChild(t);
+  }
+  if (S.telZoom) {
+    const b = document.createElement("button"); b.className = "btn"; b.textContent = "Reset zoom";
+    b.addEventListener("click", () => { S.telZoom = null; HUB.render(); });
+    right.appendChild(b);
+  }
+
+  const stack = document.createElement("div"); c3.appendChild(stack);
+  const charts = [];
+  const inWin = i => { const r = i / (N_TEL - 1); return r >= zoom[0] - 0.02 && r <= zoom[1] + 0.02; };
+  const xsOf = () => Array.from({ length: N_TEL }, (_, i) => i / (N_TEL - 1) * L);
+  const xs = xsOf();
+  const mkPanel = (h, yd, o = {}) => {
+    const div = document.createElement("div"); div.className = "chart"; stack.appendChild(div);
+    const ch = Chart(div, Object.assign({ h, xd, yd, ml: 64, mr: 14, mt: 8, mb: 4, xticksArr: [], xgrid: false, yticks: o.yticks || 4 }, o));
+    charts.push(ch);
+    return ch;
+  };
+  const cornerLines = ch => {
+    if (!map) return;
+    for (const cn of map.corners) {
+      const xm = cn.d / map.len * L;
+      if (xm < xd[0] || xm > xd[1]) continue;
+      svgEl("line", { x1: ch.x(xm), x2: ch.x(xm), y1: ch.mt, y2: ch.mt + ch.ih, stroke: "var(--line)", "stroke-width": 1, "stroke-dasharray": "2 4" }, ch.plot);
+    }
+  };
+
+  // corner header ruler (clickable)
+  if (map) {
+    const div = document.createElement("div"); div.className = "chart"; stack.appendChild(div);
+    const ch = Chart(div, { h: 30, xd, yd: [0, 1], ml: 64, mr: 14, mt: 2, mb: 2, yticksArr: [], xticksArr: [], xgrid: false });
+    charts.push(ch);
+    for (const cn of map.corners) {
+      const xm = cn.d / map.len * L;
+      if (xm < xd[0] || xm > xd[1]) continue;
+      const t = svgEl("text", { x: ch.x(xm), y: 18, "text-anchor": "middle", "font-size": 9.5, "font-weight": 700, fill: "var(--ink2)", class: "num", cursor: "pointer" }, ch.svg);
+      t.textContent = "T" + cn.n + (cn.l || "");
+      t.addEventListener("click", () => { S.telZoom = [Math.max(0, (xm - 320) / L), Math.min(1, (xm + 320) / L)]; HUB.render(); });
+    }
+    svgEl("text", { x: 4, y: 18, "font-size": 9, fill: "var(--ink3)" }, ch.svg).textContent = "corners ▸";
+  }
+
+  // Delta
+  if (S.telPanels.delta && ents.length >= 2) {
+    const deltas = ents.slice(1).map(en => xs.map((_, i) => (en.tel.t[i] - ref.tel.t[i]) / 1000));
+    const vis = deltas.flatMap(dd => dd.filter((_, i) => inWin(i)));
+    const pad = Math.max(0.05, (Math.max(...vis) - Math.min(...vis)) * 0.1);
+    const ch = mkPanel(150, [Math.min(...vis) - pad, Math.max(...vis) + pad], { ylab: "Δt (s)", yfmt: v => v.toFixed(2) });
+    cornerLines(ch);
+    svgEl("line", { x1: ch.ml, x2: ch.ml + ch.iw, y1: ch.y(0), y2: ch.y(0), stroke: ref.col, "stroke-width": 1.6, opacity: .8 }, ch.plot);
+    deltas.forEach((dd, j) => {
+      const en = ents[j + 1];
+      const p = svgEl("path", { d: linePath(xs.map((x, i) => [x, dd[i]]), ch.x, ch.y), fill: "none", stroke: en.col, "stroke-width": 1.8 }, ch.plot);
+      if (en.dash) p.setAttribute("stroke-dasharray", en.dash);
+    });
+    ch.chan = "delta"; ch.get = (en, i) => en === ref ? 0 : (en.tel.t[i] - ref.tel.t[i]) / 1000;
+  }
+  // Speed
+  if (S.telPanels.v) {
+    const vis = ents.flatMap(en => en.tel.v.filter((_, i) => inWin(i)));
+    const ch = mkPanel(190, [Math.min(...vis) - 12, Math.max(...vis) + 12], { ylab: "km/h" });
+    cornerLines(ch);
+    for (const en of ents) {
+      const p = svgEl("path", { d: linePath(xs.map((x, i) => [x, en.tel.v[i]]), ch.x, ch.y), fill: "none", stroke: en.col, "stroke-width": 1.8 }, ch.plot);
+      if (en.dash) p.setAttribute("stroke-dasharray", en.dash);
+    }
+    ch.chan = "v";
+  }
+  // Throttle
+  if (S.telPanels.th) {
+    const ch = mkPanel(90, [-4, 104], { ylab: "thr %", yticksArr: [0, 50, 100] });
+    cornerLines(ch);
+    for (const en of ents) {
+      const p = svgEl("path", { d: linePath(xs.map((x, i) => [x, en.tel.th[i]]), ch.x, ch.y), fill: "none", stroke: en.col, "stroke-width": 1.4 }, ch.plot);
+      if (en.dash) p.setAttribute("stroke-dasharray", en.dash);
+    }
+    ch.chan = "th";
+  }
+  // Brake
+  if (S.telPanels.b) {
+    const ch = mkPanel(64, [-0.08, 1.15], { ylab: "brake", yticksArr: [] });
+    cornerLines(ch);
+    ents.forEach((en, j) => {
+      const p = svgEl("path", { d: stepPath(xs.map((x, i) => [x, en.tel.b[i] ? 1 - j * 0.13 : 0]), ch.x, ch.y), fill: "none", stroke: en.col, "stroke-width": 1.6 }, ch.plot);
+      if (en.dash) p.setAttribute("stroke-dasharray", en.dash);
+    });
+    ch.chan = "b";
+  }
+  // Gear
+  if (S.telPanels.g) {
+    const ch = mkPanel(100, [0.5, 8.9], { ylab: "gear", yticksArr: [2, 4, 6, 8] });
+    cornerLines(ch);
+    for (const en of ents) {
+      const p = svgEl("path", { d: stepPath(xs.map((x, i) => [x, en.tel.g[i]]), ch.x, ch.y), fill: "none", stroke: en.col, "stroke-width": 1.4 }, ch.plot);
+      if (en.dash) p.setAttribute("stroke-dasharray", en.dash);
+    }
+    ch.chan = "g";
+  }
+  // RPM
+  if (S.telPanels.n) {
+    const vis = ents.flatMap(en => en.tel.n.filter((_, i) => inWin(i)));
+    const ch = mkPanel(110, [Math.min(...vis) - 300, Math.max(...vis) + 300], { ylab: "rpm", yfmt: v => (v / 1000).toFixed(0) + "k" });
+    cornerLines(ch);
+    for (const en of ents) {
+      const p = svgEl("path", { d: linePath(xs.map((x, i) => [x, en.tel.n[i]]), ch.x, ch.y), fill: "none", stroke: en.col, "stroke-width": 1.4 }, ch.plot);
+      if (en.dash) p.setAttribute("stroke-dasharray", en.dash);
+    }
+    ch.chan = "n";
+  }
+  // DRS rows
+  if (S.telPanels.d && hasDrs) {
+    const rh = 15;
+    const ch = mkPanel(ents.length * rh + 26, [0, 1], { ylab: "DRS", yticksArr: [], mb: 18 });
+    ents.forEach((en, j) => {
+      const cy = ch.mt + j * rh + rh / 2;
+      svgEl("line", { x1: ch.ml, x2: ch.ml + ch.iw, y1: cy, y2: cy, stroke: "var(--grid)", "stroke-width": 1 }, ch.plot);
+      let start = null;
+      for (let i = 0; i <= N_TEL; i++) {
+        const on = i < N_TEL && en.tel.d[i];
+        if (on && start == null) start = i;
+        if (!on && start != null) {
+          svgEl("rect", { x: ch.x(xs[start]), y: cy - 5, width: Math.max(2, ch.x(xs[i - 1]) - ch.x(xs[start])), height: 10, rx: 2.5, fill: en.col, opacity: .85 }, ch.plot);
+          start = null;
+        }
+      }
+      svgEl("text", { x: ch.ml - 8, y: cy + 3, "text-anchor": "end", "font-size": 9, "font-weight": 700, fill: en.col, class: "num" }, ch.svg).textContent = en.e.drv;
+    });
+    ch.chan = "d";
+  }
+  // x-axis footer
+  {
+    const div = document.createElement("div"); div.className = "chart"; stack.appendChild(div);
+    const ch = Chart(div, { h: 34, xd, yd: [0, 1], ml: 64, mr: 14, mt: 0, mb: 22, yticksArr: [], xfmt: v => (v / 1000).toFixed(v >= 1000 ? 1 : 2) + " km", xlab: "" });
+    charts.push(ch);
+  }
+
+  legend(c3, ents.map(en => ({ color: en.col, label: en.label + " — " + fmtLap(en.lap.t), dash: !!en.dash })));
+
+  /* ---- shared crosshair + readout ---- */
+  const readout = document.createElement("div");
+  readout.style.cssText = "position:absolute;top:6px;right:10px;background:var(--surface);border:1px solid var(--line2);border-radius:8px;padding:6px 9px;font-size:11px;box-shadow:var(--shadow);display:none;z-index:5;pointer-events:none";
+  c3.style.position = "relative"; c3.appendChild(readout);
+  const vlines = charts.map(ch => svgEl("line", { y1: ch.mt, y2: ch.mt + ch.ih, stroke: "var(--ink2)", "stroke-width": 1, opacity: 0 }, ch.svg));
+  stack.addEventListener("pointermove", e => {
+    const ref0 = charts[0];
+    const rect0 = ref0.svg.getBoundingClientRect();
+    const fx = (e.clientX - rect0.left) / rect0.width * ref0.W;
+    if (fx < ref0.ml || fx > ref0.ml + ref0.iw) { hideCross(); return; }
+    const xm = xd[0] + (fx - ref0.ml) / ref0.iw * (xd[1] - xd[0]);
+    const r = Math.max(0, Math.min(1, xm / L));
+    charts.forEach((ch, i) => { vlines[i].setAttribute("x1", ch.x(xm)); vlines[i].setAttribute("x2", ch.x(xm)); vlines[i].setAttribute("opacity", .55); });
+    readout.style.display = "block";
+    readout.innerHTML = `<div style="color:var(--ink3);margin-bottom:2px" class="num">${(xm / 1000).toFixed(3)} km</div><table>` + ents.map((en, i) => {
+      const v = telAt(en.tel.v, r).toFixed(0), th = telAt(en.tel.th, r).toFixed(0), gg = Math.round(telAt(en.tel.g, r));
+      const dt = i === 0 ? "" : ` · Δ<b>${((telAt(en.tel.t, r) - telAt(ref.tel.t, r)) / 1000).toFixed(2)}s</b>`;
+      return `<tr><td><span class="drv-cell" style="gap:4px"><span class="dot" style="background:${en.col};height:10px"></span>${en.e.drv}</span></td><td class="num" style="padding-left:7px">${v} km/h · ${th}% · G${gg}${dt}</td></tr>`;
+    }).join("") + "</table>";
+    if (mapAPI) mapAPI.moveDots(r);
+  });
+  stack.addEventListener("pointerleave", hideCross);
+  function hideCross() { vlines.forEach(v => v.setAttribute("opacity", 0)); readout.style.display = "none"; if (mapAPI) mapAPI.hideDots(); }
+
+  // drag zoom on all panels
+  for (const ch of charts) dragZoom(ch, dom => {
+    S.telZoom = dom ? [Math.max(0, dom[0] / L), Math.min(1, dom[1] / L)] : null;
+    HUB.render();
+  });
+
+  /* map dominance colouring uses same winners */
+  if (mapAPI && ents.length >= 2) mapAPI.dominance(domWinner);
+}
+
+/* ---- track map ---- */
+function drawTrackMap(cardEl, map, ents, L) {
+  const rot = (map.rot || 0) * Math.PI / 180;
+  const cos = Math.cos(rot), sin = Math.sin(rot);
+  const rx = (x, y) => x * cos - y * sin;
+  const ry = (x, y) => x * sin + y * cos;
+  const X = map.x.map((x, i) => rx(x, map.y[i]));
+  const Y = map.y.map((y, i) => -ry(map.x[i], y));
+  const pad = 700;
+  const x0 = Math.min(...X) - pad, x1 = Math.max(...X) + pad, y0 = Math.min(...Y) - pad, y1 = Math.max(...Y) + pad;
+  const div = document.createElement("div"); div.className = "chart"; cardEl.appendChild(div);
+  const svg = svgEl("svg", { viewBox: `${x0.toFixed(0)} ${y0.toFixed(0)} ${(x1 - x0).toFixed(0)} ${(y1 - y0).toFixed(0)}`, role: "img", "aria-label": "Track map" }, div);
+  svg.style.maxHeight = "440px";
+  const sw = (x1 - x0) / 90;
+  // base line
+  svgEl("path", { d: X.map((x, i) => (i ? "L" : "M") + x.toFixed(0) + "," + Y[i].toFixed(0)).join("") + "Z", fill: "none", stroke: "var(--surface3)", "stroke-width": sw * 1.7, "stroke-linejoin": "round", "stroke-linecap": "round" }, svg);
+  const segs = svgEl("g", {}, svg);
+  const M = map.x.length;
+  const ref = ents[0];
+
+  function colorBy(colFn) {
+    segs.innerHTML = "";
+    const step = 2;
+    for (let i = 0; i < M - step; i += step) {
+      const col = colFn(i / (M - 1));
+      svgEl("path", { d: `M${X[i].toFixed(0)},${Y[i].toFixed(0)}L${X[Math.min(i + step, M - 1)].toFixed(0)},${Y[Math.min(i + step, M - 1)].toFixed(0)}`, stroke: col, "stroke-width": sw, "stroke-linecap": "round", fill: "none" }, segs);
+    }
+  }
+  // default: speed heat of reference lap (single-hue ramp)
+  const vmin = Math.min(...ref.tel.v), vmax = Math.max(...ref.tel.v);
+  colorBy(r => {
+    const v = telAt(ref.tel.v, r), k = (v - vmin) / (vmax - vmin || 1);
+    return `hsl(215 85% ${(30 + k * 42).toFixed(0)}%)`;
+  });
+
+  // corners
+  for (const cn of map.corners) {
+    const cxr = rx(cn.x, cn.y), cyr = -ry(cn.x, cn.y);
+    const a = (cn.a || 0) * Math.PI / 180;
+    const off = 780;
+    const lx = rx(cn.x + off * Math.cos(a), cn.y + off * Math.sin(a));
+    const ly = -ry(cn.x + off * Math.cos(a), cn.y + off * Math.sin(a));
+    svgEl("line", { x1: cxr, y1: cyr, x2: lx, y2: ly, stroke: "var(--line2)", "stroke-width": sw / 6 }, svg);
+    svgEl("circle", { cx: lx, cy: ly, r: sw * 1.05, fill: "var(--surface2)", stroke: "var(--line2)", "stroke-width": sw / 8 }, svg);
+    svgEl("text", { x: lx, y: ly + sw * 0.42, "text-anchor": "middle", "font-size": sw * 1.15, "font-weight": 700, fill: "var(--ink2)", class: "num" }, svg).textContent = cn.n + (cn.l || "");
+  }
+  // start/finish
+  svgEl("circle", { cx: X[0], cy: Y[0], r: sw * 0.7, fill: "var(--ink)", stroke: "var(--bg)", "stroke-width": sw / 5 }, svg);
+
+  // hover dots per lap
+  const dots = ents.map(en => svgEl("circle", { r: sw * 0.75, fill: en.col, stroke: "var(--bg)", "stroke-width": sw / 5, opacity: 0 }, svg));
+  return {
+    moveDots(r) {
+      const f = r * (M - 1), i = Math.min(M - 2, Math.floor(f)), k = f - i;
+      const px = X[i] + (X[i + 1] - X[i]) * k, py = Y[i] + (Y[i + 1] - Y[i]) * k;
+      dots.forEach(d => { d.setAttribute("cx", px); d.setAttribute("cy", py); d.setAttribute("opacity", 1); });
+    },
+    hideDots() { dots.forEach(d => d.setAttribute("opacity", 0)); },
+    dominance(domWinner) {
+      const NSEG = domWinner.length;
+      colorBy(r => ents[domWinner[Math.min(NSEG - 1, Math.floor(r * NSEG))]].col);
+    },
+  };
+}
+
+/* ---------- WEATHER ---------- */
+function viewWeather(root) {
+  const s = HUB.session();
+  if (!s.weather.length) { root.innerHTML = `<div class="empty">No weather data for this session.</div>`; return; }
+  const W = s.weather;
+  const t0 = W[0][0], mins = w => (w[0] - t0) / 60000;
+  const xd = [0, mins(W.at(-1)) + 1];
+  const rain = W.some(w => w[6]);
+
+  const stats = [
+    { k: "Air temp", v: `${Math.min(...W.map(w => w[1]))}–${Math.max(...W.map(w => w[1]))} °C` },
+    { k: "Track temp", v: `${Math.min(...W.map(w => w[2]))}–${Math.max(...W.map(w => w[2]))} °C` },
+    { k: "Wind", v: `${Math.min(...W.map(w => w[4]))}–${Math.max(...W.map(w => w[4]))} m/s` },
+    { k: "Humidity", v: `${Math.min(...W.map(w => w[3]))}–${Math.max(...W.map(w => w[3]))}%` },
+    { k: "Rain", v: rain ? "YES" : "dry" },
+  ];
+  const sr = document.createElement("div"); sr.className = "stat-row";
+  sr.innerHTML = stats.map(st => `<div class="stat"><div class="k">${st.k}</div><div class="v num">${st.v}</div></div>`).join("");
+  root.appendChild(sr);
+
+  const mkW = (title, series, o = {}) => {
+    const c = card(root, title);
+    const div = document.createElement("div"); div.className = "chart"; c.appendChild(div);
+    const vals = series.flatMap(sr => sr.pts.map(p => p[1]).filter(v => v != null));
+    const lo = o.lo ?? Math.min(...vals), hi = o.hi ?? Math.max(...vals);
+    const padv = Math.max((hi - lo) * 0.15, 0.5);
+    const ch = Chart(div, { h: 210, xd, yd: [lo - padv, hi + padv], xfmt: v => v + "m", xlab: "session time", yfmt: o.yfmt, label: title });
+    // rain shading
+    let rs = null;
+    for (let i = 0; i <= W.length; i++) {
+      const on = i < W.length && W[i][6];
+      if (on && rs == null) rs = mins(W[i]);
+      if (!on && rs != null) { svgEl("rect", { x: ch.x(rs), y: ch.mt, width: ch.x(mins(W[Math.min(i, W.length - 1)])) - ch.x(rs), height: ch.ih, fill: "var(--cmp-WET)", opacity: .12 }, ch.plot); rs = null; }
+    }
+    for (const sr2 of series)
+      svgEl("path", { d: linePath(sr2.pts, ch.x, ch.y), fill: "none", stroke: sr2.col, "stroke-width": 2 }, ch.plot);
+    legend(div, series.map(sr2 => ({ color: sr2.col, label: sr2.label })).concat(rain ? [{ color: "var(--cmp-WET)", label: "rainfall", dot: true }] : []));
+    return ch;
+  };
+  mkW("Temperature (°C)", [
+    { label: "track", col: "#f59e0b", pts: W.map(w => [mins(w), w[2]]) },
+    { label: "air", col: "#60a5fa", pts: W.map(w => [mins(w), w[1]]) },
+  ]);
+  mkW("Wind speed (m/s)", [{ label: "wind", col: "#10b981", pts: W.map(w => [mins(w), w[4]]) }]);
+  mkW("Humidity (%)", [{ label: "humidity", col: "#8b5cf6", pts: W.map(w => [mins(w), w[3]]) }]);
+  mkW("Pressure (mbar)", [{ label: "pressure", col: "var(--ink2)", pts: W.map(w => [mins(w), w[7]]) }]);
+}
+
+/* ============ app shell & boot ============ */
+"use strict";
+
+const TABS = [
+  ["overview", "Overview", viewOverview],
+  ["pace", "Pace", viewPace],
+  ["deg", "Tyres & Deg", viewDeg],
+  ["longruns", "Long Runs", viewLongRuns],
+  ["quali", "Qualifying", viewQuali],
+  ["race", "Race", viewRace],
+  ["tel", "Telemetry", viewTel],
+  ["weather", "Weather", viewWeather],
+];
+const MODE = typeof HUB_MODE !== "undefined" ? HUB_MODE : "embedded";
+
+HUB.render = function render() {
+  const S = HUB.S;
+  document.querySelectorAll("#sessions button").forEach(b => b.classList.toggle("on", b.dataset.sid === S.sid));
+  document.querySelectorAll("nav.tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === S.tab));
+  const main = document.getElementById("view");
+  if (!main) return;
+  main.innerHTML = "";
+  tipHide();
+  const tab = TABS.find(t => t[0] === S.tab) || TABS[0];
+  try { tab[2](main); }
+  catch (err) {
+    main.innerHTML = `<div class="empty">Something broke rendering this view: <b>${esc(err.message)}</b></div>`;
+    console.error(err);
+  }
+};
+
+function showLoading(msg) {
+  document.getElementById("app").innerHTML =
+    `<div id="loading"><div style="font-size:15px;font-weight:700;letter-spacing:.12em;text-transform:uppercase">F1 Analysis Hub</div><div class="bar"><i></i></div><div style="font-size:12px" id="loadmsg">${esc(msg)}</div></div>`;
+}
+function showError(msg) {
+  document.getElementById("app").innerHTML = `<div id="loading"><div class="empty"><b>Could not load data.</b><br>${esc(msg)}</div></div>`;
+}
+
+function buildShell() {
+  const d = HUB.data;
+  const root = document.getElementById("app");
+  const dates = d.sessions.length ? new Date(d.sessions[0].date).toLocaleDateString(undefined, { day: "numeric", month: "short" }) + " – " + new Date(d.sessions.at(-1).date).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "";
+
+  let titleHtml;
+  if (MODE === "site" && HUB.manifest) {
+    const years = Object.keys(HUB.manifest.years).sort();
+    titleHtml = `<span class="picker">
+      <select id="pyear">${years.map(y => `<option ${+y === d.year ? "selected" : ""}>${y}</option>`).join("")}</select>
+      <select id="pevent">${HUB.manifest.years[String(d.year)].map(e => `<option value="${e.round}" ${e.round === d.round ? "selected" : ""}>R${e.round} · ${esc(e.event)}</option>`).join("")}</select>
+    </span>`;
+  } else {
+    titleHtml = `<span class="gp">${esc(d.event)} ${d.year}</span>`;
+  }
+
+  root.innerHTML = `
+  <header class="top"><div class="top-inner">
+    <div class="title-row">
+      ${titleHtml}
+      <span class="meta">Round ${d.round} · ${esc(d.location)}, ${esc(d.country)} · ${esc(dates)}${String(d.format).includes("sprint") ? " · Sprint weekend" : ""}</span>
+      <span class="brand">F1 <b>Analysis Hub</b></span>
+    </div>
+    <div class="ctrl-row">
+      <div class="seg" id="sessions">${d.sessions.map(s => `<button data-sid="${s.id}">${SNAMES[s.id] || s.id}</button>`).join("")}</div>
+      <nav class="tabs" id="tabs">${TABS.map(t => `<button data-tab="${t[0]}">${t[1]}</button>`).join("")}</nav>
+    </div>
+  </div></header>
+  <main id="view"></main>
+  <footer>Data: F1 live timing via <span class="mono">FastF1</span> · lap telemetry resampled to 280 points/lap · times are official classification where available.
+  ${MODE === "site" && HUB.manifest ? `Data updated <span class="num">${esc((HUB.manifest.generated || "").slice(0, 16).replace("T", " "))} UTC</span> · ` : ""}Unofficial analysis tool for personal use — not associated with Formula 1.</footer>`;
+
+  document.querySelectorAll("#sessions button").forEach(b =>
+    b.addEventListener("click", () => { HUB.S.sid = b.dataset.sid; HUB.S.lrSel = null; HUB.render(); }));
+  document.querySelectorAll("#tabs button").forEach(b =>
+    b.addEventListener("click", () => { HUB.S.tab = b.dataset.tab; HUB.render(); }));
+
+  if (MODE === "site" && HUB.manifest) {
+    const py = document.getElementById("pyear"), pe = document.getElementById("pevent");
+    py.addEventListener("change", () => {
+      const list = HUB.manifest.years[py.value];
+      selectWeekend(+py.value, list.at(-1).round);
+    });
+    pe.addEventListener("change", () => selectWeekend(d.year, +pe.value));
+  }
+}
+
+function initState() {
+  const S = HUB.S;
+  const last = HUB.data.sessions.at(-1);
+  S.sid = last ? last.id : HUB.data.sessions[0].id;
+  S.sel = new Set(HUB.session().drivers.map(dd => dd.abbr));
+  S.compare = []; S.telZoom = null; S.lrSel = null; S.degCmp = null; S.qseg = 3;
+  HUB.restore();
+}
+
+async function selectWeekend(year, round) {
+  const entry = (HUB.manifest.years[String(year)] || []).find(e => e.round === round);
+  if (!entry) return;
+  showLoading(`fetching ${entry.event} ${year}…`);
+  try {
+    const sids = Object.keys(entry.sessions);
+    const loaded = await Promise.all(sids.map(sid => fetchSession(entry.sessions[sid].file)));
+    HUB.data = {
+      year: +year, round: entry.round, event: entry.event, location: entry.location,
+      country: entry.country, format: entry.format, sessions: loaded,
+    };
+  } catch (err) {
+    showError(err.message);
+    return;
+  }
+  initState();
+  buildShell();
+  HUB.render();
+  try { history.replaceState(null, "", `#${year}/${round}`); } catch (e) { }
+}
+
+let listenersArmed = false;
+function armGlobalListeners() {
+  if (listenersArmed) return;
+  listenersArmed = true;
+  let rT;
+  addEventListener("resize", () => { clearTimeout(rT); rT = setTimeout(() => HUB.data && HUB.render(), 220); });
+  addEventListener("hashchange", () => {
+    if (MODE !== "site" || !HUB.manifest) return;
+    const m = location.hash.match(/^#(\d{4})\/(\d+)$/);
+    if (m && HUB.data && !(+m[1] === HUB.data.year && +m[2] === HUB.data.round)
+        && (HUB.manifest.years[m[1]] || []).some(e => e.round === +m[2]))
+      selectWeekend(+m[1], +m[2]);
+  });
+  new MutationObserver(() => HUB.data && HUB.render()).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => HUB.data && HUB.render());
+}
+
+(async function boot() {
+  armGlobalListeners();
+  if (MODE === "site") {
+    let manifest;
+    try {
+      const r = await fetch("manifest.json", { cache: "no-cache" });
+      if (!r.ok) throw new Error("manifest.json: HTTP " + r.status);
+      manifest = await r.json();
+    } catch (err) { showError(err.message); return; }
+    HUB.manifest = manifest;
+    const years = Object.keys(manifest.years).sort();
+    if (!years.length) { showError("No weekends in the data set yet — run the data updater."); return; }
+    // deep link #year/round, else latest weekend of latest season
+    let y = +years.at(-1), r = manifest.years[years.at(-1)].at(-1).round;
+    const m = location.hash.match(/^#(\d{4})\/(\d+)$/);
+    if (m && manifest.years[m[1]] && manifest.years[m[1]].some(e => e.round === +m[2])) { y = +m[1]; r = +m[2]; }
+    await selectWeekend(y, r);
+  } else {
+    try { HUB.data = await decodeBundle(); }
+    catch (err) { showError("Failed to decode data bundle: " + err.message); return; }
+    initState();
+    buildShell();
+    HUB.render();
+  }
+})();
+
+</script>
