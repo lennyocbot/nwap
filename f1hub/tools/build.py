@@ -32,7 +32,7 @@ def main():
 
     if site:
         out_path = pathlib.Path(args[0] if args else HERE.parent / "index.html")
-        html = assemble("site", "", "F1 Analysis Hub")
+        html = assemble("site", "", "Minisector — F1 analysis")
     else:
         data_path = pathlib.Path(args[0] if args else HERE / "weekend_2026_9.json")
         out_path = pathlib.Path(args[1] if len(args) > 1 else HERE / "f1-analysis-hub.html")
@@ -41,7 +41,7 @@ def main():
             raw = gzip.decompress(raw)
         meta = json.loads(raw)
         b64 = base64.b64encode(gzip.compress(raw, 9)).decode()
-        html = assemble("embedded", b64, f"{meta['event']} {meta['year']} — F1 Analysis Hub")
+        html = assemble("embedded", b64, f"{meta['event']} {meta['year']} — Minisector")
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html)

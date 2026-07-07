@@ -1,5 +1,5 @@
 <meta charset="utf-8">
-<title>F1 Analysis Hub</title>
+<title>Minisector — F1 analysis</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏎️</text></svg>">
 <style>
@@ -203,7 +203,7 @@ footer { max-width:1440px; margin:30px auto 0; padding:0 20px 30px; font-size:11
 footer a { color:var(--ink2); }
 
 </style>
-<div id="app"><div id="loading"><div style="font-size:15px;font-weight:700;letter-spacing:.12em;text-transform:uppercase">F1 Analysis Hub</div><div class="bar"><i></i></div><div style="font-size:12px" id="loadmsg">loading weekend data…</div></div></div>
+<div id="app"><div id="loading"><div style="font-size:15px;font-weight:700;letter-spacing:.12em;text-transform:uppercase">Mini<span style="color:var(--accent)">sector</span></div><div class="bar"><i></i></div><div style="font-size:12px" id="loadmsg">loading weekend data…</div></div></div>
 <script type="application/octet-stream" id="data"></script>
 <script>const HUB_MODE = "site";</script>
 <script>
@@ -1971,7 +1971,7 @@ HUB.render = function render() {
 
 function showLoading(msg) {
   document.getElementById("app").innerHTML =
-    `<div id="loading"><div style="font-size:15px;font-weight:700;letter-spacing:.12em;text-transform:uppercase">F1 Analysis Hub</div><div class="bar"><i></i></div><div style="font-size:12px" id="loadmsg">${esc(msg)}</div></div>`;
+    `<div id="loading"><div style="font-size:15px;font-weight:700;letter-spacing:.12em;text-transform:uppercase">Mini<span style="color:var(--accent)">sector</span></div><div class="bar"><i></i></div><div style="font-size:12px" id="loadmsg">${esc(msg)}</div></div>`;
 }
 function showError(msg) {
   document.getElementById("app").innerHTML = `<div id="loading"><div class="empty"><b>Could not load data.</b><br>${esc(msg)}</div></div>`;
@@ -1998,7 +1998,7 @@ function buildShell() {
     <div class="title-row">
       ${titleHtml}
       <span class="meta">Round ${d.round} · ${esc(d.location)}, ${esc(d.country)} · ${esc(dates)}${String(d.format).includes("sprint") ? " · Sprint weekend" : ""}</span>
-      <span class="brand">F1 <b>Analysis Hub</b></span>
+      <span class="brand">Mini<b>sector</b> · F1 analysis</span>
     </div>
     <div class="ctrl-row">
       <div class="seg" id="sessions">${d.sessions.map(s => `<button data-sid="${s.id}">${SNAMES[s.id] || s.id}</button>`).join("")}</div>

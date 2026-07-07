@@ -1,13 +1,13 @@
 # Hosting the F1 Analysis Hub — free, self-updating
 
-End state: `yourdomain.com` shows the hub with a **year + weekend picker**; a GitHub Action
+End state: `minisector.app` shows the hub with a **year + weekend picker**; a GitHub Action
 checks every 2 hours for newly published sessions and adds them automatically. After the
 Madrid GP's FP1 ends, the data shows up on your site ~1–3 hours later without you touching
 anything. Total cost: **$0/year hosting + ~$10/year for the domain**.
 
 ## 1. Create the hub repository (5 min)
 
-1. Create a **new public GitHub repo** (public = unlimited free Actions minutes), e.g. `purple-sector`.
+1. Create a **new public GitHub repo** (public = unlimited free Actions minutes), e.g. `minisector`.
 2. Copy this `f1hub/` folder's contents into it laid out like this:
 
 ```
@@ -43,10 +43,10 @@ and during the season the bot's own commits keep it alive.
 ## 4. Custom domain (10 min)
 
 1. Buy the domain — **Cloudflare Registrar** (at-cost, ~$10/yr for .com) or Namecheap/Porkbun.
-2. Repo **Settings → Pages → Custom domain** → enter `hub.yourdomain.com` (this commits a
+2. Repo **Settings → Pages → Custom domain** → enter `minisector.app` (this commits a
    `CNAME` file). Check *Enforce HTTPS* once the cert is issued.
-3. At your DNS provider add: `CNAME  hub  <user>.github.io`
-   (For an apex domain like `yourdomain.com`, add A records to GitHub Pages IPs:
+3. At your DNS provider add: `CNAME  www  <user>.github.io   (and use the A records below for the apex)`
+   (For the apex domain `minisector.app` itself, add A records to GitHub Pages IPs:
    185.199.108.153 / .109. / .110. / .111.)
 
 ### Alternative: Cloudflare Pages

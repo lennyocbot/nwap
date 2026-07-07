@@ -31,7 +31,7 @@ HUB.render = function render() {
 
 function showLoading(msg) {
   document.getElementById("app").innerHTML =
-    `<div id="loading"><div style="font-size:15px;font-weight:700;letter-spacing:.12em;text-transform:uppercase">F1 Analysis Hub</div><div class="bar"><i></i></div><div style="font-size:12px" id="loadmsg">${esc(msg)}</div></div>`;
+    `<div id="loading"><div style="font-size:15px;font-weight:700;letter-spacing:.12em;text-transform:uppercase">Mini<span style="color:var(--accent)">sector</span></div><div class="bar"><i></i></div><div style="font-size:12px" id="loadmsg">${esc(msg)}</div></div>`;
 }
 function showError(msg) {
   document.getElementById("app").innerHTML = `<div id="loading"><div class="empty"><b>Could not load data.</b><br>${esc(msg)}</div></div>`;
@@ -58,7 +58,7 @@ function buildShell() {
     <div class="title-row">
       ${titleHtml}
       <span class="meta">Round ${d.round} · ${esc(d.location)}, ${esc(d.country)} · ${esc(dates)}${String(d.format).includes("sprint") ? " · Sprint weekend" : ""}</span>
-      <span class="brand">F1 <b>Analysis Hub</b></span>
+      <span class="brand">Mini<b>sector</b> · F1 analysis</span>
     </div>
     <div class="ctrl-row">
       <div class="seg" id="sessions">${d.sessions.map(s => `<button data-sid="${s.id}">${SNAMES[s.id] || s.id}</button>`).join("")}</div>

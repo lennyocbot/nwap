@@ -1,4 +1,4 @@
-# F1 Analysis Hub
+# Minisector — F1 Analysis Hub
 
 A self-updating race-weekend analysis site built on [FastF1](https://docs.fastf1.dev/) data.
 Pick **any season (2018+), any weekend, any session** and get the full analysis — pace, tyre
