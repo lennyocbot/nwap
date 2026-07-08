@@ -7,6 +7,10 @@ on:
     # every 30 min — a finished session lands on the site shortly after
     # FastF1 publishes it (runs are cheap no-ops when nothing is new)
     - cron: "7,37 * * * *"
+  push:
+    # editing the backfill queue kickstarts a run immediately (data commits
+    # made by the workflow itself use GITHUB_TOKEN and never re-trigger)
+    paths: ["backfill.txt"]
   workflow_dispatch:
     inputs:
       year:

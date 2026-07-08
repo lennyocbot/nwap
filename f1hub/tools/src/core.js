@@ -16,10 +16,37 @@ async function decodeBundle() {
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return gunzipJSON(bytes);
 }
-async function fetchSession(url) {
-  const r = await fetch(url, { cache: "no-cache" });
-  if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
-  return gunzipJSON(new Uint8Array(await r.arrayBuffer()));
+/* streamed fetch with progress callback, a stall watchdog and one retry —
+   a phone on bad signal must never hang forever on the loading screen */
+async function fetchSession(url, onBytes) {
+  let lastErr;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let got = 0;
+    const chunks = [];
+    const ctrl = new AbortController();
+    let lastData = Date.now();
+    const watchdog = setInterval(() => { if (Date.now() - lastData > 30000) ctrl.abort(); }, 5000);
+    try {
+      const r = await fetch(url, { signal: ctrl.signal });
+      if (!r.ok) throw new Error(url.split("/").at(-1) + ": HTTP " + r.status);
+      const reader = r.body.getReader();
+      for (; ;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value); got += value.length; lastData = Date.now();
+        if (onBytes) onBytes(value.length);
+      }
+      const buf = new Uint8Array(got);
+      let o = 0; for (const c of chunks) { buf.set(c, o); o += c.length; }
+      return await gunzipJSON(buf);
+    } catch (e) {
+      lastErr = e && e.name === "AbortError" ? new Error("connection stalled — check your signal and retry") : e;
+      if (onBytes && got) onBytes(-got);   // roll the progress counter back before retrying
+    } finally {
+      clearInterval(watchdog);
+    }
+  }
+  throw lastErr;
 }
 
 /* ---- formatting ---- */

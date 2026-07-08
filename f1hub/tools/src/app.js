@@ -43,11 +43,21 @@ HUB.render = function render() {
 };
 
 function showLoading(msg) {
+  const canEscape = MODE === "site" && HUB.manifest;
   document.getElementById("app").innerHTML =
-    `<div id="loading"><div style="font-size:15px;font-weight:700;letter-spacing:.12em;text-transform:uppercase">Mini<span style="color:var(--accent)">sector</span></div><div class="bar"><i></i></div><div style="font-size:12px" id="loadmsg">${esc(msg)}</div></div>`;
+    `<div id="loading"><div style="font-size:15px;font-weight:700;letter-spacing:.12em;text-transform:uppercase">Mini<span style="color:var(--accent)">sector</span></div><div class="bar"><i></i></div><div style="font-size:12px" id="loadmsg">${esc(msg)}</div>${canEscape ? '<button class="btn" id="cancelLoad">← all weekends</button>' : ""}</div>`;
+  const c = document.getElementById("cancelLoad");
+  if (c) c.addEventListener("click", showPicker);
 }
 function showError(msg) {
-  document.getElementById("app").innerHTML = `<div id="loading"><div class="empty"><b>Could not load data.</b><br>${esc(msg)}</div></div>`;
+  const canEscape = MODE === "site" && HUB.manifest;
+  document.getElementById("app").innerHTML =
+    `<div id="loading"><div class="empty"><b>Could not load data.</b><br>${esc(msg)}<br><br>
+    ${HUB._last ? '<button class="btn pri" id="retryBtn">Retry</button> ' : ""}${canEscape ? '<button class="btn" id="backBtn">All weekends</button>' : ""}</div></div>`;
+  const r = document.getElementById("retryBtn");
+  if (r) r.addEventListener("click", () => selectWeekend(HUB._last.y, HUB._last.r));
+  const b = document.getElementById("backBtn");
+  if (b) b.addEventListener("click", showPicker);
 }
 
 function buildShell() {
@@ -134,10 +144,18 @@ function initState() {
 async function selectWeekend(year, round) {
   const entry = (HUB.manifest.years[String(year)] || []).find(e => e.round === round);
   if (!entry) return;
+  HUB._last = { y: year, r: round };
   showLoading(`fetching ${entry.event} ${year}…`);
   try {
     const sids = Object.keys(entry.sessions);
-    const loaded = await Promise.all(sids.map(sid => fetchSession(entry.sessions[sid].file)));
+    const total = sids.reduce((a, sid) => a + (entry.sessions[sid].size || 0), 0);
+    let got = 0;
+    const onBytes = n => {
+      got = Math.max(0, got + n);
+      const el = document.getElementById("loadmsg");
+      if (el && total) el.textContent = `fetching ${entry.event} ${year} — ${(got / 1e6).toFixed(1)} / ${(total / 1e6).toFixed(1)} MB`;
+    };
+    const loaded = await Promise.all(sids.map(sid => fetchSession(entry.sessions[sid].file, onBytes)));
     HUB.data = {
       year: +year, round: entry.round, event: entry.event, location: entry.location,
       country: entry.country, format: entry.format, sessions: loaded,
