@@ -58,6 +58,7 @@ function buildShell() {
   if (MODE === "site" && HUB.manifest) {
     const years = Object.keys(HUB.manifest.years).sort();
     titleHtml = `<span class="picker">
+      <button id="homeBtn" class="btn" title="All weekends">≡</button>
       <select id="pyear">${years.map(y => `<option ${+y === d.year ? "selected" : ""}>${y}</option>`).join("")}</select>
       <select id="pevent">${HUB.manifest.years[String(d.year)].map(e => `<option value="${e.round}" ${e.round === d.round ? "selected" : ""}>R${e.round} · ${esc(e.event)}</option>`).join("")}</select>
     </span>`;
@@ -91,7 +92,31 @@ function buildShell() {
       selectWeekend(+py.value, list.at(-1).round);
     });
     pe.addEventListener("change", () => selectWeekend(d.year, +pe.value));
+    document.getElementById("homeBtn").addEventListener("click", showPicker);
   }
+}
+
+/* landing screen: choose a weekend */
+function showPicker() {
+  const m = HUB.manifest;
+  const root = document.getElementById("app");
+  const years = Object.keys(m.years).sort().reverse();
+  root.innerHTML = `<div class="pick-screen">
+    <div class="pick-brand">Mini<b>sector</b></div>
+    <div class="pick-sub">F1 race-weekend analysis — pick a Grand Prix</div>
+    ${years.map(y => `<div class="pick-year">${y} <span>${m.years[y].length} weekend${m.years[y].length > 1 ? "s" : ""}</span></div>
+      <div class="pick-grid">${[...m.years[y]].reverse().map(e => `
+        <button class="pick-card" data-y="${y}" data-r="${e.round}">
+          <span class="pc-top"><span class="pc-round">R${e.round}</span>${String(e.format).includes("sprint") ? '<span class="pc-sprint">SPRINT</span>' : ""}</span>
+          <span class="pc-name">${esc(e.event)}</span>
+          <span class="pc-meta">${esc(e.location)}, ${esc(e.country)}${e.date ? " · " + new Date(e.date).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : ""}</span>
+          <span class="pc-sess">${Object.keys(e.sessions).map(sid => `<i>${SNAMES[sid] || sid}</i>`).join("")}</span>
+        </button>`).join("")}</div>`).join("")}
+    <div class="pick-foot">Data via FastF1 · new sessions appear automatically ~1–3 h after they end · unofficial, not associated with Formula 1</div>
+  </div>`;
+  root.querySelectorAll(".pick-card").forEach(b =>
+    b.addEventListener("click", () => selectWeekend(+b.dataset.y, +b.dataset.r)));
+  try { history.replaceState(null, "", location.pathname + location.search); } catch (e) { }
 }
 
 function initState() {
@@ -130,11 +155,21 @@ let listenersArmed = false;
 function armGlobalListeners() {
   if (listenersArmed) return;
   listenersArmed = true;
-  let rT;
-  addEventListener("resize", () => { clearTimeout(rT); rT = setTimeout(() => HUB.data && HUB.render(), 220); });
+  // re-render on width change only — mobile URL-bar show/hide fires height-only
+  // resizes on every scroll, and re-rendering there yanks the page back to the top
+  let rT, lastW = innerWidth;
+  addEventListener("resize", () => {
+    clearTimeout(rT);
+    rT = setTimeout(() => {
+      if (innerWidth === lastW) return;
+      lastW = innerWidth;
+      if (HUB.data) HUB.render();
+    }, 220);
+  });
   addEventListener("hashchange", () => {
     if (MODE !== "site" || !HUB.manifest) return;
     const m = location.hash.match(/^#(\d{4})\/(\d+)$/);
+    if (!m && !location.hash) { showPicker(); return; }
     if (m && HUB.data && !(+m[1] === HUB.data.year && +m[2] === HUB.data.round)
         && (HUB.manifest.years[m[1]] || []).some(e => e.round === +m[2]))
       selectWeekend(+m[1], +m[2]);
@@ -155,11 +190,12 @@ function armGlobalListeners() {
     HUB.manifest = manifest;
     const years = Object.keys(manifest.years).sort();
     if (!years.length) { showError("No weekends in the data set yet — run the data updater."); return; }
-    // deep link #year/round, else latest weekend of latest season
-    let y = +years.at(-1), r = manifest.years[years.at(-1)].at(-1).round;
+    // deep link #year/round goes straight in; otherwise show the weekend chooser
     const m = location.hash.match(/^#(\d{4})\/(\d+)$/);
-    if (m && manifest.years[m[1]] && manifest.years[m[1]].some(e => e.round === +m[2])) { y = +m[1]; r = +m[2]; }
-    await selectWeekend(y, r);
+    if (m && manifest.years[m[1]] && manifest.years[m[1]].some(e => e.round === +m[2]))
+      await selectWeekend(+m[1], +m[2]);
+    else
+      showPicker();
   } else {
     try { HUB.data = await decodeBundle(); }
     catch (err) { showError("Failed to decode data bundle: " + err.message); return; }

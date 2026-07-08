@@ -59,7 +59,7 @@ def write_meta(year, ev):
     return d
 
 
-def extract_one(year, ev, sid, force=False):
+def extract_one(year, ev, sid, force=False, require_tel=False):
     d = weekend_dir(year, ev["RoundNumber"], ev["EventName"])
     out = d / f"{sid}.json.gz"
     if out.exists() and not force:
@@ -67,6 +67,11 @@ def extract_one(year, ev, sid, force=False):
     print(f"extracting {year} R{ev['RoundNumber']} {sid} ({ev['EventName']}) ...", flush=True)
     data = extract_session(year, int(ev["RoundNumber"]), sid)
     if not data:
+        return False
+    if require_tel and not data.get("tel"):
+        # laps published but car data not yet — don't freeze a telemetry-less
+        # file into the archive; the next cron run will pick it up complete
+        print("  laps up but telemetry not published yet — retrying next run")
         return False
     write_meta(year, ev)
     out.write_bytes(gzip.compress(json.dumps(data, separators=(",", ":")).encode(), 9))
@@ -90,7 +95,7 @@ def do_weekend(year, ev, force=False):
     now = pd.Timestamp.now(tz="UTC").tz_localize(None)
     n = 0
     for sid, date in sessions_of(ev):
-        if date + pd.Timedelta(hours=2, minutes=30) > now:
+        if date + pd.Timedelta(minutes=45) > now:
             continue  # session not finished / data not published yet
         try:
             n += bool(extract_one(year, ev, sid, force))
@@ -108,14 +113,17 @@ def auto(year):
         if int(ev["RoundNumber"]) == 0:
             continue
         for sid, date in sessions_of(ev):
-            if date + pd.Timedelta(hours=2, minutes=30) > now:
+            # start trying 45 min after the scheduled session end; FastF1
+            # publishes anywhere from ~30 min to a few hours later, and
+            # failed early attempts are cheap and retried every cron run
+            if date + pd.Timedelta(minutes=45) > now:
                 continue
             if date < now - pd.Timedelta(days=14):
                 continue  # history is handled by explicit backfill runs
             if (weekend_dir(year, ev["RoundNumber"], ev["EventName"]) / f"{sid}.json.gz").exists():
                 continue
             try:
-                n += bool(extract_one(year, ev, sid))
+                n += bool(extract_one(year, ev, sid, require_tel=True))
             except Exception as e:
                 print(f"  !! {year} R{ev['RoundNumber']} {sid} not ready: {e}")
     return n

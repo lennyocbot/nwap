@@ -269,4 +269,106 @@ function viewLongRuns(root) {
     `Best long-run pace: <b>${runs[0].d.abbr}</b> ${fmtLap(Math.round(runs[0].med))} on ${runs[0].t.cmp.toLowerCase()}s (${runs[0].run.length} laps)`,
     runs.find(r => r.fit && r.fit.b < 20) ? `Flattest run: <b>${[...runs].filter(r => r.fit).sort((a, b) => a.fit.b - b.fit.b)[0].d.abbr}</b> — barely any drop-off` : "",
   ].filter(Boolean));
+
+  lrSheet(root, s, runs);
+}
+
+/* ---- shareable long-run sheet (lap-by-lap grid + PNG export) ---- */
+function lrSheet(root, s, runs) {
+  // one column per driver — their best run; columns ordered by average pace
+  const best = new Map();
+  for (const r of runs) if (!best.has(r.d.abbr) || r.med < best.get(r.d.abbr).med) best.set(r.d.abbr, r);
+  const cols = [...best.values()];
+  for (const c of cols) {
+    const laps = c.t.laps.filter(l => !l.in && !l.out && l.t != null);
+    const inRun = new Set(c.run.map(l => l.lap));
+    c.cells = laps.map(l => ({ t: l.t, x: !inRun.has(l.lap) || l.del }));
+    c.avg = c.run.reduce((a, l) => a + l.t, 0) / c.run.length;
+  }
+  cols.sort((a, b) => a.avg - b.avg);
+  if (!cols.length) return;
+  const maxRows = Math.max(...cols.map(c => c.cells.length));
+  const baseSec = Math.floor(Math.min(...cols.map(c => c.avg)) / 60000) * 60;
+  const cell = t => (t / 1000 - baseSec).toFixed(3);
+  const surname = d => (d.name || d.abbr).split(" ").at(-1);
+  const headTxt = c => `${surname(c.d)} (${CMP_LETTER[c.t.cmp] || "?"})`;
+
+  const card2 = card(root, "Long run sheet", "lap-by-lap, X = stripped (traffic / cool-down / deleted) · sorted by average pace");
+  const right = card2.querySelector(".right");
+  const dl = document.createElement("button"); dl.className = "btn pri"; dl.textContent = "Download PNG";
+  right.appendChild(dl);
+  const w = document.createElement("div"); w.className = "tblwrap"; card2.appendChild(w);
+  let html = `<table class="t lr-sheet"><thead><tr>` + cols.map(c => {
+    const col = teamCol(c.d.color), dark = lum(col) < 0.4;
+    return `<th style="background:${col};color:${dark ? "#fff" : "#111"};text-align:center">${esc(headTxt(c))}</th>`;
+  }).join("") + `</tr></thead><tbody>`;
+  for (let i = 0; i < maxRows; i++) {
+    html += "<tr>" + cols.map(c => {
+      const cc = c.cells[i];
+      if (!cc) return i === c.cells.length ? `<td class="lr-end"></td>` : `<td></td>`;
+      return `<td class="r num" style="text-align:center${cc.x ? ";color:var(--ink3)" : ""}">${cc.x ? "X" : cell(cc.t)}</td>`;
+    }).join("") + "</tr>";
+  }
+  html += `<tr class="lr-avg"><td colspan="${cols.length}">AVERAGE STINT PACE</td></tr><tr>` +
+    cols.map(c => `<td class="num" style="text-align:center;font-weight:700">${cell(c.avg)}</td>`).join("") + `</tr></tbody></table>`;
+  w.innerHTML = html;
+  card2.insertAdjacentHTML("beforeend", `<p class="note">Times shown minus ${baseSec / 60} min (e.g. ${cell(cols[0].avg)} = ${fmtLap(Math.round(cols[0].avg))}).</p>`);
+
+  dl.addEventListener("click", () => sheetPNG(
+    `Long Runs ${HUB.data.location} ${SNAMES[s.id] || s.id} ${HUB.data.year}`, cols, cell, headTxt, maxRows));
+}
+
+function sheetPNG(title, cols, cell, headTxt, maxRows) {
+  const cw = 122, rh = 27, hh = 34, pad = 24, titleH = 52, footH = 30;
+  const W = pad * 2 + cw * cols.length;
+  const H = titleH + hh + maxRows * rh + 12 + rh * 2 + footH + pad;
+  const cv = document.createElement("canvas");
+  const k = 2; cv.width = W * k; cv.height = H * k;
+  const x0 = pad, ctx = cv.getContext("2d");
+  ctx.scale(k, k);
+  ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "#111"; ctx.font = "700 21px -apple-system,Segoe UI,Arial"; ctx.textAlign = "center";
+  ctx.fillText(title, W / 2, 34);
+  const mono = '13px ui-monospace,Consolas,Menlo,monospace';
+  // headers
+  cols.forEach((c, i) => {
+    const col = teamCol(c.d.color);
+    ctx.fillStyle = col; ctx.fillRect(x0 + i * cw, titleH, cw - 2, hh - 4);
+    ctx.fillStyle = lum(col) < 0.4 ? "#fff" : "#111";
+    ctx.font = "700 12.5px -apple-system,Segoe UI,Arial";
+    ctx.fillText(headTxt(c), x0 + i * cw + cw / 2 - 1, titleH + 21);
+  });
+  // cells
+  for (let rIdx = 0; rIdx < maxRows; rIdx++) {
+    const y = titleH + hh + rIdx * rh;
+    cols.forEach((c, i) => {
+      const cx = x0 + i * cw;
+      const cc = c.cells[rIdx];
+      if (!cc && rIdx === c.cells.length) { ctx.fillStyle = "#111"; ctx.fillRect(cx, y, cw - 2, rh - 3); return; }
+      ctx.strokeStyle = "#c9cdd4"; ctx.lineWidth = 1; ctx.strokeRect(cx + .5, y + .5, cw - 3, rh - 4);
+      if (!cc) return;
+      ctx.fillStyle = cc.x ? "#9aa0a8" : "#111"; ctx.font = cc.x ? "700 13px Arial" : mono;
+      ctx.fillText(cc.x ? "X" : cell(cc.t), cx + cw / 2 - 1, y + 18);
+    });
+  }
+  // average band
+  const yA = titleH + hh + maxRows * rh + 12;
+  ctx.fillStyle = "#bfe3ad"; ctx.fillRect(x0, yA, cw * cols.length - 2, rh - 3);
+  ctx.fillStyle = "#111"; ctx.font = "700 13px -apple-system,Segoe UI,Arial";
+  ctx.fillText("AVERAGE STINT PACE", x0 + (cw * cols.length) / 2, yA + 18);
+  cols.forEach((c, i) => {
+    const cx = x0 + i * cw, y = yA + rh;
+    ctx.strokeStyle = "#c9cdd4"; ctx.strokeRect(cx + .5, y + .5, cw - 3, rh - 4);
+    ctx.fillStyle = "#111"; ctx.font = "700 " + mono;
+    ctx.fillText(cell(c.avg), cx + cw / 2 - 1, y + 18);
+  });
+  ctx.fillStyle = "#9aa0a8"; ctx.font = "11px -apple-system,Segoe UI,Arial";
+  ctx.fillText("minisector · data via FastF1 · out/in laps removed, X = stripped lap", W / 2, H - 14);
+  cv.toBlob(b => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(b);
+    a.download = title.toLowerCase().replace(/[^a-z0-9]+/g, "-") + ".png";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  }, "image/png");
 }

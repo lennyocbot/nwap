@@ -198,6 +198,36 @@ kbd.k { background:var(--surface3); border-radius:3px; padding:0 4px; font-size:
 footer { max-width:1440px; margin:30px auto 0; padding:0 20px 30px; font-size:11.5px; color:var(--ink3); }
 footer a { color:var(--ink2); }
 
+/* ---------- long run sheet ---------- */
+.lr-sheet th { border-radius:3px; }
+.lr-sheet td { border:1px solid var(--grid); }
+.lr-sheet .lr-end { background:var(--ink); }
+.lr-sheet .lr-avg td { background:rgba(74,222,128,.22); text-align:center; font-weight:800; font-size:10.5px; letter-spacing:.08em; }
+
+/* ---------- weekend chooser ---------- */
+.pick-screen { max-width:1100px; margin:0 auto; padding:38px 18px 60px; }
+.pick-brand { font-size:26px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; }
+.pick-brand b { color:var(--accent); }
+.pick-sub { color:var(--ink2); margin:4px 0 26px; font-size:13.5px; }
+.pick-year { font-size:13px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--ink2); margin:20px 0 10px; display:flex; align-items:baseline; gap:10px; }
+.pick-year span { font-weight:500; color:var(--ink3); font-size:11.5px; letter-spacing:0; text-transform:none; }
+.pick-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:10px; }
+.pick-card {
+  display:flex; flex-direction:column; align-items:flex-start; gap:4px; text-align:left;
+  background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow);
+  padding:12px 14px; cursor:pointer;
+}
+.pick-card:hover { border-color:var(--accent); }
+.pc-top { display:flex; gap:8px; align-items:center; width:100%; }
+.pc-round { font-size:10.5px; font-weight:700; letter-spacing:.07em; color:var(--ink3); }
+.pc-sprint { font-size:9px; font-weight:800; letter-spacing:.08em; color:var(--accent); background:var(--accent-soft); border-radius:4px; padding:1px 5px; }
+.pc-name { font-size:14.5px; font-weight:700; }
+.pc-meta { font-size:11.5px; color:var(--ink2); }
+.pc-sess { display:flex; flex-wrap:wrap; gap:4px; margin-top:5px; }
+.pc-sess i { font-style:normal; font-size:9.5px; font-weight:700; letter-spacing:.04em; color:var(--ink2); background:var(--surface2); border:1px solid var(--line); border-radius:4px; padding:1px 5px; }
+.pick-foot { color:var(--ink3); font-size:11.5px; margin-top:34px; }
+#homeBtn { font-size:15px; padding:4px 10px; }
+
 /* ---------- mobile ---------- */
 @media (max-width:640px) {
   main { padding:10px 8px 60px; }
