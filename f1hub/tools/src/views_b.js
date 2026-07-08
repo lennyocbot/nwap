@@ -271,7 +271,31 @@ function viewLongRuns(root) {
     legend(div, [...new Map(sel.map(r => [r.d.team, r])).values()].map(r => ({ color: teamCol(r.d.color), label: r.d.team })));
   }
 
-  const c2 = card(root, "Run ranking", "unknown fuel loads — a short run near the top usually means a light car, not raw pace");
+  /* ---- deg gradient: the fuel-proof comparison ---- */
+  const grads = runs.filter(r => r.fit && r.run.length >= 7 && !r.pushCool).sort((a, b) => a.fit.b - b.fit.b);
+  if (grads.length >= 2) {
+    const cg = card(root, "Deg gradient", "time lost per lap within each run — fuel load cancels out of the slope, so this IS comparable across cars");
+    const div = document.createElement("div"); div.className = "chart"; cg.appendChild(div);
+    const mx = Math.max(...grads.map(r => Math.abs(r.fit.b)), 100);
+    const rh2 = 24, H2 = grads.length * rh2 + 40;
+    const chg = Chart(div, { h: H2, xd: [Math.min(0, ...grads.map(r => r.fit.b)) - 20, mx * 1.25], yd: [0, 1], ml: 100, mb: 26, yticksArr: [], xfmt: v => "+" + (v / 1000).toFixed(2), xlab: "deg (s/lap)", label: "Deg gradient ranking" });
+    const bars2 = [];
+    grads.forEach((r, i) => {
+      const cy = chg.mt + (i + .5) * (chg.ih / grads.length), col = teamCol(r.d.color);
+      svgEl("text", { x: chg.ml - 8, y: cy + 3.5, "text-anchor": "end", "font-size": 11, "font-weight": 700, fill: col, class: "num" }, chg.svg).textContent = `${r.d.abbr} ${CMP_LETTER[r.t.cmp] || ""}`;
+      const x0 = chg.x(Math.min(0, r.fit.b)), x1 = chg.x(Math.max(0, r.fit.b));
+      const bar = svgEl("rect", { x: x0, y: cy - 8, width: Math.max(2, x1 - x0), height: 16, rx: 3.5, fill: col, opacity: .85 }, chg.plot);
+      svgEl("text", { x: x1 + 6, y: cy + 3.5, "font-size": 10, fill: "var(--ink2)", class: "num" }, chg.plot).textContent = `+${(r.fit.b / 1000).toFixed(3)} · ${r.run.length}L`;
+      bars2.push(bar);
+    });
+    hoverMarks(bars2, i => {
+      const r = grads[i];
+      return `<div class="t-title">${r.d.abbr} — ${esc(r.t.cmp)} run, ${r.run.length} laps</div>deg <b class="num">+${(r.fit.b / 1000).toFixed(3)} s/lap</b> · over 20 laps that compounds to <b class="num">${(r.fit.b * 20 / 1000).toFixed(1)}s</b>`;
+    });
+    cg.insertAdjacentHTML("beforeend", `<p class="note">Race sims only (7+ clean laps, no push-cool programs). A car burning fuel gets ~0.06 s/lap faster, so true tyre deg is roughly the shown slope <b>+ 0.06</b> — but that offset is the same for everyone, so the order stands.</p>`);
+  }
+
+  const c2 = card(root, "Run ranking", "⚠ fuel unknown — two 10-lap runs can differ by 40 kg. Absolute pace here proves nothing; the gradient above is the honest signal");
   const w = document.createElement("div"); w.className = "tblwrap"; c2.appendChild(w);
   w.innerHTML = `<table class="t"><thead><tr><th class="r">#</th><th>Driver</th><th>Tyre</th><th class="r">Laps</th><th></th><th class="r">Median</th><th class="r">Best</th><th class="r">Trend s/lap</th><th class="r">Gap</th></tr></thead><tbody>` +
     runs.map((r, i) => `<tr${r.tag === "race sim" ? "" : ' style="opacity:.82"'}><td class="r num">${i + 1}</td><td>${drvCell(r.d)}</td><td>${cmpDot(r.t.cmp)}${r.t.startLife > 1 ? ` <span class="hint">used</span>` : ""}</td>

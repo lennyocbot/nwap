@@ -129,6 +129,46 @@ def auto(year):
     return n
 
 
+def backfill_step(budget=2):
+    """Work through backfill.txt (one season per line, top = highest priority).
+
+    Each cron run processes up to `budget` historical weekends and marks them
+    done (done.json in the weekend dir) so failures aren't retried forever.
+    The queue file lives at the repo root; delete a line to stop that season.
+    """
+    qfile = ROOT / "backfill.txt"
+    if not qfile.exists():
+        return 0
+    years = [int(l.strip()) for l in qfile.read_text().splitlines() if l.strip().isdigit()]
+    now = pd.Timestamp.now(tz="UTC").tz_localize(None)
+    done_w = 0
+    for year in years:
+        try:
+            sched = fastf1.get_event_schedule(year)
+        except Exception as e:
+            print(f"backfill: schedule {year} failed: {e}")
+            continue
+        for _, ev in sched.iterrows():
+            if int(ev["RoundNumber"]) == 0:
+                continue
+            if pd.isna(ev["EventDate"]) or ev["EventDate"] > now - pd.Timedelta(days=4):
+                continue  # current/future weekends belong to the live updater
+            d = weekend_dir(year, ev["RoundNumber"], ev["EventName"])
+            if (d / "done.json").exists():
+                continue
+            print(f"backfill: {year} R{ev['RoundNumber']} {ev['EventName']}", flush=True)
+            try:
+                do_weekend(year, ev)
+            except Exception as e:
+                print(f"  !! weekend failed: {e}")
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "done.json").write_text(json.dumps({"attempted": str(now)}))
+            done_w += 1
+            if done_w >= budget:
+                return done_w
+    return done_w
+
+
 def rebuild_manifest():
     years = {}
     for ydir in sorted(DATA.glob("[12][0-9][0-9][0-9]")):
@@ -186,6 +226,8 @@ def main():
         n = auto(year)
         if datetime.date.today().month <= 2:  # season overlap: also check last year's finale
             n += auto(year - 1)
+        # fresh sessions first, then chip away at the historical queue
+        n += backfill_step(budget=1 if n else 2)
 
     rebuild_manifest()
     print(f"done: {n} new session file(s)")

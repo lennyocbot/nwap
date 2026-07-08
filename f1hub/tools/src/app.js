@@ -9,6 +9,7 @@ const TABS = [
   ["longruns", "Long Runs", viewLongRuns, sid => sid.startsWith("FP")],
   ["quali", "Qualifying", viewQuali, sid => sid === "Q" || sid === "SQ"],
   ["race", "Race", viewRace, sid => sid === "R" || sid === "S"],
+  ["straights", "Straights", viewStraights, () => true],
   ["tel", "Telemetry", viewTel, () => true],
   ["weather", "Weather", viewWeather, () => true],
 ];

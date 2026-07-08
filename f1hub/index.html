@@ -1225,7 +1225,31 @@ function viewLongRuns(root) {
     legend(div, [...new Map(sel.map(r => [r.d.team, r])).values()].map(r => ({ color: teamCol(r.d.color), label: r.d.team })));
   }
 
-  const c2 = card(root, "Run ranking", "unknown fuel loads — a short run near the top usually means a light car, not raw pace");
+  /* ---- deg gradient: the fuel-proof comparison ---- */
+  const grads = runs.filter(r => r.fit && r.run.length >= 7 && !r.pushCool).sort((a, b) => a.fit.b - b.fit.b);
+  if (grads.length >= 2) {
+    const cg = card(root, "Deg gradient", "time lost per lap within each run — fuel load cancels out of the slope, so this IS comparable across cars");
+    const div = document.createElement("div"); div.className = "chart"; cg.appendChild(div);
+    const mx = Math.max(...grads.map(r => Math.abs(r.fit.b)), 100);
+    const rh2 = 24, H2 = grads.length * rh2 + 40;
+    const chg = Chart(div, { h: H2, xd: [Math.min(0, ...grads.map(r => r.fit.b)) - 20, mx * 1.25], yd: [0, 1], ml: 100, mb: 26, yticksArr: [], xfmt: v => "+" + (v / 1000).toFixed(2), xlab: "deg (s/lap)", label: "Deg gradient ranking" });
+    const bars2 = [];
+    grads.forEach((r, i) => {
+      const cy = chg.mt + (i + .5) * (chg.ih / grads.length), col = teamCol(r.d.color);
+      svgEl("text", { x: chg.ml - 8, y: cy + 3.5, "text-anchor": "end", "font-size": 11, "font-weight": 700, fill: col, class: "num" }, chg.svg).textContent = `${r.d.abbr} ${CMP_LETTER[r.t.cmp] || ""}`;
+      const x0 = chg.x(Math.min(0, r.fit.b)), x1 = chg.x(Math.max(0, r.fit.b));
+      const bar = svgEl("rect", { x: x0, y: cy - 8, width: Math.max(2, x1 - x0), height: 16, rx: 3.5, fill: col, opacity: .85 }, chg.plot);
+      svgEl("text", { x: x1 + 6, y: cy + 3.5, "font-size": 10, fill: "var(--ink2)", class: "num" }, chg.plot).textContent = `+${(r.fit.b / 1000).toFixed(3)} · ${r.run.length}L`;
+      bars2.push(bar);
+    });
+    hoverMarks(bars2, i => {
+      const r = grads[i];
+      return `<div class="t-title">${r.d.abbr} — ${esc(r.t.cmp)} run, ${r.run.length} laps</div>deg <b class="num">+${(r.fit.b / 1000).toFixed(3)} s/lap</b> · over 20 laps that compounds to <b class="num">${(r.fit.b * 20 / 1000).toFixed(1)}s</b>`;
+    });
+    cg.insertAdjacentHTML("beforeend", `<p class="note">Race sims only (7+ clean laps, no push-cool programs). A car burning fuel gets ~0.06 s/lap faster, so true tyre deg is roughly the shown slope <b>+ 0.06</b> — but that offset is the same for everyone, so the order stands.</p>`);
+  }
+
+  const c2 = card(root, "Run ranking", "⚠ fuel unknown — two 10-lap runs can differ by 40 kg. Absolute pace here proves nothing; the gradient above is the honest signal");
   const w = document.createElement("div"); w.className = "tblwrap"; c2.appendChild(w);
   w.innerHTML = `<table class="t"><thead><tr><th class="r">#</th><th>Driver</th><th>Tyre</th><th class="r">Laps</th><th></th><th class="r">Median</th><th class="r">Best</th><th class="r">Trend s/lap</th><th class="r">Gap</th></tr></thead><tbody>` +
     runs.map((r, i) => `<tr${r.tag === "race sim" ? "" : ' style="opacity:.82"'}><td class="r num">${i + 1}</td><td>${drvCell(r.d)}</td><td>${cmpDot(r.t.cmp)}${r.t.startLife > 1 ? ` <span class="hint">used</span>` : ""}</td>
@@ -2130,6 +2154,113 @@ function viewWeather(root) {
   mkW("Pressure (mbar)", [{ label: "pressure", col: "var(--ink2)", pts: W.map(w => [mins(w), w[7]]) }]);
 }
 
+/* ============ view E: straights — end-of-straight speeds & ERS clipping ============ */
+"use strict";
+
+/* find the straights on the reference lap: stretches ending at a braking onset,
+   long and fast enough to matter */
+function detectStraights(tel, map) {
+  const N = tel.v.length, L = tel.len;
+  const out = [];
+  let from = 0;
+  const ends = [];
+  for (let i = 2; i < N; i++) if (tel.b[i] && !tel.b[i - 1] && !tel.b[i - 2]) ends.push(i);
+  ends.push(N - 1); // start/finish straight ends at the line
+  for (const i of ends) {
+    let vmax = -1, imax = from;
+    for (let j = from; j <= i; j++) if (tel.v[j] > vmax) { vmax = tel.v[j]; imax = j; }
+    const len = (i - from) / (N - 1) * L;
+    if (len >= 400 && vmax >= 210) {
+      // name it after the corner the braking zone leads into
+      let name = "";
+      if (map && map.corners.length) {
+        const dEnd = i / (N - 1) * map.len;
+        const next = map.corners.find(c => c.d >= dEnd - 40) || map.corners[0];
+        name = "→ T" + next.n + (next.l || "");
+      }
+      out.push({ from, iEnd: i, iPeak: imax, vmax, len, name });
+    }
+    from = i;
+  }
+  // keep the significant ones, track order
+  const best = Math.max(...out.map(s => s.vmax));
+  return out.filter(s => s.vmax >= best * 0.82).slice(0, 7);
+}
+
+/* metres of "clipping" on one lap: full throttle but speed has stopped building
+   well before the braking point — deployment has run out */
+function clipMetres(tel, straights) {
+  const N = tel.v.length, L = tel.len;
+  let m = 0;
+  for (const s of straights) {
+    let runLen = 0;
+    for (let j = Math.max(s.from + 3, 1); j < s.iEnd; j++) {
+      const full = tel.th[j] >= 96 && !tel.b[j];
+      const flat = (tel.v[j] - tel.v[j - 1]) <= 0.2;
+      const nearTop = tel.v[j] >= tel.v[s.iPeak] - 10;
+      if (full && flat && nearTop) runLen++;
+      else { if (runLen >= 3) m += runLen / (N - 1) * L; runLen = 0; }
+    }
+    if (runLen >= 3) m += runLen / (N - 1) * L;
+  }
+  return m;
+}
+
+function viewStraights(root) {
+  const s = HUB.session();
+  const map = s.map;
+  const refTel = map && s.tel[map.refLap];
+  if (!refTel) { root.innerHTML = `<div class="empty">No telemetry in this session.</div>`; return; }
+  const straights = detectStraights(refTel, map);
+  if (!straights.length) { root.innerHTML = `<div class="empty">Could not identify straights here.</div>`; return; }
+  const mainIdx = straights.indexOf(straights.reduce((a, b) => b.vmax > a.vmax ? b : a));
+
+  const rows = [];
+  for (const d of s.drivers) {
+    const lapKeys = s.laps.filter(l => l.drv === d.abbr && s.tel[l.drv + "-" + l.lap] && !l.del);
+    if (!lapKeys.length) continue;
+    const tels = lapKeys.map(l => ({ l, tel: s.tel[l.drv + "-" + l.lap] }));
+    // top speed per straight: max across the driver's laps in a window before the braking point
+    const tops = straights.map(st => {
+      let v = 0;
+      for (const { tel } of tels) {
+        for (let j = st.from; j <= Math.min(st.iEnd, tel.v.length - 1); j++) if (tel.v[j] > v) v = tel.v[j];
+      }
+      return Math.round(v);
+    });
+    // clipping: median over the driver's 5 fastest laps (push laps)
+    const fastest = [...tels].sort((a, b) => a.l.t - b.l.t).slice(0, 5);
+    const clip = Math.round(median(fastest.map(x => clipMetres(x.tel, straights))) || 0);
+    rows.push({ d, tops, clip, n: tels.length });
+  }
+  if (!rows.length) { root.innerHTML = `<div class="empty">No usable laps.</div>`; return; }
+  rows.sort((a, b) => b.tops[mainIdx] - a.tops[mainIdx]);
+  const colBest = straights.map((_, i) => Math.max(...rows.map(r => r.tops[i])));
+  const clipMax = Math.max(...rows.map(r => r.clip), 1);
+
+  const c = card(root, "End-of-straight top speeds", `${SNAMES[s.id] || s.id} · session maximum per straight (best tow / engine mode across all laps)`);
+  const w = document.createElement("div"); w.className = "tblwrap"; c.appendChild(w);
+  w.innerHTML = `<table class="t"><thead><tr><th>Driver</th>` +
+    straights.map((st, i) => `<th class="r" title="${Math.round(st.len)} m straight">${esc(st.name || "S" + (i + 1))}${i === mainIdx ? " ★" : ""}</th>`).join("") +
+    `<th class="r">Clipping</th><th></th></tr></thead><tbody>` +
+    rows.map(r => `<tr><td>${drvCell(r.d)}</td>` +
+      r.tops.map((v, i) => `<td class="r num ${v === colBest[i] ? "best" : ""}">${v}</td>`).join("") +
+      `<td class="r num">${r.clip} m</td>
+       <td style="min-width:90px"><div style="height:5px;border-radius:3px;background:var(--surface3);overflow:hidden"><div style="height:100%;width:${(r.clip / clipMax * 100).toFixed(0)}%;background:${r.clip > clipMax * 0.65 ? "var(--yellow)" : teamCol(r.d.color)}"></div></div></td></tr>`).join("") +
+    `</tbody></table>`;
+  c.insertAdjacentHTML("beforeend", `<p class="note"><b>★</b> = fastest straight (rows sorted by it) · speeds in km/h · <b>Clipping</b> = metres per push lap spent at full throttle with speed no longer building before the braking point — the signature of electrical deployment running out. Median over each driver's 5 fastest laps.</p>
+  <p class="note">⚠ Read with care: top speeds mix engine modes, tows and wing levels — a car can be "fast" here because it ran a monster mode for one lap or caught a tow. And a plateau can be genuine deployment clipping <i>or</i> a car simply hitting terminal velocity on a long straight — compare cars on the <i>same</i> straight: if one keeps building speed where another flatlines at a lower number, that one is clipping. High clipping + low top speed = energy-limited; low clipping + low top speed = draggy / big wing.</p>`);
+
+  const most = [...rows].sort((a, b) => b.clip - a.clip)[0];
+  const least = [...rows].filter(r => r.clip < 40).length;
+  insights(root, [
+    `Overall fastest: <b>${rows[0].d.abbr}</b> ${rows[0].tops[mainIdx]} km/h on the ${esc(straights[mainIdx].name || "main straight")}`,
+    most && most.clip > 80 ? `Clipping the most: <b>${most.d.abbr}</b> (~${most.clip} m per push lap flat-out without accelerating — deployment running dry)` : "",
+    least ? `${least} car${least > 1 ? "s" : ""} showing essentially no clipping` : "",
+  ].filter(Boolean));
+  root.insertBefore(root.lastChild, root.firstChild);
+}
+
 /* ============ app shell & boot ============ */
 "use strict";
 
@@ -2141,6 +2272,7 @@ const TABS = [
   ["longruns", "Long Runs", viewLongRuns, sid => sid.startsWith("FP")],
   ["quali", "Qualifying", viewQuali, sid => sid === "Q" || sid === "SQ"],
   ["race", "Race", viewRace, sid => sid === "R" || sid === "S"],
+  ["straights", "Straights", viewStraights, () => true],
   ["tel", "Telemetry", viewTel, () => true],
   ["weather", "Weather", viewWeather, () => true],
 ];
