@@ -185,9 +185,12 @@ function viewDeg(root) {
 function viewLongRuns(root) {
   const practiceIds = HUB.data.sessions.filter(s => s.id.startsWith("FP")).map(s => s.id);
   if (!practiceIds.length) { root.innerHTML = `<div class="empty">No practice session in this weekend.</div>`; return; }
-  const sid = practiceIds.includes(HUB.S.sid) ? HUB.S.sid : practiceIds[0];
+  // FP2 is where representative long running happens on a conventional
+  // weekend; sprint weekends only have FP1
+  const pref = practiceIds.includes("FP2") ? "FP2" : practiceIds[0];
+  const sid = practiceIds.includes(HUB.S.sid) ? HUB.S.sid : pref;
   const s = HUB.session(sid);
-  if (sid !== HUB.S.sid) root.insertAdjacentHTML("beforeend", `<p class="note">Long-run detection uses <b>${SNAMES[sid]}</b>.</p>`);
+  if (sid !== HUB.S.sid) root.insertAdjacentHTML("beforeend", `<p class="note">Showing <b>${SNAMES[sid]}</b> — the representative long-run session${practiceIds.length > 1 ? "; use the session picker for other practice sessions" : ""}.</p>`);
 
   // detect runs
   const runs = [];
@@ -210,9 +213,21 @@ function viewLongRuns(root) {
   }
   if (!runs.length) { root.insertAdjacentHTML("beforeend", `<div class="empty">No stint of 5+ representative laps found — nobody did race sims here.</div>`); return; }
 
+  // tag how representative each run is: length ≈ fuel ≈ trust
+  for (const r of runs) {
+    const valid = r.t.laps.filter(l => !l.in && !l.out && l.t != null).length;
+    r.pushCool = valid > 0 && r.run.length / valid < 0.62;   // lots of stripped laps = push-cool program
+    r.tag = r.pushCool ? "push-cool?" : r.run.length >= 9 ? "race sim" : r.run.length <= 6 ? "short run" : "";
+  }
   if (!HUB.S.lrSel) {
-    const seen = new Set(); HUB.S.lrSel = new Set();
-    for (const r of runs) { if (!seen.has(r.d.team)) { seen.add(r.d.team); HUB.S.lrSel.add(r.key); } if (HUB.S.lrSel.size >= 6) break; }
+    // default: each team's most representative run (longest, then fastest),
+    // top 4 teams — the midfield "glory runs" on low fuel stay off by default
+    const perTeam = new Map();
+    for (const r of runs) {
+      const cur = perTeam.get(r.d.team);
+      if (!cur || r.run.length > cur.run.length || (r.run.length === cur.run.length && r.med < cur.med)) perTeam.set(r.d.team, r);
+    }
+    HUB.S.lrSel = new Set([...perTeam.values()].sort((a, b) => a.med - b.med).slice(0, 4).map(r => r.key));
   }
 
   const c = card(root, "Long runs", `stints of 5+ laps in ${SNAMES[sid]} · out/in and cool-down laps stripped · fuel loads unknown`);
@@ -256,18 +271,24 @@ function viewLongRuns(root) {
     legend(div, [...new Map(sel.map(r => [r.d.team, r])).values()].map(r => ({ color: teamCol(r.d.color), label: r.d.team })));
   }
 
-  const c2 = card(root, "Run ranking");
+  const c2 = card(root, "Run ranking", "unknown fuel loads — a short run near the top usually means a light car, not raw pace");
   const w = document.createElement("div"); w.className = "tblwrap"; c2.appendChild(w);
-  w.innerHTML = `<table class="t"><thead><tr><th class="r">#</th><th>Driver</th><th>Tyre</th><th class="r">Laps</th><th class="r">Median</th><th class="r">Best</th><th class="r">Trend s/lap</th><th class="r">Gap</th></tr></thead><tbody>` +
-    runs.map((r, i) => `<tr><td class="r num">${i + 1}</td><td>${drvCell(r.d)}</td><td>${cmpDot(r.t.cmp)}${r.t.startLife > 1 ? ` <span class="hint">used</span>` : ""}</td>
-      <td class="r num">${r.run.length}</td><td class="r num ${i === 0 ? "best" : ""}">${fmtLap(Math.round(r.med))}</td><td class="r num">${fmtLap(r.best)}</td>
+  w.innerHTML = `<table class="t"><thead><tr><th class="r">#</th><th>Driver</th><th>Tyre</th><th class="r">Laps</th><th></th><th class="r">Median</th><th class="r">Best</th><th class="r">Trend s/lap</th><th class="r">Gap</th></tr></thead><tbody>` +
+    runs.map((r, i) => `<tr${r.tag === "race sim" ? "" : ' style="opacity:.82"'}><td class="r num">${i + 1}</td><td>${drvCell(r.d)}</td><td>${cmpDot(r.t.cmp)}${r.t.startLife > 1 ? ` <span class="hint">used</span>` : ""}</td>
+      <td class="r num">${r.run.length}</td>
+      <td>${r.tag ? `<span class="tag" style="${r.tag === "race sim" ? "background:rgba(74,222,128,.18);color:var(--green)" : "background:var(--surface3);color:var(--ink3)"}">${r.tag}</span>` : ""}</td>
+      <td class="r num ${i === 0 ? "best" : ""}">${fmtLap(Math.round(r.med))}</td><td class="r num">${fmtLap(r.best)}</td>
       <td class="r num">${r.fit ? (r.fit.b >= 0 ? "+" : "") + (r.fit.b / 1000).toFixed(3) : "—"}</td>
       <td class="r num">${i === 0 ? "—" : fmtDelta(r.med - runs[0].med)}</td></tr>`).join("") + "</tbody></table>";
-  c2.insertAdjacentHTML("beforeend", `<p class="note">Median long-run pace, unknown fuel — treat gaps across teams as indicative, trends within a run as real.</p>`);
+  c2.insertAdjacentHTML("beforeend", `<p class="note">Longer runs carry more fuel and mean more; <b>race sim</b> ≥ 9 laps, <b>short run</b> ≤ 6 laps, <b>push-cool?</b> = many stripped laps between pushes. Trends within a run are real; gaps across teams are indicative only.</p>`);
 
+  // headline goes to the most representative running, not the fastest light-fuel glory run
+  const rep = runs.filter(r => r.run.length >= 7 && !r.pushCool);
+  const head = rep[0] || runs[0];
   insights(root, [
-    `Best long-run pace: <b>${runs[0].d.abbr}</b> ${fmtLap(Math.round(runs[0].med))} on ${runs[0].t.cmp.toLowerCase()}s (${runs[0].run.length} laps)`,
-    runs.find(r => r.fit && r.fit.b < 20) ? `Flattest run: <b>${[...runs].filter(r => r.fit).sort((a, b) => a.fit.b - b.fit.b)[0].d.abbr}</b> — barely any drop-off` : "",
+    `Best representative long run: <b>${head.d.abbr}</b> ${fmtLap(Math.round(head.med))} on ${head.t.cmp.toLowerCase()}s (${head.run.length} laps)${rep.length ? "" : " — no true race sims this session, treat with care"}`,
+    head !== runs[0] ? `<b>${runs[0].d.abbr}</b> tops the raw ranking (${fmtLap(Math.round(runs[0].med))}) but only over ${runs[0].run.length} laps — likely light fuel` : "",
+    rep.find(r => r.fit && r.fit.b < 20) ? `Flattest race sim: <b>${[...rep].filter(r => r.fit).sort((a, b) => a.fit.b - b.fit.b)[0].d.abbr}</b> — barely any drop-off` : "",
   ].filter(Boolean));
 
   lrSheet(root, s, runs);
