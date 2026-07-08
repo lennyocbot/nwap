@@ -36,7 +36,7 @@ function viewTel(root) {
     const chip = document.createElement("span");
     chip.className = "lapchip" + (i === 0 ? " ref" : "");
     chip.innerHTML = `<span class="sw" style="background:${en.col};${en.dash ? "outline:2px dashed " + en.col + ";outline-offset:1px;" : ""}"></span>
-      ${i === 0 ? '<span class="refmark">REF</span>' : ""}<span>${esc(en.label)}</span><span class="num" style="color:var(--ink3)">${fmtLap(en.lap.t)}</span><button class="x" title="remove">✕</button>`;
+      ${i === 0 ? '<span class="refmark">REF</span>' : ""}<span>${esc(en.label)}</span><span class="num" style="color:var(--ink3)">${fmtLap(en.lap.t)}</span><button class="x" title="remove" aria-label="Remove ${esc(en.label)}">✕</button>`;
     chip.querySelector(".x").addEventListener("click", ev => { ev.stopPropagation(); S.compare.splice(i, 1); HUB.save(); HUB.render(); });
     chip.addEventListener("click", () => { if (i > 0) { const [e] = S.compare.splice(i, 1); S.compare.unshift(e); HUB.save(); HUB.render(); } });
     chip.style.cursor = i > 0 ? "pointer" : "default";

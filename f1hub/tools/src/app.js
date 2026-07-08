@@ -69,7 +69,7 @@ function buildShell() {
   if (MODE === "site" && HUB.manifest) {
     const years = Object.keys(HUB.manifest.years).sort();
     titleHtml = `<span class="picker">
-      <button id="homeBtn" class="btn" title="All weekends">≡</button>
+      <button id="homeBtn" class="btn" title="All weekends" aria-label="All weekends">≡</button>
       <select id="pyear">${years.map(y => `<option ${+y === d.year ? "selected" : ""}>${y}</option>`).join("")}</select>
       <select id="pevent">${HUB.manifest.years[String(d.year)].map(e => `<option value="${e.round}" ${e.round === d.round ? "selected" : ""}>R${e.round} · ${esc(e.event)}</option>`).join("")}</select>
     </span>`;
@@ -210,6 +210,10 @@ function armGlobalListeners() {
 }
 
 (async function boot() {
+  if (typeof DecompressionStream === "undefined") {
+    showError("This browser is too old for Minisector (it lacks built-in gzip support). Any browser from 2023 onward works — Chrome 80+, Safari 16.4+, Firefox 113+.");
+    return;
+  }
   armGlobalListeners();
   if (MODE === "site") {
     let manifest;

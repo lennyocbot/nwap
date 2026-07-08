@@ -1630,7 +1630,9 @@ function viewRace(root) {
   };
 
   /* ---- race trace ---- */
-  const c1 = card(root, "Race trace", `gap to a constant ${fmtLap(Math.round(refAvg))} reference (winner's clean-lap median) — flat = reference pace, pit stops and SC are the drops`);
+  const drifted = (wClean.length >= 8 && (quantile(wClean, 0.9) - quantile(wClean, 0.1)) > 5000)
+    || (winner && wEnd != null && (wEnd - raceStart) - refAvg * wLaps > 420000);
+  const c1 = card(root, "Race trace", `gap to a constant ${fmtLap(Math.round(refAvg))} reference (winner's clean-lap median) — flat = reference pace, pit stops and SC are the drops${drifted ? " · ⚠ heavy SC/weather influence this race: everyone drifts far from the clean-pace reference, so read the vertical gaps between cars, not the slope" : ""}`);
   if (drvs.length) {
     const div = document.createElement("div"); div.className = "chart"; c1.appendChild(div);
     const series = drvs.map(d => {
@@ -1715,17 +1717,22 @@ function viewRace(root) {
     const nx = s.laps.find(n => n.drv === l.drv && n.lap === l.lap + 1);
     const dur = nx && nx.pitOut != null && l.pitIn != null ? nx.pitOut - l.pitIn : null;
     const d = HUB.driver(l.drv, sid);
-    if (d) stops.push({ d, l, dur, to: nx && nx.cmp, from: l.cmp });
+    const f = tsFlags(l.ts);
+    // a stop under SC/red isn't comparable — the clock runs differently
+    const flag = f.red ? "red" : f.sc ? "SC" : f.vsc ? "VSC" : null;
+    if (d) stops.push({ d, l, dur, to: nx && nx.cmp, from: l.cmp, flag });
   }
   stops.sort((a, b) => (a.dur ?? 9e9) - (b.dur ?? 9e9));
-  const medStop = median(stops.map(st => st.dur).filter(Boolean));
+  const greenStops = stops.filter(st => st.dur && !st.flag);
+  const medStop = median(greenStops.map(st => st.dur));
+  const bestGreen = greenStops[0];
   const w3 = document.createElement("div"); w3.className = "tblwrap"; w3.style.maxHeight = "400px"; w3.style.overflowY = "auto"; c3.appendChild(w3);
   w3.innerHTML = `<table class="t"><thead><tr><th>Driver</th><th class="r">Lap</th><th>Change</th><th class="r">Pit lane</th><th class="r">vs median</th></tr></thead><tbody>` +
-    stops.map((st, i) => `<tr><td>${drvCell(st.d)}</td><td class="r num">${st.l.lap}</td>
+    stops.map(st => `<tr><td>${drvCell(st.d)}</td><td class="r num">${st.l.lap}${st.flag ? ` <span class="tag" style="background:var(--band-sc);color:var(--yellow)">${st.flag}</span>` : ""}</td>
       <td>${st.from ? cmpDot(st.from) : "?"} → ${st.to ? cmpDot(st.to) : "?"}</td>
-      <td class="r num ${i === 0 ? "best" : ""}">${st.dur ? fmtSec(st.dur, 1) + "s" : "—"}</td>
-      <td class="r num" style="color:${st.dur && medStop && st.dur - medStop > 1500 ? "var(--red)" : "var(--ink3)"}">${st.dur && medStop ? fmtDelta(st.dur - medStop, 1) : ""}</td></tr>`).join("") + "</tbody></table>";
-  if (medStop) c3.insertAdjacentHTML("beforeend", `<p class="note">Median pit-lane time: <b class="num">${fmtSec(medStop, 1)}s</b> · ${stops.length} stops</p>`);
+      <td class="r num ${st === bestGreen ? "best" : ""}">${st.dur ? fmtSec(st.dur, 1) + "s" : "—"}</td>
+      <td class="r num" style="color:${st.dur && medStop && st.dur - medStop > 1500 && !st.flag ? "var(--red)" : "var(--ink3)"}">${st.dur && medStop && !st.flag ? fmtDelta(st.dur - medStop, 1) : ""}</td></tr>`).join("") + "</tbody></table>";
+  if (medStop) c3.insertAdjacentHTML("beforeend", `<p class="note">Median green-flag pit-lane time: <b class="num">${fmtSec(medStop, 1)}s</b> · ${stops.length} stops${stops.length - greenStops.length ? ` (${stops.length - greenStops.length} under SC/VSC/red — cheaper by nature, excluded from comparisons)` : ""}</p>`);
 
   /* ---- start analysis ---- */
   const c4 = card(g, "Lap 1", "positions gained and lost from the grid");
@@ -1753,7 +1760,7 @@ function viewRace(root) {
 
   const movers = s.drivers.filter(d => d.grid && d.pos).map(d => ({ d, g: d.grid - d.pos })).sort((a, b) => b.g - a.g);
   insights(root, [
-    stops.length && stops[0].dur ? `Fastest stop: <b>${stops[0].d.abbr}</b> ${fmtSec(stops[0].dur, 1)}s pit lane (lap ${stops[0].l.lap})` : "",
+    bestGreen ? `Fastest green-flag stop: <b>${bestGreen.d.abbr}</b> ${fmtSec(bestGreen.dur, 1)}s pit lane (lap ${bestGreen.l.lap})` : "",
     movers.length && movers[0].g > 0 ? `Drive of the day candidate: <b>${movers[0].d.abbr}</b> gained ${movers[0].g} places` : "",
     l1.length ? `Best start: <b>${l1[0].d.abbr}</b> (${l1[0].delta > 0 ? "+" + l1[0].delta : l1[0].delta} on lap 1)` : "",
   ].filter(Boolean));
@@ -1816,7 +1823,7 @@ function viewTel(root) {
     const chip = document.createElement("span");
     chip.className = "lapchip" + (i === 0 ? " ref" : "");
     chip.innerHTML = `<span class="sw" style="background:${en.col};${en.dash ? "outline:2px dashed " + en.col + ";outline-offset:1px;" : ""}"></span>
-      ${i === 0 ? '<span class="refmark">REF</span>' : ""}<span>${esc(en.label)}</span><span class="num" style="color:var(--ink3)">${fmtLap(en.lap.t)}</span><button class="x" title="remove">✕</button>`;
+      ${i === 0 ? '<span class="refmark">REF</span>' : ""}<span>${esc(en.label)}</span><span class="num" style="color:var(--ink3)">${fmtLap(en.lap.t)}</span><button class="x" title="remove" aria-label="Remove ${esc(en.label)}">✕</button>`;
     chip.querySelector(".x").addEventListener("click", ev => { ev.stopPropagation(); S.compare.splice(i, 1); HUB.save(); HUB.render(); });
     chip.addEventListener("click", () => { if (i > 0) { const [e] = S.compare.splice(i, 1); S.compare.unshift(e); HUB.save(); HUB.render(); } });
     chip.style.cursor = i > 0 ? "pointer" : "default";
@@ -2860,7 +2867,7 @@ function buildShell() {
   if (MODE === "site" && HUB.manifest) {
     const years = Object.keys(HUB.manifest.years).sort();
     titleHtml = `<span class="picker">
-      <button id="homeBtn" class="btn" title="All weekends">≡</button>
+      <button id="homeBtn" class="btn" title="All weekends" aria-label="All weekends">≡</button>
       <select id="pyear">${years.map(y => `<option ${+y === d.year ? "selected" : ""}>${y}</option>`).join("")}</select>
       <select id="pevent">${HUB.manifest.years[String(d.year)].map(e => `<option value="${e.round}" ${e.round === d.round ? "selected" : ""}>R${e.round} · ${esc(e.event)}</option>`).join("")}</select>
     </span>`;
@@ -3001,6 +3008,10 @@ function armGlobalListeners() {
 }
 
 (async function boot() {
+  if (typeof DecompressionStream === "undefined") {
+    showError("This browser is too old for Minisector (it lacks built-in gzip support). Any browser from 2023 onward works — Chrome 80+, Safari 16.4+, Firefox 113+.");
+    return;
+  }
   armGlobalListeners();
   if (MODE === "site") {
     let manifest;
