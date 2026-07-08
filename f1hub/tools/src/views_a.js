@@ -4,6 +4,17 @@
 /* ---------- driver rail ---------- */
 function driverRail(root, opts = {}) {
   const s = HUB.session();
+  // phones: collapse the 22-chip rail behind a one-line toggle
+  if (innerWidth < 640) {
+    const holder = document.createElement("div");
+    const btn = document.createElement("button");
+    btn.className = "btn rail-toggle";
+    btn.innerHTML = `Drivers · <b>${HUB.S.sel.size}</b>/${s.drivers.length} selected <span style="color:var(--ink3)">${HUB.S.railOpen ? "▴" : "▾"}</span>`;
+    btn.addEventListener("click", () => { HUB.S.railOpen = !HUB.S.railOpen; HUB.render(); });
+    holder.appendChild(btn);
+    root.appendChild(holder);
+    if (!HUB.S.railOpen) { holder.style.marginBottom = "12px"; return; }
+  }
   const wrap = document.createElement("div");
   wrap.className = "drv-rail";
   wrap.innerHTML = `<span class="lbl">Drivers</span>`;

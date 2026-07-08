@@ -32,7 +32,21 @@ def main():
 
     if site:
         out_path = pathlib.Path(args[0] if args else HERE.parent / "index.html")
-        html = assemble("site", "", "Minisector — F1 analysis")
+        content = assemble("site", "", "Minisector — F1 analysis")
+        # standalone hosting needs a real HTML5 document (no doctype = quirks
+        # mode); the embedded build stays bare because the artifact host wraps it
+        head_part, body_part = content.split('<div id="app">', 1)
+        metas = (
+            '<meta name="description" content="Minisector — F1 race-weekend analysis: '
+            'pace, tyre degradation, long runs, qualifying, race strategy, straight-line '
+            'speed & clipping, and side-by-side lap telemetry from FastF1 data.">\n'
+            '<meta name="theme-color" content="#101216" media="(prefers-color-scheme: dark)">\n'
+            '<meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">\n'
+            '<meta property="og:title" content="Minisector — F1 analysis">\n'
+            '<meta property="og:description" content="Pick any F1 weekend from 2018 onward: '
+            'pace, deg, long runs, quali, strategy, clipping and full telemetry comparison.">\n')
+        html = ('<!doctype html>\n<html lang="en">\n<head>\n' + head_part + metas
+                + '</head>\n<body>\n<div id="app">' + body_part + '\n</body>\n</html>\n')
     else:
         data_path = pathlib.Path(args[0] if args else HERE / "weekend_2026_9.json")
         out_path = pathlib.Path(args[1] if len(args) > 1 else HERE / "f1-analysis-hub.html")

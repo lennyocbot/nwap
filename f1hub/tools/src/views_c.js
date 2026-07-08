@@ -210,13 +210,15 @@ function viewRace(root) {
         if (pt) { const n = svgEl("circle", { cx: ch.x(pt[0]), cy: ch.y(pt[1]), r: 3.6, fill: "var(--surface)", stroke: col, "stroke-width": 2 }, ch.plot); nodes.push(n); data.push({ d: sr.d, l }); }
       }
     }
-    const endL = series.map(sr => {
-      const last = sr.pts.filter(Boolean).at(-1);
-      return last ? { y: ch.y(last[1]) + 3.5, x: ch.x(last[0]) + 5, txt: sr.d.abbr, col: teamCol(sr.d.color) } : null;
-    }).filter(Boolean);
-    spreadLabels(endL, 11, ch.mt + 6, ch.mt + ch.ih);
-    for (const L of endL)
-      svgEl("text", { x: Math.min(L.x, ch.ml + ch.iw + 4), y: L.y, "font-size": 10, "font-weight": 700, fill: L.col, class: "num" }, ch.svg).textContent = L.txt;
+    if (ch.W >= 520) {  // on phones the label wall is denser than the chart — legend + hover carry it
+      const endL = series.map(sr => {
+        const last = sr.pts.filter(Boolean).at(-1);
+        return last ? { y: ch.y(last[1]) + 3.5, x: ch.x(last[0]) + 5, txt: sr.d.abbr, col: teamCol(sr.d.color) } : null;
+      }).filter(Boolean);
+      spreadLabels(endL, 11, ch.mt + 6, ch.mt + ch.ih);
+      for (const L of endL)
+        svgEl("text", { x: Math.min(L.x, ch.ml + ch.iw + 4), y: L.y, "font-size": 10, "font-weight": 700, fill: L.col, class: "num" }, ch.svg).textContent = L.txt;
+    }
     hoverMarks(nodes, i => {
       const { d, l } = data[i];
       const nx = s.laps.find(n => n.drv === d.abbr && n.lap === l.lap + 1 && n.pitOut != null);

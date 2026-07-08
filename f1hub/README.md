@@ -22,6 +22,7 @@ computed for you.
 | **Long Runs** | FP | Auto-detected race sims (5+ clean laps), run comparison chart with trend fits, run ranking table |
 | **Qualifying** | Q / SQ | Gap ladder per segment with elimination line, best-sector + ideal-lap analysis, track evolution scatter, speed traps |
 | **Race** | R / Sprint | Race trace vs winner's clean-lap median, position chart, pit-stop table vs field median, lap-1 gains/losses |
+| **Straights** | any | Auto-detected straights on a labelled track diagram, end-of-straight top speeds per driver, clipping ranking per straight (km/h given back flat-out, superclipping ‡ markers), corner minimum speeds by class |
 | **Telemetry** | any | Up to 6 laps side by side (cross-session works): Δ-time, speed, throttle, brake, gear, RPM traces on a shared distance axis, corner markers, drag-zoom, crosshair readout, track map with mini-sector dominance colouring and live position dots |
 | **Weather** | any | Air/track temp, wind, humidity, pressure, rainfall shading |
 

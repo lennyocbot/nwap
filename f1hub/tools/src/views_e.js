@@ -121,14 +121,63 @@ function straightsMap(cardEl, map, straights, best) {
     // label pushed outward from the circuit centre at the straight's midpoint
     const im = Math.round((i0 + Math.min(i1, M - 1)) / 2);
     const vx = X[im] - cx0, vy = Y[im] - cy0, vn = Math.hypot(vx, vy) || 1;
-    const lx = X[im] + vx / vn * sw * 6.2, ly = Y[im] + vy / vn * sw * 6.2;
+    const lx = X[im] + vx / vn * sw * 7, ly = Y[im] + vy / vn * sw * 7;
     const b = best[si];
-    const t1 = svgEl("text", { x: lx, y: ly - sw * 0.7, "text-anchor": "middle", "font-size": sw * 1.25, "font-weight": 800, fill: hot ? "var(--accent)" : "var(--ink)" }, svg);
+    const t1 = svgEl("text", { x: lx, y: ly - sw * 0.9, "text-anchor": "middle", "font-size": sw * 1.7, "font-weight": 800, fill: hot ? "var(--accent)" : "var(--ink)" }, svg);
     t1.textContent = s.name || "S" + (si + 1);
-    const t2 = svgEl("text", { x: lx, y: ly + sw * 0.9, "text-anchor": "middle", "font-size": sw * 1.05, fill: "var(--ink2)", class: "num" }, svg);
+    const t2 = svgEl("text", { x: lx, y: ly + sw * 1.2, "text-anchor": "middle", "font-size": sw * 1.35, fill: "var(--ink2)", class: "num" }, svg);
     t2.textContent = b ? `${b.v} km/h · ${b.abbr}` : "";
   });
   cardEl.insertAdjacentHTML("beforeend", `<p class="note">Highlighted stretches are the detected straights; arrowheads mark the braking points. Labels show the session's top speed there and who set it — <span style="color:var(--accent)">red</span> is the fastest straight.</p>`);
+}
+
+/* best minimum speed per corner per driver — downforce & balance in numbers */
+function cornerSpeeds(root, s, map, drivers) {
+  if (!map || !map.corners.length) return;
+  const N = 280, win = 90; // metres searched around the apex
+  const rows = [];
+  for (const d of drivers) {
+    const tels = s.laps.filter(l => l.drv === d.abbr && !l.del && s.tel[l.drv + "-" + l.lap])
+      .sort((a, b) => a.t - b.t).slice(0, 8).map(l => s.tel[l.drv + "-" + l.lap]);
+    if (!tels.length) continue;
+    const mins = map.corners.map(c => {
+      const j0 = Math.max(0, Math.floor((c.d - win) / map.len * (N - 1)));
+      const j1 = Math.min(N - 1, Math.ceil((c.d + win) / map.len * (N - 1)));
+      let best = 0;
+      for (const tel of tels) {
+        let m = 1e9;
+        for (let j = j0; j <= j1 && j < tel.v.length; j++) m = Math.min(m, tel.v[j]);
+        if (m < 1e9) best = Math.max(best, m);
+      }
+      return best || null;
+    });
+    rows.push({ d, mins });
+  }
+  if (rows.length < 2) return;
+  const colBest = map.corners.map((_, i) => Math.max(...rows.map(r => r.mins[i] || 0)));
+  // corner classes from the session-best minimum
+  const cls = colBest.map(v => v < 150 ? 0 : v < 230 ? 1 : 2);
+  const clsName = ["Slow", "Med", "Fast"];
+  for (const r of rows) {
+    r.avg = [0, 1, 2].map(k => {
+      const vals = r.mins.filter((v, i) => v != null && cls[i] === k);
+      return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    });
+  }
+  rows.sort((a, b) => (b.avg[2] ?? 0) - (a.avg[2] ?? 0));
+  const avgBest = [0, 1, 2].map(k => Math.max(...rows.map(r => r.avg[k] ?? 0)));
+
+  const c = card(root, "Corner minimum speeds", "best apex speed per corner across each driver's 8 fastest laps · Slow < 150 · Med < 230 · Fast ≥ 230 km/h at the session-best apex");
+  const w = document.createElement("div"); w.className = "tblwrap"; c.appendChild(w);
+  w.innerHTML = `<table class="t"><thead><tr><th>Driver</th>` +
+    [0, 1, 2].map(k => `<th class="r" style="border-right:${k === 2 ? "2px solid var(--line2)" : "none"}">${clsName[k]} avg</th>`).join("") +
+    map.corners.map(cn => `<th class="r">T${cn.n}${cn.l || ""}</th>`).join("") +
+    `</tr></thead><tbody>` +
+    rows.map(r => `<tr><td>${drvCell(r.d)}</td>` +
+      [0, 1, 2].map(k => `<td class="r num" style="font-weight:700;border-right:${k === 2 ? "2px solid var(--line2)" : "none"};${r.avg[k] != null && Math.round(r.avg[k]) >= Math.round(avgBest[k]) ? "color:var(--purple)" : ""}">${r.avg[k] != null ? Math.round(r.avg[k]) : "—"}</td>`).join("") +
+      r.mins.map((v, i) => `<td class="r num ${v === colBest[i] ? "best" : ""}">${v ?? "—"}</td>`).join("") + `</tr>`).join("") +
+    `</tbody></table>`;
+  c.insertAdjacentHTML("beforeend", `<p class="note">Sorted by fast-corner average — the purest read on downforce${HUB.data.year >= 2026 ? " (Z-mode grip)" : ""}. Slow corners lean on mechanical grip and traction. Purple = best of the field. Apex windows are ±${win} m around each corner, so chicanes share readings.</p>`);
 }
 
 function viewStraights(root) {
@@ -218,6 +267,12 @@ function viewStraights(root) {
        <td class="r num" style="color:var(--ink2)">−${r.slClip.toFixed(1)}</td>${isRace ? `<td class="r num" style="color:var(--ink3)">${r.clipN}</td>` : ""}</tr>`).join("") +
     `</tbody></table>`;
   c2.insertAdjacentHTML("beforeend", `<p class="note">Ranked worst-first. <b>Total /lap</b> sums every km/h lost at full throttle before the braking points; <b>on straights</b> counts only the part lost on dead-straight track (curve radius &gt; ~600 m), where cornering scrub can't be the explanation — that portion is pure deployment clipping, and <span style="color:var(--red);font-weight:800">‡</span> marks zones where it exceeds 12 km/h: the signature of the MGU-K harvesting against the engine (superclipping). Loss through flat-out esses (e.g. Maggotts–Becketts) mixes clipping with cornering scrub, so compare cars on the same column rather than across circuits. Lifts don't count — that's lift-and-coast, not clipping.</p>`);
+
+  if (HUB.data.year >= 2026) c2.insertAdjacentHTML("beforeend",
+    `<p class="note">2026 note: electrical deployment tapers off above ~290 km/h by regulation, so some loss at very high speed is the rulebook, not a weakness — the gaps between cars are still real.</p>`);
+
+  /* ---- corner minimum speeds: the other half of the car-performance story ---- */
+  cornerSpeeds(root, s, map, rows.map(r => r.d));
 
   const most = [...rows].sort((a, b) => b.clip - a.clip)[0];
   const none = rows.filter(r => r.clip < 3).length;

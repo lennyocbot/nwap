@@ -127,7 +127,11 @@ function showPicker() {
   </div>`;
   root.querySelectorAll(".pick-card").forEach(b =>
     b.addEventListener("click", () => selectWeekend(+b.dataset.y, +b.dataset.r)));
-  try { history.replaceState(null, "", location.pathname + location.search); } catch (e) { }
+  HUB.viewing = null;
+  try {
+    if (location.hash) history.pushState(null, "", location.pathname + location.search);
+    document.title = "Minisector — F1 analysis";
+  } catch (e) { }
 }
 
 function initState() {
@@ -167,7 +171,15 @@ async function selectWeekend(year, round) {
   initState();
   buildShell();
   HUB.render();
-  try { history.replaceState(null, "", `#${year}/${round}`); } catch (e) { }
+  HUB.viewing = `${year}/${round}`;
+  try {
+    const target = `#${year}/${round}`;
+    // push a history entry when actually navigating so the phone back button
+    // walks weekend -> picker; replace when it's the same weekend (reload etc.)
+    if (location.hash !== target) history.pushState(null, "", target);
+    else history.replaceState(null, "", target);
+    document.title = `${entry.event} ${year} — Minisector`;
+  } catch (e) { }
 }
 
 let listenersArmed = false;
@@ -188,10 +200,10 @@ function armGlobalListeners() {
   addEventListener("hashchange", () => {
     if (MODE !== "site" || !HUB.manifest) return;
     const m = location.hash.match(/^#(\d{4})\/(\d+)$/);
-    if (!m && !location.hash) { showPicker(); return; }
-    if (m && HUB.data && !(+m[1] === HUB.data.year && +m[2] === HUB.data.round)
-        && (HUB.manifest.years[m[1]] || []).some(e => e.round === +m[2]))
-      selectWeekend(+m[1], +m[2]);
+    const want = m ? `${+m[1]}/${+m[2]}` : null;
+    if (want === HUB.viewing) return;
+    if (!want) { showPicker(); return; }
+    if ((HUB.manifest.years[m[1]] || []).some(e => e.round === +m[2])) selectWeekend(+m[1], +m[2]);
   });
   new MutationObserver(() => HUB.data && HUB.render()).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
   matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => HUB.data && HUB.render());

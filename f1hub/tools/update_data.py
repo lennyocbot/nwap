@@ -154,15 +154,25 @@ def backfill_step(budget=2):
             if pd.isna(ev["EventDate"]) or ev["EventDate"] > now - pd.Timedelta(days=4):
                 continue  # current/future weekends belong to the live updater
             d = weekend_dir(year, ev["RoundNumber"], ev["EventName"])
+            scheduled = [sid for sid, _ in sessions_of(ev)]
+            complete = scheduled and all((d / f"{sid}.json.gz").exists() for sid in scheduled)
+            attempts = 0
             if (d / "done.json").exists():
+                try:
+                    attempts = int(json.loads((d / "done.json").read_text()).get("attempts", 1))
+                except Exception:
+                    attempts = 1
+            # the F1 API flakes for whole weekends at a time — retry incomplete
+            # weekends up to 3 attempts (already-extracted sessions are skipped)
+            if complete or attempts >= 3:
                 continue
-            print(f"backfill: {year} R{ev['RoundNumber']} {ev['EventName']}", flush=True)
+            print(f"backfill: {year} R{ev['RoundNumber']} {ev['EventName']} (attempt {attempts + 1})", flush=True)
             try:
                 do_weekend(year, ev)
             except Exception as e:
                 print(f"  !! weekend failed: {e}")
             d.mkdir(parents=True, exist_ok=True)
-            (d / "done.json").write_text(json.dumps({"attempted": str(now)}))
+            (d / "done.json").write_text(json.dumps({"attempts": attempts + 1, "when": str(now)}))
             done_w += 1
             if done_w >= budget:
                 return done_w
