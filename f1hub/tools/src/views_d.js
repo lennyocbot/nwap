@@ -43,29 +43,36 @@ function viewTel(root) {
     bar.appendChild(chip);
   });
 
-  // add controls
+  // add controls — pick any lap from any session of the weekend
   const add = document.createElement("div"); add.className = "addlap"; c.appendChild(add);
-  const s = HUB.session();
+  const sessSel = document.createElement("select");
+  sessSel.innerHTML = HUB.data.sessions.map(ss => `<option value="${ss.id}" ${ss.id === HUB.S.sid ? "selected" : ""}>${SNAMES[ss.id] || ss.id}</option>`).join("");
   const drvSel = document.createElement("select");
-  drvSel.innerHTML = [...s.drivers].sort((a, b) => (a.pos ?? 99) - (b.pos ?? 99)).map(d => `<option value="${d.abbr}">${d.abbr} — ${esc(d.team)}</option>`).join("");
   const lapSel = document.createElement("select");
+  const ps = () => HUB.session(sessSel.value);
+  const fillDrivers = () => {
+    drvSel.innerHTML = [...ps().drivers].sort((a, b) => (a.pos ?? 99) - (b.pos ?? 99)).map(d => `<option value="${d.abbr}">${d.abbr} — ${esc(d.team)}</option>`).join("");
+  };
   const fillLaps = () => {
-    const laps = s.laps.filter(l => l.drv === drvSel.value && s.tel[l.drv + "-" + l.lap]).sort((a, b) => a.t - b.t);
+    const s2 = ps();
+    const laps = s2.laps.filter(l => l.drv === drvSel.value && s2.tel[l.drv + "-" + l.lap]).sort((a, b) => a.t - b.t);
     lapSel.innerHTML = laps.map(l => `<option value="${l.lap}">L${l.lap} — ${fmtLap(l.t)}${l.pb ? " ·PB" : ""}${l.cmp ? " · " + CMP_LETTER[l.cmp] + (l.life ?? "") : ""}${l.del ? " ·DEL" : ""}</option>`).join("") || `<option value="">no telemetry laps</option>`;
   };
-  fillLaps();
+  fillDrivers(); fillLaps();
+  sessSel.addEventListener("change", () => { fillDrivers(); fillLaps(); });
   drvSel.addEventListener("change", fillLaps);
   const addBtn = document.createElement("button"); addBtn.className = "btn pri"; addBtn.textContent = "Add lap";
-  addBtn.addEventListener("click", () => { if (lapSel.value) addCompare(s.id, drvSel.value, +lapSel.value); });
+  addBtn.addEventListener("click", () => { if (lapSel.value) addCompare(sessSel.value, drvSel.value, +lapSel.value); });
   const fastBtn = document.createElement("button"); fastBtn.className = "btn"; fastBtn.textContent = "+ session fastest";
   fastBtn.addEventListener("click", () => {
-    const cand = s.laps.filter(l => l.t != null && !l.del && s.tel[l.drv + "-" + l.lap]).sort((a, b) => a.t - b.t)[0];
-    if (cand) addCompare(s.id, cand.drv, cand.lap);
+    const s2 = ps();
+    const cand = s2.laps.filter(l => l.t != null && !l.del && s2.tel[l.drv + "-" + l.lap]).sort((a, b) => a.t - b.t)[0];
+    if (cand) addCompare(s2.id, cand.drv, cand.lap);
   });
   const clrBtn = document.createElement("button"); clrBtn.className = "btn"; clrBtn.textContent = "Clear";
   clrBtn.addEventListener("click", () => { S.compare = []; S.telZoom = null; HUB.save(); HUB.render(); });
-  add.append("Add from " + SNAMES[s.id] + ": ", drvSel, lapSel, addBtn, fastBtn, clrBtn);
-  add.insertAdjacentHTML("beforeend", `<span class="hint">tip: click any dot in the Pace view · drag on a trace to zoom, double-click to reset</span>`);
+  add.append("Add: ", sessSel, drvSel, lapSel, addBtn, fastBtn, clrBtn);
+  add.insertAdjacentHTML("beforeend", `<span class="hint">tip: tap any dot in the Pace view · drag on a trace to zoom, double-tap to reset</span>`);
 
   if (!ents.length) {
     const q = HUB.session("Q");

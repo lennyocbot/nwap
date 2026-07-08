@@ -146,6 +146,7 @@ function dragZoom(ch, cb) {
   let sx = null, rect = null;
   const toVal = px => ch.xd[0] + (px - ml) / iw * (ch.xd[1] - ch.xd[0]);
   svg.style.cursor = "crosshair";
+  svg.style.touchAction = "pan-y";  // vertical swipe scrolls the page, horizontal drag zooms
   svg.addEventListener("pointerdown", e => {
     const p = pt(e); if (p.x < ml || p.x > ml + iw) return;
     sx = p.x; svg.setPointerCapture(e.pointerId);

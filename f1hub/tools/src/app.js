@@ -1,22 +1,34 @@
 /* ============ app shell & boot ============ */
 "use strict";
 
+/* tabs are contextual: only the ones that make sense for the current session show up */
 const TABS = [
-  ["overview", "Overview", viewOverview],
-  ["pace", "Pace", viewPace],
-  ["deg", "Tyres & Deg", viewDeg],
-  ["longruns", "Long Runs", viewLongRuns],
-  ["quali", "Qualifying", viewQuali],
-  ["race", "Race", viewRace],
-  ["tel", "Telemetry", viewTel],
-  ["weather", "Weather", viewWeather],
+  ["overview", "Overview", viewOverview, () => true],
+  ["pace", "Pace", viewPace, () => true],
+  ["deg", "Tyres & Deg", viewDeg, sid => ["R", "S", "FP1", "FP2", "FP3"].includes(sid)],
+  ["longruns", "Long Runs", viewLongRuns, sid => sid.startsWith("FP")],
+  ["quali", "Qualifying", viewQuali, sid => sid === "Q" || sid === "SQ"],
+  ["race", "Race", viewRace, sid => sid === "R" || sid === "S"],
+  ["tel", "Telemetry", viewTel, () => true],
+  ["weather", "Weather", viewWeather, () => true],
 ];
 const MODE = typeof HUB_MODE !== "undefined" ? HUB_MODE : "embedded";
+
+function renderTabs() {
+  const S = HUB.S, nav = document.getElementById("tabs");
+  if (!nav) return;
+  const avail = TABS.filter(t => t[3](S.sid));
+  if (!avail.some(t => t[0] === S.tab)) S.tab = "overview";
+  nav.innerHTML = avail.map(t =>
+    `<button data-tab="${t[0]}" class="${t[0] === S.tab ? "on" : ""}">${t[1]}${t[0] === "tel" && S.compare.length ? ` <span class="cnt">${S.compare.length}</span>` : ""}</button>`).join("");
+  nav.querySelectorAll("button").forEach(b =>
+    b.addEventListener("click", () => { S.tab = b.dataset.tab; HUB.render(); }));
+}
 
 HUB.render = function render() {
   const S = HUB.S;
   document.querySelectorAll("#sessions button").forEach(b => b.classList.toggle("on", b.dataset.sid === S.sid));
-  document.querySelectorAll("nav.tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === S.tab));
+  renderTabs();
   const main = document.getElementById("view");
   if (!main) return;
   main.innerHTML = "";
@@ -62,7 +74,7 @@ function buildShell() {
     </div>
     <div class="ctrl-row">
       <div class="seg" id="sessions">${d.sessions.map(s => `<button data-sid="${s.id}">${SNAMES[s.id] || s.id}</button>`).join("")}</div>
-      <nav class="tabs" id="tabs">${TABS.map(t => `<button data-tab="${t[0]}">${t[1]}</button>`).join("")}</nav>
+      <nav class="tabs" id="tabs"></nav>
     </div>
   </div></header>
   <main id="view"></main>
@@ -71,8 +83,6 @@ function buildShell() {
 
   document.querySelectorAll("#sessions button").forEach(b =>
     b.addEventListener("click", () => { HUB.S.sid = b.dataset.sid; HUB.S.lrSel = null; HUB.render(); }));
-  document.querySelectorAll("#tabs button").forEach(b =>
-    b.addEventListener("click", () => { HUB.S.tab = b.dataset.tab; HUB.render(); }));
 
   if (MODE === "site" && HUB.manifest) {
     const py = document.getElementById("pyear"), pe = document.getElementById("pevent");
@@ -88,7 +98,9 @@ function initState() {
   const S = HUB.S;
   const last = HUB.data.sessions.at(-1);
   S.sid = last ? last.id : HUB.data.sessions[0].id;
-  S.sel = new Set(HUB.session().drivers.map(dd => dd.abbr));
+  // phones start with the top 10 selected — 22 lines on a small screen is soup
+  const order = [...HUB.session().drivers].sort((a, b) => (a.pos ?? 99) - (b.pos ?? 99));
+  S.sel = new Set((innerWidth < 700 ? order.slice(0, 10) : order).map(dd => dd.abbr));
   S.compare = []; S.telZoom = null; S.lrSel = null; S.degCmp = null; S.qseg = 3;
   HUB.restore();
 }

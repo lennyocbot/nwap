@@ -92,6 +92,7 @@ nav.tabs button {
 }
 nav.tabs button:hover { color:var(--ink); }
 nav.tabs button.on { color:var(--ink); border-bottom-color:var(--accent); }
+nav.tabs .cnt { background:var(--accent); color:#fff; border-radius:9px; font-size:9.5px; padding:1px 5px; vertical-align:1.5px; }
 
 main { max-width:1440px; margin:0 auto; padding:16px 20px 80px; }
 
@@ -196,3 +197,30 @@ kbd.k { background:var(--surface3); border-radius:3px; padding:0 4px; font-size:
 
 footer { max-width:1440px; margin:30px auto 0; padding:0 20px 30px; font-size:11.5px; color:var(--ink3); }
 footer a { color:var(--ink2); }
+
+/* ---------- mobile ---------- */
+@media (max-width:640px) {
+  main { padding:10px 8px 60px; }
+  .top-inner { padding:8px 10px 0; }
+  .title-row { gap:8px; }
+  .title-row .meta { display:none; }
+  .title-row .brand { font-size:9.5px; }
+  .title-row .picker select { font-size:13.5px; max-width:56vw; }
+  .ctrl-row { gap:8px; margin-top:6px; }
+  .seg { overflow-x:auto; scrollbar-width:none; max-width:100%; }
+  .seg button { padding:6px 10px; }
+  nav.tabs button { padding:10px 10px 11px; font-size:12.5px; }
+  .card { padding:10px 11px; margin-bottom:10px; border-radius:9px; }
+  .card h3 .right { width:100%; margin-left:0; }
+  .stat-row { grid-template-columns:repeat(2,1fr); gap:7px; }
+  .stat .v { font-size:16px; }
+  .chip { padding:5px 10px; }
+  .rail-btn { padding:6px 7px; }
+  table.t { font-size:11.5px; }
+  table.t td { padding:4px 6px; }
+  table.t th { padding:4px 6px; }
+  .addlap select { max-width:34vw; }
+  .btn { padding:6px 11px; }
+  .insights { gap:5px; }
+  .insight { font-size:11.5px; padding:5px 9px; }
+}

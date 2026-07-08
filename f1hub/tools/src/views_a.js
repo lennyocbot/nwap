@@ -255,10 +255,13 @@ function viewPace(root) {
     if (drvDash(d.abbr)) path.setAttribute("stroke-dasharray", drvDash(d.abbr));
     for (const l of laps) {
       const fillc = S.colorMode === "compound" ? cmpCol(l.cmp) : col;
-      const n = svgEl("circle", { cx: ch.x(l.lap), cy: ch.y(fc(l)), r: pts.length > 400 ? 2.6 : 3.4, fill: fillc, stroke: "var(--surface)", "stroke-width": 1.2, cursor: "pointer" }, ch.plot);
-      if (l.pb) n.setAttribute("stroke", "var(--green)");
-      dotNodes.push(n); dotLaps.push(l);
-      n.addEventListener("click", () => addCompare(s.id, l.drv, l.lap));
+      const cx = ch.x(l.lap), cy = ch.y(fc(l));
+      const vis = svgEl("circle", { cx, cy, r: pts.length > 400 ? 2.6 : 3.4, fill: fillc, stroke: "var(--surface)", "stroke-width": 1.2, "pointer-events": "none" }, ch.plot);
+      if (l.pb) vis.setAttribute("stroke", "var(--green)");
+      // generous invisible hit target so laps are tappable on touch screens
+      const hit = svgEl("circle", { cx, cy, r: 9, fill: "transparent", cursor: "pointer" }, ch.plot);
+      dotNodes.push(hit); dotLaps.push(l);
+      hit.addEventListener("click", () => addCompare(s.id, l.drv, l.lap));
     }
   }
   // direct labels at line ends, de-collided

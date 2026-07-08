@@ -167,7 +167,7 @@ function addCompare(sid, drv, lap) {
   S.compare.push({ sid, drv, lap });
   HUB.save();
   toast(`Added ${drv} L${lap} (${SNAMES[sid]}) — ${S.compare.length} in Telemetry`);
-  if (S.tab === "tel") HUB.render();
+  if (S.tab === "tel") HUB.render(); else if (typeof renderTabs === "function") renderTabs();
   const b = document.querySelector('nav.tabs button[data-tab="tel"]');
   if (b) { b.style.color = "var(--accent)"; setTimeout(() => b.style.color = "", 1200); }
 }
