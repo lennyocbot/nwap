@@ -227,7 +227,13 @@ def main():
         if datetime.date.today().month <= 2:  # season overlap: also check last year's finale
             n += auto(year - 1)
         # fresh sessions first, then chip away at the historical queue
-        n += backfill_step(budget=1 if n else 2)
+        budget = 1 if n else 2
+        n_bf = backfill_step(budget=budget)
+        n += n_bf
+        if n_bf >= budget:
+            # full budget used -> queue almost certainly has more; the
+            # workflow greps for this marker and re-dispatches itself
+            print("BACKFILL_REMAINING")
 
     rebuild_manifest()
     print(f"done: {n} new session file(s)")

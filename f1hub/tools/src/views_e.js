@@ -32,24 +32,60 @@ function detectStraights(tel, map) {
 /* km/h lost to clipping on one lap, per straight: peak speed minus speed at
    the braking point, counted only while the driver stays flat out — a lift
    (throttle off, lift-and-coast) is not clipping and returns null there */
-function clipLossPer(tel, straights) {
+/* which telemetry grid points sit on a dead-straight piece of track —
+   speed falling there at full throttle cannot be cornering scrub */
+function straightLineMask(map, N) {
+  const M = map.x.length;
+  const h = new Array(M).fill(0);
+  for (let i = 1; i < M; i++) h[i] = Math.atan2(map.y[i] - map.y[i - 1], map.x[i] - map.x[i - 1]);
+  h[0] = h[1];
+  const segLen = map.len / (M - 1);
+  const mask = new Array(N).fill(false);
+  for (let j = 0; j < N; j++) {
+    const i = Math.max(2, Math.min(M - 3, Math.round(j / (N - 1) * (M - 1))));
+    let dh = 0;
+    for (let k = i - 2; k <= i + 1; k++) {
+      let a = h[k + 1] - h[k];
+      while (a > Math.PI) a -= 2 * Math.PI;
+      while (a < -Math.PI) a += 2 * Math.PI;
+      dh += Math.abs(a);
+    }
+    mask[j] = dh / (4 * segLen) < 0.0016;   // curve radius beyond ~600 m ≈ straight line
+  }
+  return mask;
+}
+
+/* per straight: km/h given back while flat on the throttle before this lap's
+   own braking point. Lifts simply don't contribute (they're lift-and-coast,
+   not clipping) instead of invalidating the whole zone. slLoss counts only
+   the part lost on dead-straight track — the superclipping signature. */
+function clipLossPer(tel, straights, slMask) {
   const N = tel.v.length;
+  // light smoothing so ±1 km/h quantisation wiggle doesn't sum into fake loss
+  const vs = tel.v.map((v, i) => i > 0 && i < N - 1 ? (tel.v[i - 1] + v + tel.v[i + 1]) / 3 : v);
   return straights.map(s => {
-    // find THIS lap's braking onset — drivers brake at different points than
-    // the reference lap, and measuring to the ref's point falsely reads
-    // "lift" for anyone braking earlier
-    const lo = s.from, hiRef = Math.min(s.iEnd + 6, N - 1);
+    const hiRef = Math.min(s.iEnd + 6, N - 1);
+    // this lap may still be braking / feeding throttle out of the previous
+    // corner past the reference lap's exit point — skip the whole corner-exit
+    // zone (up to the first quarter of the window) before looking for the
+    // braking onset that ends the straight
+    let lo = s.from;
+    const lead = Math.min(hiRef - 6, s.from + Math.max(6, Math.round((hiRef - s.from) * 0.25)));
+    while (lo < lead && (tel.b[lo] || tel.th[lo] < 90)) lo++;
     let end = hiRef;
-    for (let j = lo + 3; j <= hiRef; j++) if (tel.b[j]) { end = j; break; }
+    for (let j = lo + 2; j <= hiRef; j++) if (tel.b[j]) { end = j; break; }
     if (end - lo < 6) return null;
-    let vmax = -1, imax = -1;
-    for (let j = lo; j < end; j++) if (tel.v[j] > vmax) { vmax = tel.v[j]; imax = j; }
-    if (imax < 0) return null;
-    // flat on the throttle from peak to just before their own braking point;
-    // a real lift (throttle off before braking) is lift-and-coast, not clipping
-    const stop = end - 1;
-    for (let j = imax; j < stop; j++) if (tel.th[j] < 95) return null;
-    return Math.max(0, vmax - tel.v[Math.max(stop - 1, imax)]);
+    let loss = 0, slLoss = 0, any = false;
+    for (let j = lo + 1; j < end - 1; j++) {
+      if (tel.b[j] || tel.th[j] < 95 || tel.th[j - 1] < 95) continue;
+      any = true;
+      const dv = vs[j - 1] - vs[j];
+      if (dv > 0.4) {
+        loss += dv;
+        if (slMask && slMask[j] && slMask[j - 1]) slLoss += dv;
+      }
+    }
+    return any ? { loss, slLoss } : null;
   });
 }
 
@@ -104,6 +140,7 @@ function viewStraights(root) {
   const straights = detectStraights(refTel, map);
   if (!straights.length) { root.innerHTML = `<div class="empty">Could not identify straights here.</div>`; return; }
   const mainIdx = straights.indexOf(straights.reduce((a, b) => b.vmax > a.vmax ? b : a));
+  const slMask = straightLineMask(map, refTel.v.length);
 
   const rows = [];
   for (const d of s.drivers) {
@@ -122,19 +159,20 @@ function viewStraights(root) {
     if (isRace) {
       const clean = tels.filter(x => isClean(x.l));
       const use = clean.length ? clean : tels;
-      const sums = straights.map(() => 0), ns = straights.map(() => 0);
+      const sums = straights.map(() => 0), sl = straights.map(() => 0), ns = straights.map(() => 0);
       for (const x of use) {
-        clipLossPer(x.tel, straights).forEach((v, i) => { if (v != null) { sums[i] += v; ns[i]++; } });
+        clipLossPer(x.tel, straights, slMask).forEach((v, i) => { if (v) { sums[i] += v.loss; sl[i] += v.slLoss; ns[i]++; } });
       }
-      per = sums.map((v, i) => ns[i] ? v / ns[i] : null);
+      per = sums.map((v, i) => ns[i] ? { loss: v / ns[i], slLoss: sl[i] / ns[i] } : null);
       clipN = use.length;
     } else {
       const fastest = [...tels].sort((a, b) => a.l.t - b.l.t)[0];
-      per = clipLossPer(fastest.tel, straights);
+      per = clipLossPer(fastest.tel, straights, slMask);
       clipN = 1;
     }
-    const clip = per.reduce((a, v) => a + (v || 0), 0);
-    rows.push({ d, tops, per, clip, clipN });
+    const clip = per.reduce((a, v) => a + (v ? v.loss : 0), 0);
+    const slClip = per.reduce((a, v) => a + (v ? v.slLoss : 0), 0);
+    rows.push({ d, tops, per, clip, slClip, clipN });
   }
   if (!rows.length) { root.innerHTML = `<div class="empty">No usable laps.</div>`; return; }
   rows.sort((a, b) => b.tops[mainIdx] - a.tops[mainIdx]);
@@ -160,19 +198,26 @@ function viewStraights(root) {
 
   /* ---- clipping ranking: per straight + overall ---- */
   const crows = [...rows].sort((a, b) => b.clip - a.clip);
-  const cellMax = Math.max(...rows.flatMap(r => r.per.map(v => v || 0)), 1);
+  const cellMax = Math.max(...rows.flatMap(r => r.per.map(v => v ? v.loss : 0)), 1);
   const c2 = card(root, "Clipping ranking",
-    `km/h given back between peak speed and the braking point while flat on the throttle · ${isRace ? "average per clean race lap, per straight" : "on each driver's fastest lap"} · "—" = lifted there${isRace ? " every lap" : ""}, so not measurable`);
+    `km/h given back while flat on the throttle, per straight · ${isRace ? "average per clean race lap" : "on each driver's fastest lap"} · ‡ = superclipping signature`);
   const w2 = document.createElement("div"); w2.className = "tblwrap"; c2.appendChild(w2);
-  const heat = v => v == null ? "" : `background:rgba(250,204,21,${Math.min(0.5, v / cellMax * 0.5).toFixed(2)});`;
+  const heat = v => v == null ? "" : `background:rgba(250,204,21,${Math.min(0.5, v.loss / cellMax * 0.5).toFixed(2)});`;
+  const cellTxt = v => {
+    if (v == null) return "—";
+    if (v.loss < 1.5) return "0";
+    const sup = v.slLoss >= 12;
+    return `−${v.loss.toFixed(1)}${sup ? '<span title="speed falling on dead-straight track at full throttle — harvesting against the engine (superclipping) likely" style="color:var(--red);font-weight:800">‡</span>' : ""}`;
+  };
   w2.innerHTML = `<table class="t"><thead><tr><th class="r">#</th><th>Driver</th>` +
     straights.map((st, i) => `<th class="r">${esc(st.name || "S" + (i + 1))}${i === mainIdx ? " ★" : ""}</th>`).join("") +
-    `<th class="r">Total /lap</th>${isRace ? '<th class="r">Laps</th>' : ""}</tr></thead><tbody>` +
+    `<th class="r">Total /lap</th><th class="r">on straights</th>${isRace ? '<th class="r">Laps</th>' : ""}</tr></thead><tbody>` +
     crows.map((r, i) => `<tr><td class="r num">${i + 1}</td><td>${drvCell(r.d)}</td>` +
-      r.per.map(v => `<td class="r num" style="${heat(v)}">${v == null ? "—" : v < 0.05 ? "0" : "−" + v.toFixed(1)}</td>`).join("") +
-      `<td class="r num" style="font-weight:700${i === 0 ? ";color:var(--yellow)" : ""}">−${r.clip.toFixed(1)}</td>${isRace ? `<td class="r num" style="color:var(--ink3)">${r.clipN}</td>` : ""}</tr>`).join("") +
+      r.per.map(v => `<td class="r num" style="${heat(v)}">${cellTxt(v)}</td>`).join("") +
+      `<td class="r num" style="font-weight:700${i === 0 ? ";color:var(--yellow)" : ""}">−${r.clip.toFixed(1)}</td>
+       <td class="r num" style="color:var(--ink2)">−${r.slClip.toFixed(1)}</td>${isRace ? `<td class="r num" style="color:var(--ink3)">${r.clipN}</td>` : ""}</tr>`).join("") +
     `</tbody></table>`;
-  c2.insertAdjacentHTML("beforeend", `<p class="note">Ranked worst-first — the top of this table is the most energy-limited car. Laps with a lift between peak and braking are excluded (that's lift-and-coast, not clipping). A plateau can also be plain terminal velocity on a very long straight; compare cars on the <i>same</i> straight before concluding. High clipping + low top speed = energy-limited; low clipping + low top speed = draggy / big wing.</p>`);
+  c2.insertAdjacentHTML("beforeend", `<p class="note">Ranked worst-first. <b>Total /lap</b> sums every km/h lost at full throttle before the braking points; <b>on straights</b> counts only the part lost on dead-straight track (curve radius &gt; ~600 m), where cornering scrub can't be the explanation — that portion is pure deployment clipping, and <span style="color:var(--red);font-weight:800">‡</span> marks zones where it exceeds 12 km/h: the signature of the MGU-K harvesting against the engine (superclipping). Loss through flat-out esses (e.g. Maggotts–Becketts) mixes clipping with cornering scrub, so compare cars on the same column rather than across circuits. Lifts don't count — that's lift-and-coast, not clipping.</p>`);
 
   const most = [...rows].sort((a, b) => b.clip - a.clip)[0];
   const none = rows.filter(r => r.clip < 3).length;

@@ -26,6 +26,7 @@ on:
 
 permissions:
   contents: write
+  actions: write   # lets a finished run re-dispatch itself while the backfill queue has work
 
 concurrency:
   group: f1-data
@@ -61,7 +62,7 @@ jobs:
             ARGS="--year ${{ inputs.year }} --all"
           fi
           if [ "${{ inputs.force }}" = "true" ]; then ARGS="$ARGS --force"; fi
-          python update_data.py $ARGS
+          python update_data.py $ARGS | tee /tmp/update.log
 
       - name: Commit & push
         run: |
@@ -74,4 +75,20 @@ jobs:
             git commit -m "data: $(git diff --cached --name-only | grep -c 'json.gz$') new session file(s)"
             git pull --rebase origin ${{ github.ref_name }}
             git push
+          fi
+
+      - name: Keep the backfill rolling
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if grep -q BACKFILL_REMAINING /tmp/update.log; then
+            echo "queue not empty — dispatching the next run"
+            curl -sf -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${{ github.repository }}/actions/workflows/f1-data.yml/dispatches" \
+              -d '{"ref":"${{ github.ref_name }}"}' || echo "dispatch failed — cron will pick it up"
+          else
+            echo "backfill queue empty"
           fi
