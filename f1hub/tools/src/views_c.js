@@ -230,6 +230,9 @@ function viewRace(root) {
     legend(div, [{ color: "var(--band-sc)", label: "SC", dot: true }, { color: "var(--band-vsc)", label: "VSC", dot: true }, { color: "var(--ink2)", label: "○ pit stop", dot: true }]);
   } else c1.insertAdjacentHTML("beforeend", `<div class="empty">Select drivers above.</div>`);
 
+  /* ---- race replay ---- */
+  replayCard(root, s);
+
   /* ---- position chart ---- */
   const c2 = card(root, "Position changes");
   if (drvs.length) {

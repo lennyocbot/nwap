@@ -115,6 +115,9 @@ function viewTel(root) {
       <td class="r num">${vmax} km/h</td><td class="r num">${ft.toFixed(0)}%</td><td class="r num">${br.toFixed(0)}%</td></tr>`;
     }).join("") + "</tbody></table>";
 
+  /* ---- why is the slower lap slower ---- */
+  if (ents.length >= 2) whyCard(root, ents);
+
   /* ---- dominance + map row ---- */
   const g = document.createElement("div"); g.className = "grid2"; root.appendChild(g);
   const cmap = card(g, "Track map", map ? `${map.corners.length} corners · hover traces to follow the cars` : "");
@@ -335,6 +338,137 @@ function viewTel(root) {
 
   /* map dominance colouring uses same winners */
   if (mapAPI && ents.length >= 2) mapAPI.dominance(domWinner);
+}
+
+/* ---- time-loss decomposition: why is the slower lap slower ----
+   The reference lap is partitioned completely into corner zones (lift/brake
+   -> apex -> back to full throttle) and the straights between them, so the
+   per-zone deltas provably sum to the total gap. Every label is a measured
+   fact: braking point (m), minimum speed (km/h), throttle application (m). */
+function refZones(tel, map) {
+  const N = tel.v.length;
+  const starts = [];
+  for (let j = 2; j < N - 2; j++) if (tel.b[j] && !tel.b[j - 1]) starts.push(j);
+  let zones = [];
+  for (const bs of starts) {
+    let lift = bs;
+    for (let j = bs - 1; j > Math.max(0, bs - 30); j--) { if (tel.th[j] >= 95) { lift = j; break; } }
+    let apex = bs, mv = 1e9;
+    for (let j = bs; j < Math.min(bs + 50, N - 1); j++) { if (tel.v[j] < mv) { mv = tel.v[j]; apex = j; } else if (tel.v[j] > mv + 10) break; }
+    let ex = Math.min(apex + 45, N - 1);
+    for (let j = apex; j < Math.min(apex + 45, N - 1); j++) if (tel.th[j] >= 97 && tel.th[j + 1] >= 97) { ex = j; break; }
+    zones.push({ lift, bs, apex, ex });
+  }
+  // merge chained corners (esses / chicanes) whose zones touch
+  const merged = [];
+  for (const z of zones) {
+    const p = merged.at(-1);
+    if (p && z.lift <= p.ex + 2) { p.ex = Math.max(p.ex, z.ex); p.apex2 = z.apex; }
+    else merged.push({ ...z });
+  }
+  // name zones by the nearest corner to the apex
+  for (const z of merged) {
+    if (map && map.corners.length) {
+      const dApex = z.apex / (N - 1) * map.len;
+      let bestC = map.corners[0], bd = 1e9;
+      for (const c of map.corners) { const dd = Math.abs(c.d - dApex); if (dd < bd) { bd = dd; bestC = c; } }
+      z.name = "T" + bestC.n + (bestC.l || "") + (z.apex2 ? "+" : "");
+    }
+  }
+  return merged;
+}
+
+function zoneFacts(zone, telA, telB, N) {
+  const step = telA.len / (N - 1);
+  const win0 = Math.max(0, zone.lift - 10), win1 = Math.min(N - 1, zone.apex + 6);
+  const measure = tel => {
+    let bs = null;
+    for (let j = win0; j <= win1; j++) if (tel.b[j] && !tel.b[j - 1]) { bs = j; break; }
+    let lift = bs ?? win1;
+    for (let j = (bs ?? win1) - 1; j > Math.max(0, win0 - 15); j--) { if (tel.th[j] >= 95) { lift = j; break; } }
+    let mv = 1e9;
+    for (let j = win0; j <= Math.min(zone.ex, N - 1); j++) mv = Math.min(mv, tel.v[j]);
+    let on = null;
+    for (let j = zone.apex - 2; j < Math.min(zone.ex + 25, N - 1); j++) if (tel.th[j] >= 95 && tel.th[j + 1] >= 95) { on = j; break; }
+    return { bs, lift, mv, on };
+  };
+  const A = measure(telA), B = measure(telB);
+  const facts = [];
+  if (A.bs != null && B.bs != null && Math.abs(B.bs - A.bs) >= 2)
+    facts.push(`braked ${Math.round(Math.abs(B.bs - A.bs) * step)} m ${B.bs < A.bs ? "earlier" : "later"}`);
+  else if (Math.abs(B.lift - A.lift) >= 2)
+    facts.push(`lifted ${Math.round(Math.abs(B.lift - A.lift) * step)} m ${B.lift < A.lift ? "earlier" : "later"}`);
+  if (Math.abs(B.mv - A.mv) >= 2) facts.push(`min speed ${B.mv < A.mv ? "−" : "+"}${Math.abs(Math.round(B.mv - A.mv))} km/h`);
+  if (A.on != null && B.on != null && Math.abs(B.on - A.on) >= 2)
+    facts.push(`full throttle ${Math.round(Math.abs(B.on - A.on) * step)} m ${B.on > A.on ? "later" : "earlier"}`);
+  return facts;
+}
+
+function whyCard(root, ents) {
+  const S = HUB.S;
+  const ref = ents[0];
+  const map = HUB.session(ref.e.sid).map || HUB.session().map;
+  const N = ref.tel.v.length;
+  if (!(S.whyIdx >= 1 && S.whyIdx < ents.length)) S.whyIdx = 1;
+  const other = ents[S.whyIdx];
+
+  const c = card(root, "Why the slower lap is slower", "the reference lap is split into corner zones and straights — the pieces sum to the whole gap, and every label is a measured fact");
+  if (ents.length > 2) {
+    const sel = document.createElement("select");
+    sel.innerHTML = ents.slice(1).map((en, i) => `<option value="${i + 1}" ${i + 1 === S.whyIdx ? "selected" : ""}>${esc(en.label)} vs ${esc(ref.label)}</option>`).join("");
+    sel.addEventListener("change", () => { S.whyIdx = +sel.value; HUB.render(); });
+    c.querySelector(".right").appendChild(sel);
+  }
+
+  const zones = refZones(ref.tel, map);
+  const dt = (tel, a, b) => tel.t[Math.min(b, N - 1)] - tel.t[Math.max(a, 0)];
+  const segs = [];
+  let cursor = 0;
+  for (const z of zones) {
+    if (z.lift > cursor + 1) segs.push({ kind: "straight", a: cursor, b: z.lift, name: `Straight → ${z.name || ""}` });
+    segs.push({ kind: "entry", a: z.lift, b: Math.max(z.apex2 || z.apex, z.apex), name: z.name, zone: z });
+    segs.push({ kind: "exit", a: Math.max(z.apex2 || z.apex, z.apex), b: z.ex, name: z.name, zone: z });
+    cursor = z.ex;
+  }
+  if (cursor < N - 1) segs.push({ kind: "straight", a: cursor, b: N - 1, name: "Final straight" });
+  for (const sg of segs) sg.d = dt(other.tel, sg.a, sg.b) - dt(ref.tel, sg.a, sg.b);
+
+  const total = other.lap.t - ref.lap.t;
+  const sumSegs = segs.reduce((a, s) => a + s.d, 0);
+
+  // per corner: entry + exit combined, plus straights as their own rows
+  const rowsMap = new Map();
+  for (const sg of segs) {
+    const key = sg.kind === "straight" ? "s:" + sg.a : "c:" + sg.a + sg.name;
+    if (!rowsMap.has(key)) rowsMap.set(key, { name: sg.name, kind: sg.kind, d: 0, zone: sg.zone });
+    rowsMap.get(key).d += sg.d;
+  }
+  const rows = [...rowsMap.values()].filter(r => Math.abs(r.d) >= 15).sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).slice(0, 9);
+  for (const r of rows) {
+    r.facts = r.kind === "straight"
+      ? [r.d > 0 ? "flat-out deficit (power / drag / clipping / tow)" : "flat-out gain (power / clipping / tow)"]
+      : zoneFacts(r.zone, ref.tel, other.tel, N);
+    if (!r.facts.length)
+      r.facts = [r.d > 0 ? "carried less speed through the zone (line / grip)" : "carried more speed through the zone (line / grip)"];
+  }
+  const totals = { entry: 0, exit: 0, straight: 0 };
+  for (const sg of segs) totals[sg.kind === "straight" ? "straight" : sg.kind] += sg.d;
+
+  const maxAbs = Math.max(...rows.map(r => Math.abs(r.d)), 1);
+  c.insertAdjacentHTML("beforeend", `
+    <div class="why-head"><b class="num" style="font-size:17px">${fmtDelta(total)}s</b> — ${esc(other.label)} vs ${esc(ref.label)}
+      <span class="hint">zones account for ${fmtDelta(sumSegs)}s${Math.abs(sumSegs - total) > 40 ? ` · ${fmtDelta(total - sumSegs)}s elsewhere (line variation between zones)` : ""}</span></div>
+    <div class="why-totals">
+      <span>Corner entries <b class="num">${fmtDelta(totals.entry, 2)}</b></span>
+      <span>Corner exits <b class="num">${fmtDelta(totals.exit, 2)}</b></span>
+      <span>Straights <b class="num">${fmtDelta(totals.straight, 2)}</b></span>
+    </div>
+    <table class="t why-t"><tbody>${rows.map(r => `
+      <tr><td style="width:110px"><b>${esc(r.name || "?")}</b>${r.kind === "straight" ? "" : ""}</td>
+      <td class="r num" style="width:70px;font-weight:700;color:${r.d > 0 ? "var(--red)" : "var(--green)"}">${fmtDelta(r.d, 2)}</td>
+      <td style="width:130px"><div style="height:6px;border-radius:3px;background:var(--surface3);overflow:hidden"><div style="height:100%;width:${(Math.abs(r.d) / maxAbs * 100).toFixed(0)}%;background:${r.d > 0 ? "var(--red)" : "var(--green)"};float:${r.d > 0 ? "left" : "left"}"></div></div></td>
+      <td class="hint">${r.facts.map(esc).join(" · ") || "—"}</td></tr>`).join("")}</tbody></table>
+    <p class="note">Positive red = time lost by ${esc(other.e.drv)} in that zone, green = gained. Facts are read directly from the traces (braking point, minimum speed, throttle application); zones smaller than 0.015 s are folded into the totals.</p>`);
 }
 
 /* ---- track map ---- */

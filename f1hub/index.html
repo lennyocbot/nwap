@@ -206,6 +206,27 @@ kbd.k { background:var(--surface3); border-radius:3px; padding:0 4px; font-size:
 footer { max-width:1440px; margin:30px auto 0; padding:0 20px 30px; font-size:11.5px; color:var(--ink3); }
 footer a { color:var(--ink2); }
 
+/* ---------- why the slower lap is slower ---------- */
+.why-head { margin-bottom:8px; }
+.why-totals { display:flex; flex-wrap:wrap; gap:8px 20px; margin-bottom:10px; font-size:12.5px; color:var(--ink2); }
+.why-totals b { color:var(--ink); }
+table.why-t td { border-bottom:1px solid var(--grid); padding:5px 8px; }
+
+/* ---------- race replay ---------- */
+.rp-wrap { display:grid; grid-template-columns: 1fr 250px; gap:14px; }
+@media (max-width:900px) { .rp-wrap { grid-template-columns:1fr; } }
+.rp-controls { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
+.rp-controls input[type=range] { flex:1; min-width:140px; }
+.rp-lap { font-weight:800; font-size:14px; min-width:86px; }
+.rp-flag { font-size:10.5px; font-weight:800; letter-spacing:.08em; padding:2px 8px; border-radius:5px; display:none; }
+.rp-flag.sc { display:inline-block; background:var(--yellow); color:#111; }
+.rp-flag.red { display:inline-block; background:var(--red); color:#fff; }
+.rp-board { font-size:12px; max-height:460px; overflow-y:auto; }
+.rp-board table { border-collapse:collapse; width:100%; }
+.rp-board td { padding:2.5px 5px; border-bottom:1px solid var(--grid); white-space:nowrap; }
+.rp-board .out { opacity:.4; }
+.rp-tyre { display:inline-block; width:9px; height:9px; border-radius:50%; border:2px solid; vertical-align:-1px; }
+
 /* ---------- long run sheet ---------- */
 .lr-sheet th { border-radius:3px; }
 .lr-sheet td { border:1px solid var(--grid); }
@@ -1654,6 +1675,9 @@ function viewRace(root) {
     legend(div, [{ color: "var(--band-sc)", label: "SC", dot: true }, { color: "var(--band-vsc)", label: "VSC", dot: true }, { color: "var(--ink2)", label: "○ pit stop", dot: true }]);
   } else c1.insertAdjacentHTML("beforeend", `<div class="empty">Select drivers above.</div>`);
 
+  /* ---- race replay ---- */
+  replayCard(root, s);
+
   /* ---- position chart ---- */
   const c2 = card(root, "Position changes");
   if (drvs.length) {
@@ -1870,6 +1894,9 @@ function viewTel(root) {
       <td>${en.lap.cmp ? cmpDot(en.lap.cmp) + ` <span class="hint num">${en.lap.life}L</span>` : "—"}</td>
       <td class="r num">${vmax} km/h</td><td class="r num">${ft.toFixed(0)}%</td><td class="r num">${br.toFixed(0)}%</td></tr>`;
     }).join("") + "</tbody></table>";
+
+  /* ---- why is the slower lap slower ---- */
+  if (ents.length >= 2) whyCard(root, ents);
 
   /* ---- dominance + map row ---- */
   const g = document.createElement("div"); g.className = "grid2"; root.appendChild(g);
@@ -2091,6 +2118,137 @@ function viewTel(root) {
 
   /* map dominance colouring uses same winners */
   if (mapAPI && ents.length >= 2) mapAPI.dominance(domWinner);
+}
+
+/* ---- time-loss decomposition: why is the slower lap slower ----
+   The reference lap is partitioned completely into corner zones (lift/brake
+   -> apex -> back to full throttle) and the straights between them, so the
+   per-zone deltas provably sum to the total gap. Every label is a measured
+   fact: braking point (m), minimum speed (km/h), throttle application (m). */
+function refZones(tel, map) {
+  const N = tel.v.length;
+  const starts = [];
+  for (let j = 2; j < N - 2; j++) if (tel.b[j] && !tel.b[j - 1]) starts.push(j);
+  let zones = [];
+  for (const bs of starts) {
+    let lift = bs;
+    for (let j = bs - 1; j > Math.max(0, bs - 30); j--) { if (tel.th[j] >= 95) { lift = j; break; } }
+    let apex = bs, mv = 1e9;
+    for (let j = bs; j < Math.min(bs + 50, N - 1); j++) { if (tel.v[j] < mv) { mv = tel.v[j]; apex = j; } else if (tel.v[j] > mv + 10) break; }
+    let ex = Math.min(apex + 45, N - 1);
+    for (let j = apex; j < Math.min(apex + 45, N - 1); j++) if (tel.th[j] >= 97 && tel.th[j + 1] >= 97) { ex = j; break; }
+    zones.push({ lift, bs, apex, ex });
+  }
+  // merge chained corners (esses / chicanes) whose zones touch
+  const merged = [];
+  for (const z of zones) {
+    const p = merged.at(-1);
+    if (p && z.lift <= p.ex + 2) { p.ex = Math.max(p.ex, z.ex); p.apex2 = z.apex; }
+    else merged.push({ ...z });
+  }
+  // name zones by the nearest corner to the apex
+  for (const z of merged) {
+    if (map && map.corners.length) {
+      const dApex = z.apex / (N - 1) * map.len;
+      let bestC = map.corners[0], bd = 1e9;
+      for (const c of map.corners) { const dd = Math.abs(c.d - dApex); if (dd < bd) { bd = dd; bestC = c; } }
+      z.name = "T" + bestC.n + (bestC.l || "") + (z.apex2 ? "+" : "");
+    }
+  }
+  return merged;
+}
+
+function zoneFacts(zone, telA, telB, N) {
+  const step = telA.len / (N - 1);
+  const win0 = Math.max(0, zone.lift - 10), win1 = Math.min(N - 1, zone.apex + 6);
+  const measure = tel => {
+    let bs = null;
+    for (let j = win0; j <= win1; j++) if (tel.b[j] && !tel.b[j - 1]) { bs = j; break; }
+    let lift = bs ?? win1;
+    for (let j = (bs ?? win1) - 1; j > Math.max(0, win0 - 15); j--) { if (tel.th[j] >= 95) { lift = j; break; } }
+    let mv = 1e9;
+    for (let j = win0; j <= Math.min(zone.ex, N - 1); j++) mv = Math.min(mv, tel.v[j]);
+    let on = null;
+    for (let j = zone.apex - 2; j < Math.min(zone.ex + 25, N - 1); j++) if (tel.th[j] >= 95 && tel.th[j + 1] >= 95) { on = j; break; }
+    return { bs, lift, mv, on };
+  };
+  const A = measure(telA), B = measure(telB);
+  const facts = [];
+  if (A.bs != null && B.bs != null && Math.abs(B.bs - A.bs) >= 2)
+    facts.push(`braked ${Math.round(Math.abs(B.bs - A.bs) * step)} m ${B.bs < A.bs ? "earlier" : "later"}`);
+  else if (Math.abs(B.lift - A.lift) >= 2)
+    facts.push(`lifted ${Math.round(Math.abs(B.lift - A.lift) * step)} m ${B.lift < A.lift ? "earlier" : "later"}`);
+  if (Math.abs(B.mv - A.mv) >= 2) facts.push(`min speed ${B.mv < A.mv ? "−" : "+"}${Math.abs(Math.round(B.mv - A.mv))} km/h`);
+  if (A.on != null && B.on != null && Math.abs(B.on - A.on) >= 2)
+    facts.push(`full throttle ${Math.round(Math.abs(B.on - A.on) * step)} m ${B.on > A.on ? "later" : "earlier"}`);
+  return facts;
+}
+
+function whyCard(root, ents) {
+  const S = HUB.S;
+  const ref = ents[0];
+  const map = HUB.session(ref.e.sid).map || HUB.session().map;
+  const N = ref.tel.v.length;
+  if (!(S.whyIdx >= 1 && S.whyIdx < ents.length)) S.whyIdx = 1;
+  const other = ents[S.whyIdx];
+
+  const c = card(root, "Why the slower lap is slower", "the reference lap is split into corner zones and straights — the pieces sum to the whole gap, and every label is a measured fact");
+  if (ents.length > 2) {
+    const sel = document.createElement("select");
+    sel.innerHTML = ents.slice(1).map((en, i) => `<option value="${i + 1}" ${i + 1 === S.whyIdx ? "selected" : ""}>${esc(en.label)} vs ${esc(ref.label)}</option>`).join("");
+    sel.addEventListener("change", () => { S.whyIdx = +sel.value; HUB.render(); });
+    c.querySelector(".right").appendChild(sel);
+  }
+
+  const zones = refZones(ref.tel, map);
+  const dt = (tel, a, b) => tel.t[Math.min(b, N - 1)] - tel.t[Math.max(a, 0)];
+  const segs = [];
+  let cursor = 0;
+  for (const z of zones) {
+    if (z.lift > cursor + 1) segs.push({ kind: "straight", a: cursor, b: z.lift, name: `Straight → ${z.name || ""}` });
+    segs.push({ kind: "entry", a: z.lift, b: Math.max(z.apex2 || z.apex, z.apex), name: z.name, zone: z });
+    segs.push({ kind: "exit", a: Math.max(z.apex2 || z.apex, z.apex), b: z.ex, name: z.name, zone: z });
+    cursor = z.ex;
+  }
+  if (cursor < N - 1) segs.push({ kind: "straight", a: cursor, b: N - 1, name: "Final straight" });
+  for (const sg of segs) sg.d = dt(other.tel, sg.a, sg.b) - dt(ref.tel, sg.a, sg.b);
+
+  const total = other.lap.t - ref.lap.t;
+  const sumSegs = segs.reduce((a, s) => a + s.d, 0);
+
+  // per corner: entry + exit combined, plus straights as their own rows
+  const rowsMap = new Map();
+  for (const sg of segs) {
+    const key = sg.kind === "straight" ? "s:" + sg.a : "c:" + sg.a + sg.name;
+    if (!rowsMap.has(key)) rowsMap.set(key, { name: sg.name, kind: sg.kind, d: 0, zone: sg.zone });
+    rowsMap.get(key).d += sg.d;
+  }
+  const rows = [...rowsMap.values()].filter(r => Math.abs(r.d) >= 15).sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).slice(0, 9);
+  for (const r of rows) {
+    r.facts = r.kind === "straight"
+      ? [r.d > 0 ? "flat-out deficit (power / drag / clipping / tow)" : "flat-out gain (power / clipping / tow)"]
+      : zoneFacts(r.zone, ref.tel, other.tel, N);
+    if (!r.facts.length)
+      r.facts = [r.d > 0 ? "carried less speed through the zone (line / grip)" : "carried more speed through the zone (line / grip)"];
+  }
+  const totals = { entry: 0, exit: 0, straight: 0 };
+  for (const sg of segs) totals[sg.kind === "straight" ? "straight" : sg.kind] += sg.d;
+
+  const maxAbs = Math.max(...rows.map(r => Math.abs(r.d)), 1);
+  c.insertAdjacentHTML("beforeend", `
+    <div class="why-head"><b class="num" style="font-size:17px">${fmtDelta(total)}s</b> — ${esc(other.label)} vs ${esc(ref.label)}
+      <span class="hint">zones account for ${fmtDelta(sumSegs)}s${Math.abs(sumSegs - total) > 40 ? ` · ${fmtDelta(total - sumSegs)}s elsewhere (line variation between zones)` : ""}</span></div>
+    <div class="why-totals">
+      <span>Corner entries <b class="num">${fmtDelta(totals.entry, 2)}</b></span>
+      <span>Corner exits <b class="num">${fmtDelta(totals.exit, 2)}</b></span>
+      <span>Straights <b class="num">${fmtDelta(totals.straight, 2)}</b></span>
+    </div>
+    <table class="t why-t"><tbody>${rows.map(r => `
+      <tr><td style="width:110px"><b>${esc(r.name || "?")}</b>${r.kind === "straight" ? "" : ""}</td>
+      <td class="r num" style="width:70px;font-weight:700;color:${r.d > 0 ? "var(--red)" : "var(--green)"}">${fmtDelta(r.d, 2)}</td>
+      <td style="width:130px"><div style="height:6px;border-radius:3px;background:var(--surface3);overflow:hidden"><div style="height:100%;width:${(Math.abs(r.d) / maxAbs * 100).toFixed(0)}%;background:${r.d > 0 ? "var(--red)" : "var(--green)"};float:${r.d > 0 ? "left" : "left"}"></div></div></td>
+      <td class="hint">${r.facts.map(esc).join(" · ") || "—"}</td></tr>`).join("")}</tbody></table>
+    <p class="note">Positive red = time lost by ${esc(other.e.drv)} in that zone, green = gained. Facts are read directly from the traces (braking point, minimum speed, throttle application); zones smaller than 0.015 s are folded into the totals.</p>`);
 }
 
 /* ---- track map ---- */
@@ -2490,6 +2648,145 @@ function viewStraights(root) {
     none ? `${none} car${none > 1 ? "s" : ""} showing essentially no clipping` : "",
   ].filter(Boolean));
   root.insertBefore(root.lastChild, root.firstChild);
+}
+
+/* ============ view F: race replay ============ */
+/* Every race lap carries a cumulative-time channel on a distance grid, so a
+   car's track position at any session time is reconstructable from data —
+   no simulation, just interpolation of what actually happened. */
+"use strict";
+
+function replayCard(root, s) {
+  if (!(s.id === "R" || s.id === "S") || !s.map || !Object.keys(s.tel).length) return;
+  const map = s.map, N = 280, M = map.x.length;
+
+  // per-driver lap index
+  const cars = [];
+  for (const d of s.drivers) {
+    const laps = s.laps.filter(l => l.drv === d.abbr && l.st != null && l.t != null).sort((a, b) => a.lap - b.lap);
+    if (!laps.length) continue;
+    cars.push({ d, laps, lastEnd: laps.at(-1).st + laps.at(-1).t, finPos: d.pos ?? 99 });
+  }
+  if (cars.length < 2) return;
+  const t0 = Math.min(...cars.map(c => c.laps[0].st));
+  const t1 = Math.max(...cars.map(c => c.lastEnd));
+
+  const c = card(root, "Race replay", "reconstructed from each lap's telemetry — press play");
+  const wrap = document.createElement("div"); wrap.className = "rp-wrap"; c.appendChild(wrap);
+  const left = document.createElement("div"); wrap.appendChild(left);
+  const right = document.createElement("div"); right.className = "rp-board"; wrap.appendChild(right);
+
+  // controls
+  const ctr = document.createElement("div"); ctr.className = "rp-controls";
+  ctr.innerHTML = `
+    <button class="btn pri" id="rpPlay">▶ Play</button>
+    <select id="rpSpeed"><option>2</option><option>5</option><option selected>15</option><option>30</option><option>60</option><option>120</option></select><span class="hint">× speed</span>
+    <span class="rp-lap num" id="rpLap"></span><span class="rp-flag" id="rpFlag"></span>
+    <input type="range" id="rpScrub" min="0" max="${Math.ceil((t1 - t0) / 1000)}" value="0">`;
+  left.appendChild(ctr);
+
+  // map svg
+  const rot = (map.rot || 0) * Math.PI / 180, cos = Math.cos(rot), sin = Math.sin(rot);
+  const X = map.x.map((x, i) => x * cos - map.y[i] * sin);
+  const Y = map.y.map((y, i) => -(map.x[i] * sin + y * cos));
+  const pad = 700;
+  const x0 = Math.min(...X) - pad, x1 = Math.max(...X) + pad, y0 = Math.min(...Y) - pad, y1 = Math.max(...Y) + pad;
+  const div = document.createElement("div"); div.className = "chart"; left.appendChild(div);
+  const svg = svgEl("svg", { viewBox: `${x0.toFixed(0)} ${y0.toFixed(0)} ${(x1 - x0).toFixed(0)} ${(y1 - y0).toFixed(0)}`, role: "img", "aria-label": "Race replay" }, div);
+  svg.style.maxHeight = "480px";
+  const sw = (x1 - x0) / 95;
+  svgEl("path", { d: X.map((x, i) => (i ? "L" : "M") + x.toFixed(0) + "," + Y[i].toFixed(0)).join("") + "Z", fill: "none", stroke: "var(--surface3)", "stroke-width": sw * 1.6, "stroke-linejoin": "round", "stroke-linecap": "round" }, svg);
+  svgEl("circle", { cx: X[0], cy: Y[0], r: sw * 0.55, fill: "var(--ink3)" }, svg);
+  for (const cn of map.corners)
+    svgEl("text", { x: X[Math.round(cn.d / map.len * (M - 1)) % M], y: Y[Math.round(cn.d / map.len * (M - 1)) % M] - sw, "text-anchor": "middle", "font-size": sw * 0.95, fill: "var(--ink3)", class: "num" }, svg).textContent = cn.n;
+  const dots = new Map();
+  for (const car of cars) {
+    const g = svgEl("g", {}, svg);
+    const dot = svgEl("circle", { r: sw * 0.85, fill: teamCol(car.d.color), stroke: "#fff", "stroke-width": sw * 0.22 }, g);
+    dots.set(car.d.abbr, { g, dot });
+  }
+
+  /* position of a car at session time T */
+  function locate(car, T) {
+    if (T >= car.lastEnd) return { done: true, prog: 1e6 - car.finPos };
+    let lapRec = null, idx = 0;
+    for (let i = car.laps.length - 1; i >= 0; i--) {
+      if (car.laps[i].st <= T) { lapRec = car.laps[i]; idx = i; break; }
+    }
+    if (!lapRec) return { pre: true, prog: -1 };
+    const tel = s.tel[car.d.abbr + "-" + lapRec.lap];
+    const dtc = Math.max(0, Math.min(T - lapRec.st, lapRec.t));
+    let r;
+    if (tel) {
+      // binary search cumulative time channel
+      let lo = 0, hi = N - 1;
+      while (hi - lo > 1) { const m = (lo + hi) >> 1; (tel.t[m] <= dtc) ? lo = m : hi = m; }
+      const span = tel.t[hi] - tel.t[lo] || 1;
+      r = (lo + (dtc - tel.t[lo]) / span) / (N - 1);
+    } else r = dtc / (lapRec.t || 1);
+    return { r: Math.max(0, Math.min(1, r)), lapRec, prog: lapRec.lap - 1 + r, inPit: lapRec.in || lapRec.out };
+  }
+
+  const flagEl = ctr.querySelector("#rpFlag"), lapEl = ctr.querySelector("#rpLap");
+  const scrub = ctr.querySelector("#rpScrub"), playBtn = ctr.querySelector("#rpPlay"), spdSel = ctr.querySelector("#rpSpeed");
+  const total = s.totalLaps || Math.max(...s.laps.map(l => l.lap));
+  let T = t0, playing = false, lastFrame = 0, lastBoard = 0;
+
+  function draw(now) {
+    if (!svg.isConnected) { playing = false; return; }   // view left — stop the loop
+    if (playing) {
+      const dt = lastFrame ? Math.min(now - lastFrame, 200) : 0;
+      T = Math.min(T + dt * (+spdSel.value), t1);
+      if (T >= t1) { playing = false; playBtn.textContent = "▶ Play"; }
+    }
+    lastFrame = now;
+    const states = cars.map(car => ({ car, st: locate(car, T) }));
+    for (const { car, st } of states) {
+      const el = dots.get(car.d.abbr);
+      if (st.done || st.pre) { el.g.setAttribute("opacity", 0); continue; }
+      const f = st.r * (M - 1), i = Math.min(M - 2, Math.floor(f)), k = f - i;
+      el.g.setAttribute("opacity", st.inPit ? 0.35 : 1);
+      el.dot.setAttribute("cx", X[i] + (X[i + 1] - X[i]) * k);
+      el.dot.setAttribute("cy", Y[i] + (Y[i + 1] - Y[i]) * k);
+      el.dot.setAttribute("stroke", st.lapRec && st.lapRec.cmp ? cmpCol(st.lapRec.cmp) : "#fff");
+    }
+    // leaderboard + lap/flag, throttled
+    if (now - lastBoard > 350) {
+      lastBoard = now;
+      const running = states.filter(x => !x.st.pre).sort((a, b) => b.st.prog - a.st.prog);
+      const leader = running.find(x => !x.st.done);
+      const leadLap = leader ? Math.min(total, Math.floor(leader.st.prog) + 1) : total;
+      lapEl.textContent = `Lap ${leadLap}/${total}`;
+      scrub.value = Math.round((T - t0) / 1000);
+      // flag from any lap record at the leader's lap
+      let w = 0;
+      for (const l of s.laps) if (l.lap === leadLap) { const f = tsFlags(l.ts); w = Math.max(w, f.red ? 3 : f.sc ? 2 : f.vsc ? 1 : 0); }
+      flagEl.className = "rp-flag" + (w >= 3 ? " red" : w >= 1 ? " sc" : "");
+      flagEl.textContent = w >= 3 ? "RED FLAG" : w === 2 ? "SAFETY CAR" : w === 1 ? "VIRTUAL SC" : "";
+      const leaderLapTime = leader && leader.st.lapRec ? leader.st.lapRec.t : 95000;
+      right.innerHTML = `<table>` + running.map((x, i) => {
+        const gapP = i === 0 ? null : running[0].st.prog - x.st.prog;
+        const lappedBy = Math.floor(gapP ?? 0);
+        const gapTxt = x.st.done ? (x.car.d.status && !/Finished|\+/.test(x.car.d.status) ? "OUT" : "FIN")
+          : i === 0 ? "Leader"
+            : lappedBy >= 1 ? `+${lappedBy}L`
+              : `+${(gapP * leaderLapTime / 1000).toFixed(1)}`;
+        const cmp = x.st.lapRec && x.st.lapRec.cmp;
+        return `<tr class="${x.st.done && gapTxt === "OUT" ? "out" : ""}"><td class="num" style="color:var(--ink3)">${i + 1}</td>
+          <td><span class="drv-cell" style="gap:5px"><span class="dot" style="background:${teamCol(x.car.d.color)}"></span>${x.car.d.abbr}</span></td>
+          <td>${cmp ? `<span class="rp-tyre" style="border-color:${cmpCol(cmp)}"></span>` : ""}</td>
+          <td class="r num">${gapTxt}</td></tr>`;
+      }).join("") + `</table><p class="hint" style="margin:6px 0 0">gaps ≈ track-position × leader lap time · tyre ring = current compound · dimmed dot = in the pits</p>`;
+    }
+    requestAnimationFrame(draw);
+  }
+  playBtn.addEventListener("click", () => {
+    playing = !playing;
+    playBtn.textContent = playing ? "⏸ Pause" : "▶ Play";
+    if (playing && T >= t1) T = t0;
+  });
+  scrub.addEventListener("input", () => { T = t0 + (+scrub.value) * 1000; });
+  requestAnimationFrame(draw);
 }
 
 /* ============ app shell & boot ============ */
