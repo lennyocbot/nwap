@@ -2212,21 +2212,28 @@ function detectStraights(tel, map) {
   return out.filter(s => s.vmax >= best * 0.82).slice(0, 7);
 }
 
-/* km/h lost to clipping on one lap: peak speed minus speed at the braking
-   point, counted only while the driver stays flat out — a lift (throttle off,
-   lift-and-coast) is not clipping and is excluded */
-function clipLoss(tel, straights) {
-  let loss = 0;
-  for (const s of straights) {
-    const hi = Math.min(s.iEnd, tel.v.length - 1);
+/* km/h lost to clipping on one lap, per straight: peak speed minus speed at
+   the braking point, counted only while the driver stays flat out — a lift
+   (throttle off, lift-and-coast) is not clipping and returns null there */
+function clipLossPer(tel, straights) {
+  const N = tel.v.length;
+  return straights.map(s => {
+    // find THIS lap's braking onset — drivers brake at different points than
+    // the reference lap, and measuring to the ref's point falsely reads
+    // "lift" for anyone braking earlier
+    const lo = s.from, hiRef = Math.min(s.iEnd + 6, N - 1);
+    let end = hiRef;
+    for (let j = lo + 3; j <= hiRef; j++) if (tel.b[j]) { end = j; break; }
+    if (end - lo < 6) return null;
     let vmax = -1, imax = -1;
-    for (let j = s.from; j < hi; j++) if (tel.v[j] > vmax) { vmax = tel.v[j]; imax = j; }
-    if (imax < 0) continue;
-    let flat = true;
-    for (let j = imax; j < hi; j++) if (tel.th[j] < 95 || tel.b[j]) { flat = false; break; }
-    if (flat) loss += Math.max(0, vmax - tel.v[hi - 1]);
-  }
-  return loss;
+    for (let j = lo; j < end; j++) if (tel.v[j] > vmax) { vmax = tel.v[j]; imax = j; }
+    if (imax < 0) return null;
+    // flat on the throttle from peak to just before their own braking point;
+    // a real lift (throttle off before braking) is lift-and-coast, not clipping
+    const stop = end - 1;
+    for (let j = imax; j < stop; j++) if (tel.th[j] < 95) return null;
+    return Math.max(0, vmax - tel.v[Math.max(stop - 1, imax)]);
+  });
 }
 
 /* the circuit with its straights highlighted and labelled */
@@ -2292,19 +2299,25 @@ function viewStraights(root) {
         for (let j = st.from; j <= Math.min(st.iEnd, tel.v.length - 1); j++) if (tel.v[j] > v) v = tel.v[j];
       return Math.round(v);
     });
-    // clipping: races -> average over clean laps; quali/practice -> the fastest lap
-    let clip, clipN;
+    // clipping: races -> per-straight average over clean laps;
+    // quali/practice -> per-straight loss on the fastest lap
+    let per, clipN;
     if (isRace) {
       const clean = tels.filter(x => isClean(x.l));
       const use = clean.length ? clean : tels;
-      clip = use.reduce((a, x) => a + clipLoss(x.tel, straights), 0) / use.length;
+      const sums = straights.map(() => 0), ns = straights.map(() => 0);
+      for (const x of use) {
+        clipLossPer(x.tel, straights).forEach((v, i) => { if (v != null) { sums[i] += v; ns[i]++; } });
+      }
+      per = sums.map((v, i) => ns[i] ? v / ns[i] : null);
       clipN = use.length;
     } else {
       const fastest = [...tels].sort((a, b) => a.l.t - b.l.t)[0];
-      clip = clipLoss(fastest.tel, straights);
+      per = clipLossPer(fastest.tel, straights);
       clipN = 1;
     }
-    rows.push({ d, tops, clip, clipN });
+    const clip = per.reduce((a, v) => a + (v || 0), 0);
+    rows.push({ d, tops, per, clip, clipN });
   }
   if (!rows.length) { root.innerHTML = `<div class="empty">No usable laps.</div>`; return; }
   rows.sort((a, b) => b.tops[mainIdx] - a.tops[mainIdx]);
@@ -2318,19 +2331,31 @@ function viewStraights(root) {
   const cm = card(root, "Where the straights are");
   straightsMap(cm, map, straights, bestBy);
 
-  const c = card(root, "End-of-straight top speeds",
-    `${SNAMES[s.id] || s.id} · session maximum per straight · clipping = km/h lost between peak and braking point (${isRace ? "average over clean race laps" : "on each driver's fastest lap"})`);
+  const c = card(root, "End-of-straight top speeds", `${SNAMES[s.id] || s.id} · session maximum per straight (best tow / engine mode across all laps)`);
   const w = document.createElement("div"); w.className = "tblwrap"; c.appendChild(w);
   w.innerHTML = `<table class="t"><thead><tr><th>Driver</th>` +
     straights.map((st, i) => `<th class="r" title="${Math.round(st.len)} m straight">${esc(st.name || "S" + (i + 1))}${i === mainIdx ? " ★" : ""}</th>`).join("") +
-    `<th class="r">Clipping</th><th></th></tr></thead><tbody>` +
+    `</tr></thead><tbody>` +
     rows.map(r => `<tr><td>${drvCell(r.d)}</td>` +
-      r.tops.map((v, i) => `<td class="r num ${v === colBest[i] ? "best" : ""}">${v}</td>`).join("") +
-      `<td class="r num" style="${r.clip > clipMax * 0.66 ? "color:var(--yellow);font-weight:700" : ""}">−${r.clip.toFixed(1)} km/h</td>
-       <td style="min-width:90px"><div style="height:5px;border-radius:3px;background:var(--surface3);overflow:hidden"><div style="height:100%;width:${(r.clip / clipMax * 100).toFixed(0)}%;background:${r.clip > clipMax * 0.66 ? "var(--yellow)" : teamCol(r.d.color)}"></div></div></td></tr>`).join("") +
+      r.tops.map((v, i) => `<td class="r num ${v === colBest[i] ? "best" : ""}">${v}</td>`).join("") + `</tr>`).join("") +
     `</tbody></table>`;
-  c.insertAdjacentHTML("beforeend", `<p class="note"><b>★</b> = fastest straight (rows sorted by it) · speeds in km/h · <b>Clipping</b> sums, across all straights, the speed a car gave back between its peak and the braking point while still flat on the throttle — the signature of electrical deployment running out. Laps with a lift in that zone are excluded, so lift-and-coast doesn't count.</p>
-  <p class="note">⚠ Read with care: top speeds mix engine modes, tows and wing levels. A plateau can also be terminal velocity on a very long straight — compare cars on the <i>same</i> straight: if one keeps building speed where another flatlines lower, that one is clipping. High clipping + low top speed = energy-limited; low clipping + low top speed = draggy / big wing.</p>`);
+  c.insertAdjacentHTML("beforeend", `<p class="note"><b>★</b> = fastest straight (rows sorted by it) · speeds in km/h · top speeds mix engine modes, tows and wing levels, so treat single-lap outliers with care.</p>`);
+
+  /* ---- clipping ranking: per straight + overall ---- */
+  const crows = [...rows].sort((a, b) => b.clip - a.clip);
+  const cellMax = Math.max(...rows.flatMap(r => r.per.map(v => v || 0)), 1);
+  const c2 = card(root, "Clipping ranking",
+    `km/h given back between peak speed and the braking point while flat on the throttle · ${isRace ? "average per clean race lap, per straight" : "on each driver's fastest lap"} · "—" = lifted there${isRace ? " every lap" : ""}, so not measurable`);
+  const w2 = document.createElement("div"); w2.className = "tblwrap"; c2.appendChild(w2);
+  const heat = v => v == null ? "" : `background:rgba(250,204,21,${Math.min(0.5, v / cellMax * 0.5).toFixed(2)});`;
+  w2.innerHTML = `<table class="t"><thead><tr><th class="r">#</th><th>Driver</th>` +
+    straights.map((st, i) => `<th class="r">${esc(st.name || "S" + (i + 1))}${i === mainIdx ? " ★" : ""}</th>`).join("") +
+    `<th class="r">Total /lap</th>${isRace ? '<th class="r">Laps</th>' : ""}</tr></thead><tbody>` +
+    crows.map((r, i) => `<tr><td class="r num">${i + 1}</td><td>${drvCell(r.d)}</td>` +
+      r.per.map(v => `<td class="r num" style="${heat(v)}">${v == null ? "—" : v < 0.05 ? "0" : "−" + v.toFixed(1)}</td>`).join("") +
+      `<td class="r num" style="font-weight:700${i === 0 ? ";color:var(--yellow)" : ""}">−${r.clip.toFixed(1)}</td>${isRace ? `<td class="r num" style="color:var(--ink3)">${r.clipN}</td>` : ""}</tr>`).join("") +
+    `</tbody></table>`;
+  c2.insertAdjacentHTML("beforeend", `<p class="note">Ranked worst-first — the top of this table is the most energy-limited car. Laps with a lift between peak and braking are excluded (that's lift-and-coast, not clipping). A plateau can also be plain terminal velocity on a very long straight; compare cars on the <i>same</i> straight before concluding. High clipping + low top speed = energy-limited; low clipping + low top speed = draggy / big wing.</p>`);
 
   const most = [...rows].sort((a, b) => b.clip - a.clip)[0];
   const none = rows.filter(r => r.clip < 3).length;
