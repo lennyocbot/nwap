@@ -9,6 +9,21 @@ function svgEl(tag, attrs, parent) {
 }
 function cvar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 
+/* team-coloured helmet icon (profile, facing right); (cx, yTop) = top-centre.
+   A deterministic stand-in for driver headshots — real photos aren't bundled. */
+function drawHelmet(svg, cx, yTop, col, dark) {
+  const g = svgEl("g", {}, svg);
+  svgEl("path", {
+    d: `M${cx - 8},${yTop + 8} C${cx - 8},${yTop} ${cx - 2},${yTop - 1} ${cx + 2},${yTop - 1} `
+      + `C${cx + 7},${yTop - 1} ${cx + 9},${yTop + 4} ${cx + 9},${yTop + 8} L${cx + 9},${yTop + 9} `
+      + `L${cx + 2},${yTop + 10} L${cx + 1.5},${yTop + 14} L${cx - 4},${yTop + 14} `
+      + `C${cx - 7},${yTop + 13} ${cx - 8},${yTop + 11} ${cx - 8},${yTop + 8} Z`,
+    fill: col, stroke: "var(--surface)", "stroke-width": 0.6,
+  }, g);
+  svgEl("path", { d: `M${cx - 3},${yTop + 4} L${cx + 8},${yTop + 5} L${cx + 8},${yTop + 8} L${cx - 3},${yTop + 8} Z`, fill: dark ? "rgba(255,255,255,.82)" : "rgba(18,22,30,.78)" }, g);
+  return g;
+}
+
 function niceTicks(lo, hi, n = 6) {
   if (!(hi > lo)) return [lo];
   const span = hi - lo, step0 = span / n, mag = 10 ** Math.floor(Math.log10(step0));

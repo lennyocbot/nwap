@@ -301,48 +301,144 @@ function viewPace(root) {
     : [...new Map(drvs.map(d => [d.team, d])).values()].map(d => ({ color: teamCol(d.color), label: d.team, dot: true })));
   if (isRace) legend(div.parentElement, [{ color: "var(--band-sc)", label: "SC band", dot: true }, { color: "var(--band-vsc)", label: "VSC band", dot: true }]);
 
-  // ---- pace distribution ----
-  const c2 = card(root, "Race pace distribution", "clean green-flag laps only" + (S.fuelOn && isRace ? " · fuel-corrected" : ""));
+  // ---- race pace (vertical box plot, sorted by mean) ----
+  const c2 = card(root, isRace ? "Race pace" : "Pace distribution",
+    `drivers sorted by mean lap time · clean green-flag laps only${S.fuelOn && isRace ? " · fuel-corrected" : ""} · dashed line = mean, solid = median, box = middle 50%, dots = outliers`);
   const rows = [];
   for (const d of drvs) {
-    const v = s.laps.filter(l => l.drv === d.abbr && isClean(l)).map(l => fuelCorr(l, s.id));
-    if (v.length >= 3) rows.push({ d, v, med: median(v), q1: quantile(v, .25), q3: quantile(v, .75), p5: quantile(v, .05), p95: quantile(v, .95) });
+    const cl = s.laps.filter(l => l.drv === d.abbr && isClean(l));
+    const v = cl.map(l => fuelCorr(l, s.id)).sort((a, b) => a - b);
+    if (v.length >= 3) {
+      const cmps = [...new Set(cl.sort((a, b) => a.lap - b.lap).map(l => l.cmp).filter(Boolean))].map(c => CMP_LETTER[c] || "?");
+      const q1 = quantile(v, .25), q3 = quantile(v, .75), iqr = q3 - q1;
+      const loF = q1 - 1.5 * iqr, hiF = q3 + 1.5 * iqr;
+      const inl = v.filter(x => x >= loF && x <= hiF);
+      rows.push({
+        d, v, cmps, n: v.length,
+        mean: v.reduce((a, b) => a + b, 0) / v.length, med: median(v), q1, q3,
+        wLo: inl.length ? inl[0] : v[0], wHi: inl.length ? inl.at(-1) : v.at(-1),
+        outliers: v.filter(x => x < loF || x > hiF),
+      });
+    }
   }
-  rows.sort((a, b) => a.med - b.med);
+  rows.sort((a, b) => a.mean - b.mean);
   if (rows.length < 2) { c2.insertAdjacentHTML("beforeend", `<div class="empty">Not enough clean laps.</div>`); }
   else {
-    const div2 = document.createElement("div"); div2.className = "chart"; c2.appendChild(div2);
-    const xlo = Math.min(...rows.map(r => r.p5)) - 250, xhi = Math.max(...rows.map(r => r.p95)) + 250;
-    const rh = 26, H = rows.length * rh + 46;
-    const ch2 = Chart(div2, { h: H, xd: [xlo, xhi], yd: [0, rows.length], ml: 100, mb: 30, yticksArr: [], xfmt: v => fmtLap(Math.round(v)), xlab: "lap time", label: "Pace distribution box plot" });
+    const p1 = rows[0].mean, mob = innerWidth < 640;
+    const wrap = document.createElement("div"); wrap.style.overflowX = "auto"; wrap.style.overflowY = "hidden"; c2.appendChild(wrap);
+    const colW = mob ? 58 : 66, ml = 46, mr = 14, mt = 54, plotH = mob ? 250 : 300, mb = 96;
+    const W = ml + rows.length * colW + mr, H = mt + plotH + mb;
+    const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "img", "aria-label": "Race pace box plot" }, wrap);
+    svg.style.display = "block"; svg.style.maxWidth = "none";
+    const gLo = Math.min(...rows.map(r => Math.min(r.wLo, ...r.outliers))), gHi = Math.max(...rows.map(r => Math.max(r.wHi, ...r.outliers)));
+    const pad = (gHi - gLo) * 0.06 + 100;
+    const ylo = gLo - pad, yhi = gHi + pad;
+    const yP = v => mt + plotH * (1 - (v - ylo) / (yhi - ylo));
+    const xC = i => ml + colW * (i + 0.5);
+    // y grid + axis (seconds)
+    for (const gv of niceTicks(ylo, yhi, 6)) {
+      if (gv < ylo || gv > yhi) continue;
+      svgEl("line", { x1: ml, x2: W - mr, y1: yP(gv), y2: yP(gv), stroke: "var(--grid)", "stroke-width": 1 }, svg);
+      svgEl("text", { x: ml - 6, y: yP(gv) + 3.5, "text-anchor": "end", "font-size": 10, fill: "var(--ink3)", class: "num" }, svg).textContent = (gv / 1000).toFixed(1);
+    }
+    svgEl("text", { x: 12, y: mt + plotH / 2, "text-anchor": "middle", class: "ylab", transform: `rotate(-90 12 ${mt + plotH / 2})` }, svg).textContent = "lap time (s)";
+
+    // deterministic annotation groups (dashed brackets + coloured labels).
+    // only labels that are provable from the ordering — no editorialising.
+    const gaps = rows.map((r, i) => i === 0 ? 0 : r.mean - rows[i - 1].mean);
+    const callouts = [];
+    const covered = i => callouts.some(c => i >= c.a && i <= c.b);
+    // 1. front-running group: within 0.30s of fastest
+    let fEnd = 0; while (fEnd + 1 < rows.length && rows[fEnd + 1].mean - p1 <= 300 && gaps[fEnd + 1] < 250) fEnd++;
+    if (fEnd === 0 && rows.length > 1 && gaps[1] > 350) callouts.push({ a: 0, b: 0, label: "Unmatched pace", col: "#12b3a6" });
+    else if (fEnd >= 1) callouts.push({ a: 0, b: fEnd, label: rows.length > 6 ? "Front-running pace" : "Fastest group", col: "#12b3a6" });
+    // 2. recovery drive: strong race pace from a poor grid slot (races only) — high priority story
+    if (isRace) {
+      const rec = rows.map((r, i) => ({ r, i, gain: (r.d.grid || 20) - (i + 1) }))
+        .filter(x => x.r.d.grid && x.gain >= 6 && x.i <= Math.min(9, rows.length - 2) && !covered(x.i))
+        .sort((a, b) => b.gain - a.gain)[0];
+      if (rec) callouts.push({ a: rec.i, b: rec.i, label: `Recovery · P${rec.r.d.grid} start`, col: "#e0393a" });
+    }
+    // 3. off the pace: trailing driver(s) after a big gap in the last third of the field
+    const backStart = Math.ceil(rows.length * 0.66);
+    let bi = -1, bv = 0;
+    for (let i = backStart; i < rows.length; i++) if (gaps[i] > bv) { bv = gaps[i]; bi = i; }
+    if (bi > 0 && bv > 450) callouts.push({ a: bi, b: rows.length - 1, label: rows.length - bi <= 1 ? "Off the pace" : "Adrift at the back", col: "#7a828c" });
+    // 4. leading the midfield: biggest uncovered run right after the front (>=2 drivers)
+    if (rows.length > 8) {
+      let a = fEnd + 1; while (a < rows.length && covered(a)) a++;
+      if (a < rows.length) {
+        let mEnd = a; while (mEnd + 1 < rows.length && gaps[mEnd + 1] < 250 && !covered(mEnd + 1)) mEnd++;
+        if (mEnd >= a + 1) callouts.push({ a, b: mEnd, label: "Leading the midfield", col: "#c02fd6" });
+      }
+    }
+
+    let labRow = 0;
+    for (const co of callouts) {
+      const xL = xC(co.a) - colW * 0.42, xR = xC(co.b) + colW * 0.42;
+      const yTop = yP(Math.max(...rows.slice(co.a, co.b + 1).map(r => Math.max(r.wHi, ...r.outliers)))) - 6;
+      const yBot = yP(Math.min(...rows.slice(co.a, co.b + 1).map(r => Math.min(r.wLo, ...r.outliers)))) + 6;
+      svgEl("rect", { x: xL, y: yTop, width: xR - xL, height: yBot - yTop, fill: "none", stroke: co.col, "stroke-width": 1.4, "stroke-dasharray": "5 3", rx: 5 }, svg);
+      const ly = 12 + (labRow % 2) * 17, lx = Math.max(ml + 2, Math.min(W - mr - 2, (xL + xR) / 2));
+      const tw2 = co.label.length * (mob ? 5.7 : 6.4) + 12;
+      svgEl("rect", { x: lx - tw2 / 2, y: ly - 10, width: tw2, height: 15, rx: 3, fill: co.col }, svg);
+      svgEl("text", { x: lx, y: ly + 1.5, "text-anchor": "middle", "font-size": mob ? 9.5 : 10.5, "font-weight": 800, fill: "#fff" }, svg).textContent = co.label;
+      svgEl("line", { x1: lx, x2: (xL + xR) / 2, y1: ly + 5, y2: yTop, stroke: co.col, "stroke-width": 1, "stroke-dasharray": "2 2" }, svg);
+      labRow++;
+    }
+
     const boxes = [];
     rows.forEach((r, i) => {
-      const cy = ch2.mt + (i + .5) * (ch2.ih / rows.length), col = teamCol(r.d.color);
-      svgEl("text", { x: ch2.ml - 10, y: cy + 4, "text-anchor": "end", "font-size": 11.5, "font-weight": 700, fill: col, class: "num" }, ch2.svg).textContent = r.d.abbr;
-      svgEl("line", { x1: ch2.x(r.p5), x2: ch2.x(r.p95), y1: cy, y2: cy, stroke: col, "stroke-width": 1.4, opacity: .7 }, ch2.plot);
-      const bx = svgEl("rect", { x: ch2.x(r.q1), y: cy - 7, width: Math.max(2, ch2.x(r.q3) - ch2.x(r.q1)), height: 14, fill: col, opacity: .38, rx: 3, stroke: col, "stroke-width": 1 }, ch2.plot);
-      svgEl("line", { x1: ch2.x(r.med), x2: ch2.x(r.med), y1: cy - 8, y2: cy + 8, stroke: col, "stroke-width": 2.4 }, ch2.plot);
-      svgEl("text", { x: Math.min(ch2.x(r.p95) + 7, ch2.ml + ch2.iw - 108), y: cy + 3.5, "font-size": 10, fill: "var(--ink3)", class: "num" }, ch2.svg).textContent = `${fmtLap(Math.round(r.med))} · n=${r.v.length}`;
-      boxes.push(bx);
+      const x = xC(i), col = teamCol(r.d.color), bw = colW * 0.52, dark = lum(col) < 0.5;
+      // whisker
+      svgEl("line", { x1: x, x2: x, y1: yP(r.wLo), y2: yP(r.wHi), stroke: col, "stroke-width": 1.3 }, svg);
+      svgEl("line", { x1: x - 5, x2: x + 5, y1: yP(r.wHi), y2: yP(r.wHi), stroke: col, "stroke-width": 1.3 }, svg);
+      svgEl("line", { x1: x - 5, x2: x + 5, y1: yP(r.wLo), y2: yP(r.wLo), stroke: col, "stroke-width": 1.3 }, svg);
+      // box
+      const bx = svgEl("rect", { x: x - bw / 2, y: yP(r.q3), width: bw, height: Math.max(2, yP(r.q1) - yP(r.q3)), fill: col, opacity: .34, stroke: col, "stroke-width": 1.3, rx: 2 }, svg);
+      // median (solid) + mean (dashed)
+      svgEl("line", { x1: x - bw / 2, x2: x + bw / 2, y1: yP(r.med), y2: yP(r.med), stroke: col, "stroke-width": 2.4 }, svg);
+      svgEl("line", { x1: x - bw / 2, x2: x + bw / 2, y1: yP(r.mean), y2: yP(r.mean), stroke: col, "stroke-width": 1.6, "stroke-dasharray": "3 2" }, svg);
+      for (const o of r.outliers) svgEl("circle", { cx: x, cy: yP(o), r: 2.2, fill: "none", stroke: col, "stroke-width": 1.1 }, svg);
+      // helmet + stacked labels below plot
+      const hy = mt + plotH + 12;
+      drawHelmet(svg, x, hy, col, dark);
+      const tx = mt + plotH + 34;
+      svgEl("text", { x, y: tx, "text-anchor": "middle", "font-size": 10.5, "font-weight": 800, fill: "var(--ink)" }, svg).textContent = r.d.abbr;
+      svgEl("text", { x, y: tx + 13, "text-anchor": "middle", "font-size": 9.5, fill: "var(--ink2)", class: "num" }, svg).textContent = (r.mean / 1000).toFixed(2);
+      svgEl("text", { x, y: tx + 25, "text-anchor": "middle", "font-size": 9, fill: i === 0 ? "var(--green)" : "var(--ink3)", class: "num" }, svg).textContent = i === 0 ? "+0.00" : "+" + ((r.mean - p1) / 1000).toFixed(2);
+      svgEl("text", { x, y: tx + 37, "text-anchor": "middle", "font-size": 8.5, "font-weight": 700, fill: "var(--ink3)" }, svg).textContent = r.cmps.join("-");
+      // wide invisible hit target for hover
+      const hit = svgEl("rect", { x: x - colW / 2, y: mt, width: colW, height: plotH, fill: "transparent" }, svg);
+      boxes.push(hit);
     });
     hoverMarks(boxes, i => {
       const r = rows[i];
       return `<div class="t-title">${esc(r.d.abbr)} — ${esc(r.d.team)}</div><table>
-        <tr><td>Median</td><td class="num"><b>${fmtLap(Math.round(r.med))}</b></td></tr>
-        <tr><td>IQR</td><td class="num">${fmtSec(r.q3 - r.q1, 3)}s</td></tr>
-        <tr><td>P5–P95</td><td class="num">${fmtLap(Math.round(r.p5))} – ${fmtLap(Math.round(r.p95))}</td></tr>
-        <tr><td>Clean laps</td><td class="num">${r.v.length}</td></tr></table>`;
+        <tr><td>Mean</td><td class="num"><b>${fmtLap(Math.round(r.mean))}</b>${i ? ` (+${((r.mean - p1) / 1000).toFixed(2)})` : " — fastest"}</td></tr>
+        <tr><td>Median</td><td class="num">${fmtLap(Math.round(r.med))}</td></tr>
+        <tr><td>Spread (IQR)</td><td class="num">${fmtSec(r.q3 - r.q1, 2)}s</td></tr>
+        <tr><td>Tyres · laps</td><td>${r.cmps.join("-")} · ${r.n}</td></tr>
+        ${r.outliers.length ? `<tr><td>Outliers</td><td class="num">${r.outliers.length}</td></tr>` : ""}</table>`;
     });
+
+    // pace per team (best driver)
+    const teamBest = new Map();
+    for (const r of rows) { const t = r.d.team; if (!teamBest.has(t) || r.mean < teamBest.get(t).mean) teamBest.set(t, r); }
+    const tr = [...teamBest.values()].sort((a, b) => a.mean - b.mean);
+    const tw = document.createElement("div"); tw.className = "tblwrap"; c2.appendChild(tw);
+    tw.innerHTML = `<table class="t"><thead><tr><th>#</th><th>Team (best driver)</th><th class="r">Mean pace</th><th class="r">Gap /lap</th></tr></thead><tbody>` +
+      tr.map((r, i) => `<tr><td class="num" style="color:var(--ink3)">${i + 1}</td><td><span class="drv-cell"><span class="dot" style="background:${teamCol(r.d.color)}"></span>${esc(r.d.team)} <span class="team">${esc(r.d.abbr)}</span></span></td><td class="r num">${fmtLap(Math.round(r.mean))}</td><td class="r num ${i === 0 ? "best" : ""}">${i === 0 ? "—" : "+" + ((r.mean - tr[0].mean) / 1000).toFixed(3)}</td></tr>`).join("") + "</tbody></table>";
   }
 
   // insights
   const ins = [];
   const bestL = pts.reduce((a, b) => fc(b) < fc(a) ? b : a);
-  ins.push(`Fastest: <b>${bestL.drv}</b> ${fmtLap(bestL.t)} (lap ${bestL.lap}${bestL.cmp ? ", " + bestL.cmp : ""})`);
+  ins.push(`Fastest lap: <b>${bestL.drv}</b> ${fmtLap(bestL.t)} (lap ${bestL.lap}${bestL.cmp ? ", " + bestL.cmp : ""})`);
   if (rows && rows.length >= 2) {
     const cons = [...rows].filter(r => r.v.length >= 8).sort((a, b) => (a.q3 - a.q1) - (b.q3 - b.q1))[0];
     if (cons) ins.push(`Most consistent: <b>${cons.d.abbr}</b> (IQR ${fmtSec(cons.q3 - cons.q1, 2)}s over ${cons.v.length} laps)`);
-    ins.push(`Pace spread P1→P${rows.length}: <b>${fmtSec(rows.at(-1).med - rows[0].med, 2)}s</b>/lap on median`);
+    ins.push(`Field spread P1→P${rows.length}: <b>${fmtSec(rows.at(-1).med - rows[0].med, 2)}s</b>/lap on median`);
   }
   insights(root, ins);
   root.insertBefore(root.lastChild, root.children[1]);

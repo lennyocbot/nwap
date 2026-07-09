@@ -83,6 +83,7 @@ function buildShell() {
       ${titleHtml}
       <span class="meta">Round ${d.round} · ${esc(d.location)}, ${esc(d.country)} · ${esc(dates)}${String(d.format).includes("sprint") ? " · Sprint weekend" : ""}</span>
       <span class="brand">Mini<b>sector</b> · F1 analysis</span>
+      <span id="themeSlot"></span>
     </div>
     <div class="ctrl-row">
       <div class="seg" id="sessions">${d.sessions.map(s => `<button data-sid="${s.id}">${SNAMES[s.id] || s.id}</button>`).join("")}</div>
@@ -105,6 +106,8 @@ function buildShell() {
     pe.addEventListener("change", () => selectWeekend(d.year, +pe.value));
     document.getElementById("homeBtn").addEventListener("click", showPicker);
   }
+  const slot = document.getElementById("themeSlot");
+  if (slot && MODE === "site") slot.appendChild(themeToggleBtn());
 }
 
 /* landing screen: choose a weekend */
@@ -113,7 +116,7 @@ function showPicker() {
   const root = document.getElementById("app");
   const years = Object.keys(m.years).sort().reverse();
   root.innerHTML = `<div class="pick-screen">
-    <div class="pick-brand">Mini<b>sector</b></div>
+    <div class="pick-brand">Mini<b>sector</b><span id="pickTheme"></span></div>
     <div class="pick-sub">F1 race-weekend analysis — pick a Grand Prix</div>
     ${years.map(y => `<div class="pick-year">${y} <span>${m.years[y].length} weekend${m.years[y].length > 1 ? "s" : ""}</span></div>
       <div class="pick-grid">${[...m.years[y]].reverse().map(e => `
@@ -127,6 +130,8 @@ function showPicker() {
   </div>`;
   root.querySelectorAll(".pick-card").forEach(b =>
     b.addEventListener("click", () => selectWeekend(+b.dataset.y, +b.dataset.r)));
+  const ts = root.querySelector("#pickTheme");
+  if (ts && MODE === "site") ts.appendChild(themeToggleBtn());
   HUB.viewing = null;
   try {
     if (location.hash) history.pushState(null, "", location.pathname + location.search);
@@ -138,9 +143,9 @@ function initState() {
   const S = HUB.S;
   const last = HUB.data.sessions.at(-1);
   S.sid = last ? last.id : HUB.data.sessions[0].id;
-  // phones start with the top 10 selected — 22 lines on a small screen is soup
+  // phones start with the top 5 selected — 22 lines on a small screen is soup
   const order = [...HUB.session().drivers].sort((a, b) => (a.pos ?? 99) - (b.pos ?? 99));
-  S.sel = new Set((innerWidth < 700 ? order.slice(0, 10) : order).map(dd => dd.abbr));
+  S.sel = new Set((innerWidth < 700 ? order.slice(0, 5) : order).map(dd => dd.abbr));
   S.compare = []; S.telZoom = null; S.lrSel = null; S.degCmp = null; S.qseg = 3;
   HUB.restore();
 }
@@ -209,7 +214,33 @@ function armGlobalListeners() {
   matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => HUB.data && HUB.render());
 }
 
+/* theme: standalone site defaults to light; a header toggle persists choice.
+   (embedded artifact leaves theme to its host, which stamps data-theme.) */
+function applyTheme(t) {
+  document.documentElement.setAttribute("data-theme", t);
+  try { localStorage.setItem("f1hub_theme", t); } catch (e) { }
+}
+function initTheme() {
+  if (MODE !== "site") return;
+  let t = "light";
+  try { t = localStorage.getItem("f1hub_theme") || "light"; } catch (e) { }
+  document.documentElement.setAttribute("data-theme", t);
+}
+function themeToggleBtn() {
+  const cur = document.documentElement.getAttribute("data-theme") || "light";
+  const b = document.createElement("button");
+  b.className = "btn theme-btn";
+  b.setAttribute("aria-label", "Toggle light/dark theme");
+  b.textContent = cur === "dark" ? "☀" : "☾";
+  b.addEventListener("click", () => {
+    const next = (document.documentElement.getAttribute("data-theme") || "light") === "dark" ? "light" : "dark";
+    applyTheme(next);   // MutationObserver re-renders
+  });
+  return b;
+}
+
 (async function boot() {
+  initTheme();
   if (typeof DecompressionStream === "undefined") {
     showError("This browser is too old for Minisector (it lacks built-in gzip support). Any browser from 2023 onward works — Chrome 80+, Safari 16.4+, Firefox 113+.");
     return;
