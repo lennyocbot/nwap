@@ -1,36 +1,32 @@
 /* ============ app shell & boot ============ */
 "use strict";
 
-/* tools are weekend-scoped: a tab shows if the weekend has (or is still loading)
-   any session it can use; each tool picks its own session and falls back */
+/* tabs are contextual to the ONE selected session: pick Qualifying and you get
+   quali tools, pick Race and you get race tools — the tab row never shows a
+   tool that belongs to a session you're not looking at */
 const TABS = [
   ["overview", "Overview", viewOverview, () => true],
   ["pace", "Pace", viewPace, () => true],
-  ["deg", "Tyres & Deg", viewDeg, h => ["R", "S", "FP1", "FP2", "FP3"].some(x => h.has(x))],
-  ["longruns", "Long Runs", viewLongRuns, h => ["FP1", "FP2", "FP3"].some(x => h.has(x))],
-  ["quali", "Qualifying", viewQuali, h => h.has("Q") || h.has("SQ")],
-  ["race", "Race", viewRace, h => h.has("R") || h.has("S")],
+  ["deg", "Tyres & Deg", viewDeg, sid => ["R", "S", "FP1", "FP2", "FP3"].includes(sid)],
+  ["longruns", "Long Runs", viewLongRuns, sid => sid.startsWith("FP")],
+  ["quali", "Gaps & Sectors", viewQuali, sid => sid === "Q" || sid === "SQ"],
+  ["race", "Trace & Replay", viewRace, sid => sid === "R" || sid === "S"],
   ["straights", "Straights", viewStraights, () => true],
   ["tel", "Telemetry", viewTel, () => true],
   ["weather", "Weather", viewWeather, () => true],
 ];
-/* sessions each tool can run on — render waits for one before dispatching */
-const TAB_NEEDS = {
-  deg: ["R", "S", "FP2", "FP1", "FP3"], longruns: ["FP2", "FP1", "FP3"],
-  quali: ["Q", "SQ"], race: ["R", "S"],
-};
+/* when a session switch removes the current tab, land on its analog */
+const TAB_ANALOG = { race: "quali", quali: "race", longruns: "deg", deg: "longruns" };
 const MODE = typeof HUB_MODE !== "undefined" ? HUB_MODE : "embedded";
-
-function weekendSids() {
-  return new Set([...HUB.data.sessions.map(s => s.id), ...(HUB.data.pending || []), ...(HUB.data.failed || [])]);
-}
 
 function renderTabs() {
   const S = HUB.S, nav = document.getElementById("tabs");
   if (!nav) return;
-  const h = weekendSids();
-  const avail = TABS.filter(t => t[3](h));
-  if (!avail.some(t => t[0] === S.tab)) S.tab = "overview";
+  const avail = TABS.filter(t => t[3](S.sid));
+  if (!avail.some(t => t[0] === S.tab)) {
+    const alt = TAB_ANALOG[S.tab];
+    S.tab = avail.some(t => t[0] === alt) ? alt : "overview";
+  }
   nav.innerHTML = avail.map(t =>
     `<button data-tab="${t[0]}" class="${t[0] === S.tab ? "on" : ""}">${t[1]}${t[0] === "tel" && S.compare.length ? ` <span class="cnt">${S.compare.length}</span>` : ""}</button>`).join("");
   nav.querySelectorAll("button").forEach(b =>
@@ -58,19 +54,16 @@ HUB.render = function render(keepScroll) {
   if (!main) return;
   main.innerHTML = "";
   tipHide();
-  // if every session this tool could use is still downloading, show a holder
-  const need = TAB_NEEDS[S.tab] || [S.sid];
-  if (!need.some(sid => HUB.session(sid))) {
-    const pend = need.find(sid => (HUB.data.pending || []).includes(sid));
-    if (pend) {
-      main.innerHTML = `<div class="empty"><div class="bar" style="margin:0 auto 14px"><i></i></div>loading ${SNAMES[pend] || pend}…</div>`;
-      ensureSession(pend);
+  // selected session still downloading (or failed) → holder instead of a view
+  if (!HUB.session(S.sid)) {
+    if ((HUB.data.pending || []).includes(S.sid)) {
+      main.innerHTML = `<div class="empty"><div class="bar" style="margin:0 auto 14px"><i></i></div>loading ${SNAMES[S.sid] || S.sid}…</div>`;
+      ensureSession(S.sid);
       return;
     }
-    const fail = need.find(sid => (HUB.data.failed || []).includes(sid));
-    if (fail) {
-      main.innerHTML = `<div class="empty"><b>Couldn't load ${SNAMES[fail] || fail}.</b><br><br><button class="btn pri" id="sessRetry">Retry</button></div>`;
-      main.querySelector("#sessRetry").addEventListener("click", () => { retrySession(fail); });
+    if ((HUB.data.failed || []).includes(S.sid)) {
+      main.innerHTML = `<div class="empty"><b>Couldn't load ${SNAMES[S.sid] || S.sid}.</b><br><br><button class="btn pri" id="sessRetry">Retry</button></div>`;
+      main.querySelector("#sessRetry").addEventListener("click", () => { retrySession(S.sid); });
       return;
     }
   }
@@ -281,7 +274,7 @@ async function ensureSession(sid) {
     d.pending = d.pending.filter(x => x !== sid);
     d.failed = [...(d.failed || []), sid];
     refreshSessionSelect();
-    if (HUB.S.sid === sid || (TAB_NEEDS[HUB.S.tab] || []).includes(sid)) HUB.render(true);
+    if (HUB.S.sid === sid) HUB.render(true);
   } finally {
     SESS_INFLIGHT.delete(sid);
   }
