@@ -7,6 +7,9 @@ function viewQuali(root) {
   const sid = qids.includes(HUB.S.sid) ? HUB.S.sid : "Q";
   const s = HUB.session(sid), pfx = sid === "SQ" ? "SQ" : "Q";
   if (sid !== HUB.S.sid) root.insertAdjacentHTML("beforeend", `<p class="note">Showing <b>${SNAMES[sid]}</b> — switch the session picker to ${qids.filter(q => q !== sid).map(q => SNAMES[q]).join("/") || "…"} for the other one.</p>`);
+  driverRail(root, s);
+  const inSel = a => HUB.S.sel.has(a);
+  if (!s.drivers.some(d => inSel(d.abbr))) { root.insertAdjacentHTML("beforeend", `<div class="empty">No drivers selected — pick some above.</div>`); return; }
 
   const seg = HUB.S.qseg;
   const c = card(root, "Gap ladder");
@@ -20,31 +23,36 @@ function viewQuali(root) {
   c.querySelector(".right").appendChild(segEl);
 
   // best lap per driver in segment (laps table; fall back to results q1/q2/q3)
-  const rows = [];
+  const allRows = [];
   for (const d of s.drivers) {
     const laps = s.laps.filter(l => l.drv === d.abbr && l.q === seg && l.t != null && !l.del);
     const best = laps.length ? laps.reduce((a, b) => a.t < b.t ? a : b) : null;
     const t = best ? best.t : d["q" + seg];
-    if (t != null) rows.push({ d, t, best });
+    if (t != null) allRows.push({ d, t, best });
   }
-  rows.sort((a, b) => a.t - b.t);
-  if (!rows.length) { c.insertAdjacentHTML("beforeend", `<div class="empty">No laps in this segment.</div>`); }
+  allRows.sort((a, b) => a.t - b.t);
+  allRows.forEach((r, i) => r.rank = i + 1);   // true segment position, kept when drivers are hidden
+  const rows = allRows.filter(r => inSel(r.d.abbr));
+  if (!rows.length) { c.insertAdjacentHTML("beforeend", `<div class="empty">No laps in this segment${rows.length < allRows.length ? " from the selected drivers" : ""}.</div>`); }
   else {
     const p1 = rows[0].t;
+    if (rows.length < allRows.length && rows[0].rank > 1)
+      c.insertAdjacentHTML("beforeend", `<p class="note">Gaps shown to <b>${rows[0].d.abbr}</b> (fastest selected, P${rows[0].rank} overall) — select all drivers for gaps to the outright fastest.</p>`);
     const div = document.createElement("div"); div.className = "chart"; c.appendChild(div);
     const gmax = Math.max(...rows.map(r => r.t - p1), 800);
     const rh = 23, H = rows.length * rh + 40;
     const ch = Chart(div, { h: H, xd: [0, gmax * 1.15], yd: [0, 1], ml: 96, mb: 26, yticksArr: [], xfmt: v => "+" + (v / 1000).toFixed(2), xlab: "gap (s)", label: "Qualifying gap ladder" });
     const bars = [];
+    const cutN = pfx === "Q" || pfx === "SQ" ? (seg === 1 ? 15 : seg === 2 ? 10 : null) : null;
     rows.forEach((r, i) => {
       const cy = ch.mt + i * (ch.ih / rows.length) + (ch.ih / rows.length) / 2, col = teamCol(r.d.color);
-      svgEl("text", { x: ch.ml - 8, y: cy + 3.5, "text-anchor": "end", "font-size": 11, "font-weight": 700, fill: col, class: "num" }, ch.svg).textContent = `${i + 1}. ${r.d.abbr}`;
+      svgEl("text", { x: ch.ml - 8, y: cy + 3.5, "text-anchor": "end", "font-size": 11, "font-weight": 700, fill: col, class: "num" }, ch.svg).textContent = `${r.rank}. ${r.d.abbr}`;
       const w = Math.max(2, ch.x(r.t - p1) - ch.x(0));
       const bar = svgEl("rect", { x: ch.x(0), y: cy - 7.5, width: w, height: 15, rx: 3, fill: col, opacity: i === 0 ? 1 : .75 }, ch.plot);
       svgEl("text", { x: ch.x(0) + w + 6, y: cy + 3.5, "font-size": 10.5, fill: "var(--ink2)", class: "num" }, ch.plot).textContent = i === 0 ? fmtLap(r.t) : "+" + ((r.t - p1) / 1000).toFixed(3);
       bars.push(bar);
-      const cutN = pfx === "Q" || pfx === "SQ" ? (seg === 1 ? 15 : seg === 2 ? 10 : null) : null;
-      if (cutN && i === cutN - 1 && rows.length > cutN)
+      // elimination line after the last displayed driver who made the cut
+      if (cutN && allRows.length > cutN && r.rank <= cutN && (i === rows.length - 1 ? false : rows[i + 1].rank > cutN))
         svgEl("line", { x1: ch.ml, x2: ch.ml + ch.iw, y1: cy + (ch.ih / rows.length) / 2, y2: cy + (ch.ih / rows.length) / 2, stroke: "var(--red)", "stroke-width": 1, "stroke-dasharray": "5 4" }, ch.plot);
     });
     hoverMarks(bars, i => {
@@ -57,6 +65,7 @@ function viewQuali(root) {
   const c2 = card(root, "Sector analysis", `${pfx}${seg} · best individual sectors · purple = best overall`);
   const secRows = [];
   for (const d of s.drivers) {
+    if (!inSel(d.abbr)) continue;
     const laps = s.laps.filter(l => l.drv === d.abbr && l.q === seg && !l.del);
     const b1 = Math.min(...laps.map(l => l.s1 ?? 1e12)), b2 = Math.min(...laps.map(l => l.s2 ?? 1e12)), b3 = Math.min(...laps.map(l => l.s3 ?? 1e12));
     const bl = laps.filter(l => l.t != null);
@@ -83,7 +92,7 @@ function viewQuali(root) {
 
   /* ---- track evolution ---- */
   const c3 = card(root, "Track evolution", "every timed lap vs session clock — watch the track ramp up");
-  const evo = s.laps.filter(l => l.t != null && !l.del && !l.in && !l.out);
+  const evo = s.laps.filter(l => l.t != null && !l.del && !l.in && !l.out && inSel(l.drv));
   if (evo.length > 5) {
     const div3 = document.createElement("div"); div3.className = "chart"; c3.appendChild(div3);
     const t0 = Math.min(...evo.map(l => l.st)), t1 = Math.max(...evo.map(l => l.st));
@@ -116,6 +125,7 @@ function viewQuali(root) {
   const c4 = card(root, "Speed traps", "session maximums per driver");
   const sp = [];
   for (const d of s.drivers) {
+    if (!inSel(d.abbr)) continue;
     const laps = s.laps.filter(l => l.drv === d.abbr);
     const mx = k => { const v = laps.map(l => l[k]).filter(v => v != null); return v.length ? Math.max(...v) : null; };
     const r = { d, i1: mx("spI1"), i2: mx("spI2"), fl: mx("spFL"), st: mx("spST") };
@@ -143,8 +153,8 @@ function viewRace(root) {
   const sid = rids.includes(HUB.S.sid) ? HUB.S.sid : "R";
   const s = HUB.session(sid);
   if (sid !== HUB.S.sid) root.insertAdjacentHTML("beforeend", `<p class="note">Showing <b>${SNAMES[sid]}</b> — use the session picker for the ${rids.filter(r => r !== sid).map(r => SNAMES[r]).join("/")}.</p>`);
-  driverRail(root);
-  const drvs = selDrivers();
+  driverRail(root, s);
+  const drvs = selDrivers(s);
   const total = s.totalLaps || Math.max(...s.laps.map(l => l.lap));
 
   // end-of-lap session time per driver
@@ -275,7 +285,7 @@ function viewRace(root) {
     const f = tsFlags(l.ts);
     // a stop under SC/red isn't comparable — the clock runs differently
     const flag = f.red ? "red" : f.sc ? "SC" : f.vsc ? "VSC" : null;
-    if (d) stops.push({ d, l, dur, to: nx && nx.cmp, from: l.cmp, flag });
+    if (d && HUB.S.sel.has(d.abbr)) stops.push({ d, l, dur, to: nx && nx.cmp, from: l.cmp, flag });
   }
   stops.sort((a, b) => (a.dur ?? 9e9) - (b.dur ?? 9e9));
   const greenStops = stops.filter(st => st.dur && !st.flag);
@@ -291,7 +301,7 @@ function viewRace(root) {
 
   /* ---- start analysis ---- */
   const c4 = card(g, "Lap 1", "positions gained and lost from the grid");
-  const l1 = s.drivers.filter(d => d.grid).map(d => {
+  const l1 = s.drivers.filter(d => d.grid && HUB.S.sel.has(d.abbr)).map(d => {
     const l = s.laps.find(l => l.drv === d.abbr && l.lap === 1);
     return l && l.pos ? { d, delta: d.grid - l.pos, p1: l.pos } : null;
   }).filter(Boolean).sort((a, b) => b.delta - a.delta);
@@ -313,7 +323,7 @@ function viewRace(root) {
     hoverMarks(bars, i => { const r = l1[i]; return `<div class="t-title">${r.d.abbr}</div>P${r.d.grid} grid → P${r.p1} after lap 1`; });
   }
 
-  const movers = s.drivers.filter(d => d.grid && d.pos).map(d => ({ d, g: d.grid - d.pos })).sort((a, b) => b.g - a.g);
+  const movers = s.drivers.filter(d => d.grid && d.pos && HUB.S.sel.has(d.abbr)).map(d => ({ d, g: d.grid - d.pos })).sort((a, b) => b.g - a.g);
   insights(root, [
     bestGreen ? `Fastest green-flag stop: <b>${bestGreen.d.abbr}</b> ${fmtSec(bestGreen.dur, 1)}s pit lane (lap ${bestGreen.l.lap})` : "",
     movers.length && movers[0].g > 0 ? `Drive of the day candidate: <b>${movers[0].d.abbr}</b> gained ${movers[0].g} places` : "",

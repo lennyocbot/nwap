@@ -2,8 +2,8 @@
 "use strict";
 
 /* ---------- driver rail ---------- */
-function driverRail(root, opts = {}) {
-  const s = HUB.session();
+function driverRail(root, sess) {
+  const s = sess || HUB.session();
   // phones: collapse the 22-chip rail behind a one-line toggle
   if (innerWidth < 640) {
     const holder = document.createElement("div");
@@ -43,8 +43,8 @@ function driverRail(root, opts = {}) {
   });
   root.appendChild(wrap);
 }
-function selDrivers() {
-  const s = HUB.session();
+function selDrivers(sess) {
+  const s = sess || HUB.session();
   return [...s.drivers].sort((a, b) => (a.pos ?? 99) - (b.pos ?? 99)).filter(d => HUB.S.sel.has(d.abbr));
 }
 function card(root, title, subtitle) {

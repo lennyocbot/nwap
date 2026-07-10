@@ -47,13 +47,16 @@ function viewDeg(root) {
   const sid = degSessionId(), s = HUB.session(sid);
   const isRace = sid === "R" || sid === "S";
   if (sid !== HUB.S.sid) root.insertAdjacentHTML("beforeend", `<p class="note">Showing <b>${SNAMES[sid]}</b> — degradation needs long running (Race, Sprint or practice).</p>`);
+  driverRail(root, s);
+  if (!s.drivers.some(d => HUB.S.sel.has(d.abbr))) { root.insertAdjacentHTML("beforeend", `<div class="empty">No drivers selected — pick some above.</div>`); return; }
 
-  const stints = stintsOf(s);
+  const stints = stintsOf(s).filter(t => HUB.S.sel.has(t.drv));
 
   /* ---- strategy timeline ---- */
   if (isRace) {
     const c = card(root, "Strategy", "stint compound + length; hover pit markers for pit-lane time");
-    const drivers = s.drivers.filter(d => d.pos).sort((a, b) => a.pos - b.pos);
+    const drivers = s.drivers.filter(d => d.pos && HUB.S.sel.has(d.abbr)).sort((a, b) => a.pos - b.pos);
+    if (!drivers.length) { c.insertAdjacentHTML("beforeend", `<div class="empty">None of the selected drivers are classified here.</div>`); return; }
     const total = s.totalLaps || Math.max(...s.laps.map(l => l.lap));
     const div = document.createElement("div"); div.className = "chart"; c.appendChild(div);
     const rh = 21, H = drivers.length * rh + 40;
@@ -94,7 +97,7 @@ function viewDeg(root) {
 
   /* ---- degradation model ---- */
   const cmps = [...new Set(stints.map(t => t.cmp))].filter(cc => cc !== "UNKNOWN" && stints.filter(t => t.cmp === cc).some(t => stintFit(t, sid)));
-  if (!cmps.length) { card(root, "Tyre degradation").insertAdjacentHTML("beforeend", `<div class="empty">Not enough clean stint running to fit degradation.</div>`); return; }
+  if (!cmps.length) { card(root, "Tyre degradation").insertAdjacentHTML("beforeend", `<div class="empty">Not enough clean stint running to fit degradation${HUB.S.sel.size < s.drivers.length ? " from the selected drivers — add more above" : ""}.</div>`); return; }
   if (!HUB.S.degCmp || !cmps.includes(HUB.S.degCmp)) HUB.S.degCmp = cmps.includes("MEDIUM") ? "MEDIUM" : cmps[0];
 
   const c2 = card(root, "Tyre degradation", `per-stint baseline removed · first lap of stint dropped · traffic/SC laps excluded${isRace ? ` · fuel-corrected at ${HUB.S.fuelK.toFixed(3)} s/lap` : ""}`);

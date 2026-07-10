@@ -143,9 +143,11 @@ function initState() {
   const S = HUB.S;
   const last = HUB.data.sessions.at(-1);
   S.sid = last ? last.id : HUB.data.sessions[0].id;
-  // phones start with the top 5 selected — 22 lines on a small screen is soup
+  // phones start with the top 5 selected — 22 lines on a small screen is soup;
+  // desktop gets the union of every session's roster so FP-only rookies show up too
   const order = [...HUB.session().drivers].sort((a, b) => (a.pos ?? 99) - (b.pos ?? 99));
-  S.sel = new Set((innerWidth < 700 ? order.slice(0, 5) : order).map(dd => dd.abbr));
+  if (innerWidth < 700) S.sel = new Set(order.slice(0, 5).map(dd => dd.abbr));
+  else S.sel = new Set(HUB.data.sessions.flatMap(ss => ss.drivers.map(dd => dd.abbr)));
   S.compare = []; S.telZoom = null; S.lrSel = null; S.degCmp = null; S.qseg = 3;
   HUB.restore();
 }
