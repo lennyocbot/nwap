@@ -194,6 +194,23 @@ kbd.k { background:var(--surface3); border-radius:3px; padding:0 4px; font-size:
 .lapchip .x:hover { color:var(--red); }
 .lapchip.ref { border-color:var(--accent); }
 .lapchip .refmark { font-size:9.5px; letter-spacing:.06em; color:var(--accent); font-weight:800; }
+/* team DNA */
+.dna-launch { display:block; margin:0 auto 26px; font-size:13px; padding:10px 18px; }
+.dna-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:14px; margin-bottom:18px; }
+.dna-grid .card { margin:0; }
+.dna-head { display:flex; align-items:center; gap:8px; font-size:14px; margin-bottom:10px; flex-wrap:wrap; }
+.dna-gaps { margin-left:auto; color:var(--ink2); font-size:12px; }
+.dna-row { display:flex; align-items:center; gap:8px; margin:5px 0; }
+.dna-lab { width:104px; font-size:12px; color:var(--ink2); flex:none; }
+.dna-track { flex:1; height:9px; background:var(--surface3); border-radius:5px; overflow:hidden; }
+.dna-track i { display:block; height:100%; border-radius:5px; }
+.dna-val { width:78px; text-align:right; font-size:11.5px; flex:none; }
+.dna-note { margin:6px 0 8px; }
+.dna-fit { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--ink2); border-top:1px solid var(--line); padding-top:9px; }
+.dna-temp { font-size:12px; color:var(--ink2); margin-top:8px; }
+.dna-mat th, .dna-mat td { white-space:nowrap; }
+@media (max-width:640px) { .dna-grid { grid-template-columns:1fr; } .dna-launch { width:100%; } }
+
 /* telemetry lap browser */
 .telpick { margin-top:4px; }
 .tp-head { display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px; }

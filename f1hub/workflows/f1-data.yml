@@ -64,6 +64,10 @@ jobs:
           if [ "${{ inputs.force }}" = "true" ]; then ARGS="$ARGS --force"; fi
           python update_data.py $ARGS | tee /tmp/update.log
 
+      - name: Rebuild team profiles
+        run: |
+          python tools/build_profiles.py || echo "profiles build failed (non-fatal)"
+
       - name: Commit & push
         run: |
           git config user.name "f1hub-bot"

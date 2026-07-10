@@ -14,7 +14,7 @@ import pathlib
 import sys
 
 HERE = pathlib.Path(__file__).parent
-JS_ORDER = ["core.js", "charts.js", "views_a.js", "views_b.js", "views_c.js", "views_d.js", "views_e.js", "views_f.js", "app.js"]
+JS_ORDER = ["core.js", "charts.js", "views_a.js", "views_b.js", "views_c.js", "views_d.js", "views_e.js", "views_f.js", "views_g.js", "app.js"]
 
 
 def assemble(mode, b64, title):

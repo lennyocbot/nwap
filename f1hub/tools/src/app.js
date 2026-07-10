@@ -114,6 +114,7 @@ function buildShell() {
       <select id="pyear" aria-label="Season">${years.map(y => `<option ${+y === d.year ? "selected" : ""}>${y}</option>`).join("")}</select>
       <select id="pevent" aria-label="Grand Prix">${HUB.manifest.years[String(d.year)].map(e => `<option value="${e.round}" ${e.round === d.round ? "selected" : ""}>R${e.round} · ${esc(e.event)}</option>`).join("")}</select>
       <select id="psess" aria-label="Session"></select>
+      <button id="dnaBtn" class="btn" title="Team DNA — season car profiles" aria-label="Team DNA">🧬</button>
     </span>`;
   } else {
     titleHtml = `<span class="gp">${esc(d.event)} ${d.year}</span><span class="picker"><select id="psess" aria-label="Session"></select></span>`;
@@ -152,6 +153,7 @@ function buildShell() {
     });
     pe.addEventListener("change", () => selectWeekend(d.year, +pe.value));
     document.getElementById("homeBtn").addEventListener("click", showPicker);
+    document.getElementById("dnaBtn").addEventListener("click", () => showTeams(d.year));
   }
   const slot = document.getElementById("themeSlot");
   if (slot && MODE === "site") slot.appendChild(themeToggleBtn());
@@ -174,6 +176,7 @@ function showPicker() {
   root.innerHTML = `<div class="pick-screen">
     <div class="pick-brand">Mini<b>sector</b><span id="pickTheme"></span></div>
     <div class="pick-sub">F1 race-weekend analysis — pick a Grand Prix</div>
+    <button class="btn dna-launch" id="dnaLaunch">🧬 Team DNA — what each car is good at, and which circuits should suit it</button>
     ${years.map(y => `<div class="pick-year">${y} <span>${m.years[y].length} weekend${m.years[y].length > 1 ? "s" : ""}</span></div>
       <div class="pick-grid">${[...m.years[y]].reverse().map(e => `
         <button class="pick-card" data-y="${y}" data-r="${e.round}">
@@ -186,6 +189,8 @@ function showPicker() {
   </div>`;
   root.querySelectorAll(".pick-card").forEach(b =>
     b.addEventListener("click", () => selectWeekend(+b.dataset.y, +b.dataset.r)));
+  const dna = root.querySelector("#dnaLaunch");
+  if (dna) dna.addEventListener("click", () => showTeams(years[0]));
   const ts = root.querySelector("#pickTheme");
   if (ts && MODE === "site") ts.appendChild(themeToggleBtn());
   HUB.viewing = null;
@@ -307,6 +312,11 @@ function armGlobalListeners() {
   });
   addEventListener("hashchange", () => {
     if (MODE !== "site" || !HUB.manifest) return;
+    const tm = location.hash.match(/^#teams(?:\/(\d{4}))?$/);
+    if (tm) {
+      if (!String(HUB.viewing || "").startsWith("teams") || (tm[1] && HUB.viewing !== "teams/" + tm[1])) showTeams(tm[1]);
+      return;
+    }
     const m = location.hash.match(/^#(\d{4})\/(\d+)$/);
     const want = m ? `${+m[1]}/${+m[2]}` : null;
     if (want === HUB.viewing) return;
@@ -359,9 +369,12 @@ function themeToggleBtn() {
     HUB.manifest = manifest;
     const years = Object.keys(manifest.years).sort();
     if (!years.length) { showError("No weekends in the data set yet — run the data updater."); return; }
-    // deep link #year/round goes straight in; otherwise show the weekend chooser
+    // deep link #year/round or #teams goes straight in; otherwise the chooser
+    const tmm = location.hash.match(/^#teams(?:\/(\d{4}))?$/);
     const m = location.hash.match(/^#(\d{4})\/(\d+)$/);
-    if (m && manifest.years[m[1]] && manifest.years[m[1]].some(e => e.round === +m[2]))
+    if (tmm)
+      showTeams(tmm[1]);
+    else if (m && manifest.years[m[1]] && manifest.years[m[1]].some(e => e.round === +m[2]))
       await selectWeekend(+m[1], +m[2]);
     else
       showPicker();
