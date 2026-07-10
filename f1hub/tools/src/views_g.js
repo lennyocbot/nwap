@@ -50,9 +50,9 @@ function renderTeams(P, year) {
       <span class="picker">
         <button id="homeBtn" class="btn" title="All weekends" aria-label="All weekends">≡</button>
         <select id="dnaYear" aria-label="Season">${years.map(yy => `<option ${yy === y ? "selected" : ""}>${yy}</option>`).join("")}</select>
-        <span class="gp" style="font-size:16px">Team DNA</span>
+        <span class="gp" style="font-size:16px">Team DNA — ${esc(y)} only</span>
       </span>
-      <span class="meta">what each car is measurably good at — and which circuits should suit it</span>
+      <span class="meta">one season at a time: cars change every year, so no performance data crosses seasons</span>
       <span class="brand">Mini<b>sector</b> · F1 analysis</span>
       <span id="themeSlot"></span>
     </div>
@@ -70,13 +70,15 @@ function renderTeams(P, year) {
     .sort((a, b) => a[1].quali - b[1].quali);
   if (!teams.length) { main.innerHTML = `<div class="empty">Not enough dry weekends in ${y} yet.</div>`; return; }
 
-  /* header card: model + honesty */
+  /* header card: what this is + honesty */
   const doneN = S.rounds.filter(r => r.circuit).length;
-  const intro = card(main, `${y} — car character from ${doneN} archived weekend${doneN > 1 ? "s" : ""}`,
-    "slow < 150 km/h · medium < 230 · fast ≥ 230 · deficits vs the best car at each corner, dry sessions only");
-  if (S.accMean != null) {
-    intro.insertAdjacentHTML("beforeend", `<p class="note">Model check: at every completed dry weekend the circuit-fit prediction is compared with the real qualifying order — average rank correlation <b class="num">ρ = ${S.accMean.toFixed(2)}</b> over ${S.acc.length} rounds (1 = perfect order, 0 = random). Details at the bottom.</p>`);
-  }
+  const intro = card(main, `What the ${y} cars are actually good at`,
+    `built ONLY from ${y}'s ${doneN} dry weekend${doneN > 1 ? "s" : ""} — other seasons are never mixed in`);
+  intro.insertAdjacentHTML("beforeend", `<p class="note"><b>How to read the cards:</b> every corner of every ${y} track is sorted into
+    <b>slow</b> (&lt;150 km/h), <b>medium</b> (&lt;230) or <b>fast</b> (≥230), and each car's best qualifying speed through it is compared with
+    the fastest car through that same corner. A bar of <span class="num">−6.7 km/h</span> in slow corners means: through slow corners, this car
+    is on average 6.7 km/h down on whoever is quickest there. Shorter bar = stronger. Straight-line comes from speed traps.
+    ${S.accMean != null ? `The circuit predictions are checked against reality below — average rank correlation <b class="num">ρ = ${S.accMean.toFixed(2)}</b> across ${S.acc.length} rounds (1 = predicts the exact order, 0 = random guessing).` : ""}</p>`);
 
   /* relative calibrated fits: per circuit, gap to the best team's score */
   const k = S.calib || 1;
@@ -127,13 +129,13 @@ function renderTeams(P, year) {
 
     el.innerHTML = `
       <div class="dna-head"><span class="dot" style="background:${col};width:12px;height:12px"></span><b>${esc(tm)}</b>
-        <span class="dna-gaps num">Q ${t.quali === 0 ? "fastest" : "+" + t.quali.toFixed(2) + "%"}${t.race != null ? ` · R ${t.race === 0 ? "fastest" : "+" + t.race.toFixed(2) + "s/lap"}` : ""}</span></div>
+        <span class="dna-gaps num">Quali ${t.quali === 0 ? "fastest" : "+" + t.quali.toFixed(2) + "%"}${t.race != null ? ` · Race ${t.race === 0 ? "fastest" : "+" + t.race.toFixed(2) + " s/lap"}` : ""}</span></div>
       <div class="dna-bars">${rows.map(([lab, v, mx, unit, n]) => `
         <div class="dna-row"><span class="dna-lab">${lab}</span>
           <span class="dna-track"><i style="width:${v == null ? 0 : Math.max(3, v / mx * 100).toFixed(1)}%;background:${col}"></i></span>
           <span class="num dna-val">${v == null ? "—" : "−" + v.toFixed(1) + " " + unit}</span></div>`).join("")}
       </div>
-      <p class="dna-note hint">speed given up to the best car through each corner class (avg over ${t.n} dry weekends)</p>
+      <p class="dna-note hint">speed given up to the best car through each corner type · averaged over ${t.n} dry ${esc(y)} weekends</p>
       ${ranked.length ? `<div class="dna-fit"><span><b>Should over-perform at:</b> ${best3.map(fmtC).join(" · ")}</span>
       <span><b>Should struggle at:</b> ${worst3.map(fmtC).join(" · ")}</span>
       <span class="hint">±s vs this car's own average circuit — its layout sensitivity, not a cross-team ranking</span></div>` : ""}

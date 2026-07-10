@@ -96,7 +96,9 @@ function viewDeg(root) {
   }
 
   /* ---- degradation model ---- */
-  const cmps = [...new Set(stints.map(t => t.cmp))].filter(cc => cc !== "UNKNOWN" && stints.filter(t => t.cmp === cc).some(t => stintFit(t, sid)));
+  const used = [...new Set(stints.map(t => t.cmp))].filter(cc => cc !== "UNKNOWN");
+  const cmps = used.filter(cc => stints.filter(t => t.cmp === cc).some(t => stintFit(t, sid)));
+  const unfittable = used.filter(cc => !cmps.includes(cc));
   if (!cmps.length) { card(root, "Tyre degradation").insertAdjacentHTML("beforeend", `<div class="empty">Not enough clean stint running to fit degradation${HUB.S.sel.size < s.drivers.length ? " from the selected drivers — add more above" : ""}.</div>`); return; }
   if (!HUB.S.degCmp || !cmps.includes(HUB.S.degCmp)) HUB.S.degCmp = cmps.includes("MEDIUM") ? "MEDIUM" : cmps[0];
 
@@ -109,7 +111,18 @@ function viewDeg(root) {
     b.addEventListener("click", () => { HUB.S.degCmp = cc; HUB.render(); });
     segEl.appendChild(b);
   }
+  // compounds that ran, but never long enough to fit a slope — show why
+  // they're missing instead of hiding them silently
+  for (const cc of unfittable) {
+    const b = document.createElement("button");
+    b.innerHTML = cmpDot(cc) + " " + cc;
+    b.disabled = true;
+    b.title = `${cc} was used, but no stint had the 4+ clean consecutive laps needed to fit degradation`;
+    segEl.appendChild(b);
+  }
   c2.querySelector(".right").appendChild(segEl);
+  if (unfittable.length)
+    c2.insertAdjacentHTML("beforeend", `<p class="note">${unfittable.map(cc => cmpDot(cc) + " " + cc.toLowerCase()).join(", ")} ${unfittable.length > 1 ? "were" : "was"} used but never for a long enough clean run (4+ laps) to measure degradation — greyed out, not hidden.</p>`);
 
   // pooled normalized points per team
   const teams = new Map(); // team -> {col, pts:[[life, dMs]], drvs:Set}

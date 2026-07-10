@@ -209,7 +209,14 @@ function viewRace(root) {
       return { d, pts };
     });
     const ys = series.flatMap(sr => sr.pts.filter(Boolean).map(p => p[1]));
-    const ch = Chart(div, { h: 420, mr: 46, xd: [0, total], yd: [quantile(ys, 0.01) - 4, Math.max(...ys) + 4], xlab: "lap", ylab: "gap to reference (s)", yfmt: v => v.toFixed(0), label: "Race trace" });
+    // a long safety car or red flag drags the whole field hundreds of seconds
+    // off reference and would squash the racing into a sliver — keep the scale
+    // on the bulk of the race and let the plunge clip below
+    const deepLo = quantile(ys, 0.01) - 4;
+    const yLo = Math.max(deepLo, quantile(ys, 0.30) - 90);
+    if (deepLo < yLo - 20)
+      c1.insertAdjacentHTML("beforeend", `<p class="note">⚑ the field falls far off the reference late on (long SC / red flag — the clock keeps running): those laps dive off the bottom of the scale so the actual racing stays readable. Gaps between cars are unaffected.</p>`);
+    const ch = Chart(div, { h: 420, mr: 46, xd: [0, total], yd: [yLo, Math.max(...ys) + 4], xlab: "lap", ylab: "gap to reference (s)", yfmt: v => v.toFixed(0), label: "Race trace" });
     drawBands(ch);
     const nodes = [], data = [];
     for (const sr of series) {

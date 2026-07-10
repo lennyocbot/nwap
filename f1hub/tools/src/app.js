@@ -107,7 +107,6 @@ function buildShell() {
       <select id="pyear" aria-label="Season">${years.map(y => `<option ${+y === d.year ? "selected" : ""}>${y}</option>`).join("")}</select>
       <select id="pevent" aria-label="Grand Prix">${HUB.manifest.years[String(d.year)].map(e => `<option value="${e.round}" ${e.round === d.round ? "selected" : ""}>R${e.round} · ${esc(e.event)}</option>`).join("")}</select>
       <select id="psess" aria-label="Session"></select>
-      <button id="dnaBtn" class="btn" title="Team DNA — season car profiles" aria-label="Team DNA">🧬</button>
     </span>`;
   } else {
     titleHtml = `<span class="gp">${esc(d.event)} ${d.year}</span><span class="picker"><select id="psess" aria-label="Session"></select></span>`;
@@ -146,7 +145,6 @@ function buildShell() {
     });
     pe.addEventListener("change", () => selectWeekend(d.year, +pe.value));
     document.getElementById("homeBtn").addEventListener("click", showPicker);
-    document.getElementById("dnaBtn").addEventListener("click", () => showTeams(d.year));
   }
   const slot = document.getElementById("themeSlot");
   if (slot && MODE === "site") slot.appendChild(themeToggleBtn());
