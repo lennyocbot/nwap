@@ -43,6 +43,22 @@ function driverRail(root, sess) {
   });
   root.appendChild(wrap);
 }
+/* telemetry-stage holder: true if the session's telemetry hasn't arrived yet */
+function telHolder(root, s, msg) {
+  if (s.tel) return false;
+  const failed = (s._telFail || 0) >= 3;
+  const div = document.createElement("div"); div.className = "empty";
+  if (failed) {
+    div.innerHTML = `<b>Couldn't download telemetry for ${SNAMES[s.id] || s.id}.</b><br><br><button class="btn pri">Retry</button>`;
+    div.querySelector("button").addEventListener("click", () => { s._telFail = 0; ensureTel(s.id, true); HUB.render(); });
+  } else {
+    div.innerHTML = `<div class="bar" style="margin:0 auto 14px"><i></i></div>${esc(msg || "downloading telemetry…")}`;
+    ensureTel(s.id);
+  }
+  root.appendChild(div);
+  return true;
+}
+
 function selDrivers(sess) {
   const s = sess || HUB.session();
   return [...s.drivers].sort((a, b) => (a.pos ?? 99) - (b.pos ?? 99)).filter(d => HUB.S.sel.has(d.abbr));

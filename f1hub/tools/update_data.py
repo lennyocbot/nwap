@@ -75,8 +75,20 @@ def extract_one(year, ev, sid, force=False, require_tel=False):
         return False
     write_meta(year, ev)
     out.write_bytes(gzip.compress(json.dumps(data, separators=(",", ":")).encode(), 9))
+    write_core(out, data)
     print(f"  -> {out.relative_to(ROOT)} ({out.stat().st_size/1e6:.1f} MB)")
     return True
+
+
+def write_core(full_path, data=None):
+    """Telemetry-free twin of a session file: the app first-paints from this
+    (~10x smaller) and streams the full file in the background for telemetry."""
+    if data is None:
+        data = json.loads(gzip.decompress(full_path.read_bytes()))
+    core = {k: v for k, v in data.items() if k != "tel"}
+    cf = full_path.with_name(full_path.name.replace(".json.gz", ".core.json.gz"))
+    cf.write_bytes(gzip.compress(json.dumps(core, separators=(",", ":")).encode(), 9))
+    return cf
 
 
 def sessions_of(ev):
@@ -194,6 +206,12 @@ def rebuild_manifest():
                 f = wdir / f"{sid}.json.gz"
                 if f.exists():
                     sessions[sid] = {"file": str(f.relative_to(ROOT)), "size": f.stat().st_size}
+                    cf = wdir / f"{sid}.core.json.gz"
+                    if not cf.exists():
+                        write_core(f)   # self-heal sessions extracted before core-splitting
+                    if cf.exists():
+                        sessions[sid]["core"] = str(cf.relative_to(ROOT))
+                        sessions[sid]["coreSize"] = cf.stat().st_size
             if sessions:
                 meta["sessions"] = sessions
                 entries.append(meta)

@@ -5,7 +5,14 @@
 "use strict";
 
 function replayCard(root, s) {
-  if (!(s.id === "R" || s.id === "S") || !s.map || !Object.keys(s.tel).length) return;
+  if (!(s.id === "R" || s.id === "S") || !s.map) return;
+  if (!s.tel) {
+    const c = card(root, "Race replay");
+    c.insertAdjacentHTML("beforeend", `<div class="empty"><div class="bar" style="margin:0 auto 14px"><i></i></div>replay appears once the telemetry finishes downloading…</div>`);
+    ensureTel(s.id);
+    return;
+  }
+  if (!Object.keys(s.tel).length) return;
   const map = s.map, N = 280, M = map.x.length;
 
   // per-driver lap index

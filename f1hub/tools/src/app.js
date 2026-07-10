@@ -217,19 +217,24 @@ async function selectWeekend(year, round) {
   const sids = Object.keys(entry.sessions);
   const firstSid = sids.at(-1);   // the session the page lands on
   showLoading(`fetching ${entry.event} ${year}…`);
+  // cores (lap tables, results, map, weather — no telemetry) are ~3% of the
+  // bytes; paint from those and stream telemetry behind
+  const srcOf = e => e.core || e.file;
   let first;
   try {
-    const total = entry.sessions[firstSid].size || 0;
+    const fe = entry.sessions[firstSid];
+    const total = (fe.core ? fe.coreSize : fe.size) || 0;
     let got = 0;
-    first = await fetchSession(entry.sessions[firstSid].file, n => {
+    first = await fetchSession(srcOf(fe), n => {
       got = Math.max(0, got + n);
       const el = document.getElementById("loadmsg");
-      if (el && total) el.textContent = `fetching ${entry.event} ${year} (${SNAMES[firstSid] || firstSid}) — ${(got / 1e6).toFixed(1)} / ${(total / 1e6).toFixed(1)} MB`;
+      if (el && total) el.textContent = `fetching ${entry.event} ${year} — ${Math.min(100, got / total * 100).toFixed(0)}%`;
     });
   } catch (err) {
     showError(err.message);
     return;
   }
+  if (!first.tel) first.tel = null;   // telemetry arrives separately
   HUB.data = {
     year: +year, round: entry.round, event: entry.event, location: entry.location,
     country: entry.country, format: entry.format, sessions: [first],
@@ -248,6 +253,8 @@ async function selectWeekend(year, round) {
     document.title = `${entry.event} ${year} — Minisector`;
   } catch (e) { }
   for (const sid of [...HUB.data.pending]) ensureSession(sid);
+  ensureTel(firstSid);
+  pumpTels(HUB.data);
 }
 
 const SESS_INFLIGHT = new Set();
@@ -257,16 +264,18 @@ async function ensureSession(sid) {
   const token = `${d.year}/${d.round}`;
   SESS_INFLIGHT.add(sid);
   try {
-    const s = await fetchSession(d.entry.sessions[sid].file);
+    const ent = d.entry.sessions[sid];
+    const s = await fetchSession(ent.core || ent.file);
     if (HUB.data !== d || HUB.viewing !== token) return;   // user moved on
+    if (!s.tel) s.tel = null;
     const idx = i => d.sids.indexOf(i);
     d.sessions.push(s);
     d.sessions.sort((a, b) => idx(a.id) - idx(b.id));
     d.pending = d.pending.filter(x => x !== sid);
     // desktop keeps "everyone" selected as new rosters arrive (unless the user
-    // has already customised the rail); re-validate any restored basket laps
+    // has already customised the rail); basket laps re-validate when tel lands
     if (innerWidth >= 700 && !HUB._selCustom) for (const dd of s.drivers) HUB.S.sel.add(dd.abbr);
-    HUB.S.compare = HUB.S.compare.filter(c => c.sid !== sid || s.tel[c.drv + "-" + c.lap]);
+    if (s.tel) HUB.S.compare = HUB.S.compare.filter(c => c.sid !== sid || s.tel[c.drv + "-" + c.lap]);
     refreshMeta();
     HUB.render(true);   // keep scroll position — this is a background refresh
   } catch (e) {
@@ -277,6 +286,49 @@ async function ensureSession(sid) {
     if (HUB.S.sid === sid) HUB.render(true);
   } finally {
     SESS_INFLIGHT.delete(sid);
+  }
+}
+
+/* telemetry stage: the full session file (the heavy one) fetched behind the
+   scenes; merged into the already-rendered core session */
+const TEL_INFLIGHT = new Set();
+async function ensureTel(sid, force) {
+  const d = HUB.data;
+  const s = d && HUB.session(sid);
+  if (!d || !d.entry || !s || s.tel || TEL_INFLIGHT.has(sid)) return;
+  if (!force && (s._telFail || 0) >= 3) return;
+  const ent = d.entry.sessions[sid];
+  if (!ent || !ent.core) return;     // full file was fetched directly — nothing to do
+  const token = `${d.year}/${d.round}`;
+  TEL_INFLIGHT.add(sid);
+  try {
+    const full = await fetchSession(ent.file);
+    if (HUB.data !== d || HUB.viewing !== token) return;
+    s.tel = full.tel || {};
+    HUB.S.compare = HUB.S.compare.filter(c => c.sid !== sid || s.tel[c.drv + "-" + c.lap]);
+    const S = HUB.S;
+    // refresh only the views that were actually waiting on this telemetry
+    if (S.tab === "tel" || (S.tab === "straights" && S.sid === sid)
+      || (S.tab === "race" && (sid === "R" || sid === "S"))) HUB.render(true);
+    else renderTabs();
+  } catch (e) {
+    if (HUB.data === d) s._telFail = (s._telFail || 0) + 1;
+  } finally {
+    TEL_INFLIGHT.delete(sid);
+  }
+}
+
+/* background loop: current session's telemetry first, then the rest of the
+   weekend in order; waits politely for cores that are still arriving */
+async function pumpTels(d) {
+  while (HUB.data === d && HUB.viewing === `${d.year}/${d.round}`) {
+    const next = [HUB.S.sid, ...d.sids].find(x => {
+      const s = HUB.session(x);
+      return s && !s.tel && (s._telFail || 0) < 3 && d.entry.sessions[x]?.core && !TEL_INFLIGHT.has(x);
+    });
+    if (next) { await ensureTel(next); continue; }
+    if (!d.pending.length && !TEL_INFLIGHT.size) return;   // everything settled
+    await new Promise(r => setTimeout(r, 350));            // a core is still on its way
   }
 }
 function retrySession(sid) {

@@ -7,7 +7,7 @@ function telEntries() {
   const teamCount = {};
   for (const e of HUB.S.compare) {
     const s = HUB.session(e.sid);
-    const tel = s && s.tel[e.drv + "-" + e.lap];
+    const tel = s && s.tel && s.tel[e.drv + "-" + e.lap];
     const lap = s && s.laps.find(l => l.drv === e.drv && l.lap === e.lap);
     const d = HUB.driver(e.drv, e.sid);
     if (!tel || !lap || !d) continue;
@@ -65,7 +65,10 @@ function viewTel(root) {
     seg.appendChild(b);
   }
   const s2 = HUB.session(S.telSid);
-  const timed = s2.laps.filter(l => l.t != null && s2.tel[l.drv + "-" + l.lap]);
+  // while telemetry is still streaming in, list every timed lap optimistically —
+  // adds are validated the moment the telemetry lands
+  const timed = s2.laps.filter(l => l.t != null && (!s2.tel || s2.tel[l.drv + "-" + l.lap]));
+  if (!s2.tel) ensureTel(s2.id);
   const quick = document.createElement("div"); quick.className = "tp-quick"; head.appendChild(quick);
   const qb = (label, fn, pri) => {
     const b = document.createElement("button"); b.className = "btn" + (pri ? " pri" : ""); b.textContent = label;
@@ -125,6 +128,13 @@ function viewTel(root) {
   }
   pick.insertAdjacentHTML("beforeend", `<p class="hint" style="margin:8px 2px 0">tap a driver row to open every lap · ★ = driver's best · S/M/H + number = compound & tyre age · laps can also be added by tapping dots in the Pace view · drag on a trace to zoom, double-tap to reset</p>`);
 
+  if (!ents.length && S.compare.some(cmp => { const ss = HUB.session(cmp.sid); return ss && !ss.tel; })) {
+    const hold = document.createElement("div"); hold.className = "empty";
+    hold.innerHTML = `<div class="bar" style="margin:0 auto 14px"><i></i></div>fetching telemetry for the selected laps…`;
+    for (const cmp of S.compare) { const ss = HUB.session(cmp.sid); if (ss && !ss.tel) ensureTel(cmp.sid); }
+    c.appendChild(hold);
+    return;
+  }
   if (!ents.length) {
     const q = HUB.session("Q");
     const empty = document.createElement("div"); empty.className = "empty";
@@ -133,7 +143,7 @@ function viewTel(root) {
       const b = document.createElement("button"); b.className = "btn pri"; b.textContent = "Compare the qualifying top 3";
       b.addEventListener("click", () => {
         for (const d of q.drivers.filter(d => d.pos <= 3)) {
-          const laps = q.laps.filter(l => l.drv === d.abbr && l.t != null && !l.del && q.tel[l.drv + "-" + l.lap]).sort((a, b) => a.t - b.t);
+          const laps = q.laps.filter(l => l.drv === d.abbr && l.t != null && !l.del && (!q.tel || q.tel[l.drv + "-" + l.lap])).sort((a, b) => a.t - b.t);
           if (laps.length) addCompare("Q", d.abbr, laps[0].lap);
         }
         HUB.render();

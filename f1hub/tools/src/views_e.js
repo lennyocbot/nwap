@@ -182,6 +182,7 @@ function cornerSpeeds(root, s, map, drivers) {
 
 function viewStraights(root) {
   const s = HUB.session();
+  if (telHolder(root, s, `downloading ${SNAMES[s.id] || s.id} telemetry for straight-line analysis…`)) return;
   const isRace = s.id === "R" || s.id === "S";
   const map = s.map;
   const refTel = map && s.tel[map.refLap];

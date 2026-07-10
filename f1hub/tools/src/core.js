@@ -190,10 +190,14 @@ HUB.save = () => { try { localStorage.setItem(HUB.storeKey(), JSON.stringify({ c
 HUB.restore = () => {
   try {
     const s = JSON.parse(localStorage.getItem(HUB.storeKey()) || "{}");
-    // keep basket entries pointing at sessions that are still background-loading;
-    // they're re-validated when the session arrives
-    HUB.S.compare = (s.compare || []).filter(c =>
-      HUB.session(c.sid)?.tel[c.drv + "-" + c.lap] || (HUB.data.pending || []).includes(c.sid));
+    // keep basket entries pointing at sessions (or telemetry) still loading in
+    // the background; they're re-validated when the telemetry arrives
+    HUB.S.compare = (s.compare || []).filter(c => {
+      const ss = HUB.session(c.sid);
+      if (!ss) return (HUB.data.pending || []).includes(c.sid);
+      if (!ss.tel) return true;
+      return !!ss.tel[c.drv + "-" + c.lap];
+    });
     if (s.fuelK) HUB.S.fuelK = s.fuelK;
   } catch (e) { }
 };
@@ -211,9 +215,11 @@ function toast(msg) {
   clearTimeout(toastT); toastT = setTimeout(() => el.style.opacity = "0", 1900);
 }
 function addCompare(sid, drv, lap) {
-  const S = HUB.S;
+  const S = HUB.S, ss = HUB.session(sid);
   if (S.compare.some(c => c.sid === sid && c.drv === drv && c.lap === lap)) { toast("Already in compare"); return; }
-  if (!HUB.session(sid)?.tel[drv + "-" + lap]) { toast("No telemetry for this lap"); return; }
+  if (!ss) { toast("Session still loading — try again in a moment"); return; }
+  if (ss.tel && !ss.tel[drv + "-" + lap]) { toast("No telemetry for this lap"); return; }
+  if (!ss.tel && typeof ensureTel === "function") ensureTel(sid);   // optimistic add; validated when telemetry lands
   if (S.compare.length >= 6) { toast("Compare is full (6 laps max)"); return; }
   S.compare.push({ sid, drv, lap });
   HUB.save();
