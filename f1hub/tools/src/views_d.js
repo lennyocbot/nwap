@@ -43,51 +43,104 @@ function viewTel(root) {
     bar.appendChild(chip);
   });
 
-  // add controls — pick any lap from any session of the weekend
-  const add = document.createElement("div"); add.className = "addlap"; c.appendChild(add);
-  const sessSel = document.createElement("select");
-  sessSel.innerHTML = HUB.data.sessions.map(ss => `<option value="${ss.id}" ${ss.id === HUB.S.sid ? "selected" : ""}>${SNAMES[ss.id] || ss.id}</option>`).join("");
-  const drvSel = document.createElement("select");
-  const lapSel = document.createElement("select");
-  const ps = () => HUB.session(sessSel.value);
-  const fillDrivers = () => {
-    drvSel.innerHTML = [...ps().drivers].sort((a, b) => (a.pos ?? 99) - (b.pos ?? 99)).map(d => `<option value="${d.abbr}">${d.abbr} — ${esc(d.team)}</option>`).join("");
+  // ---- lap browser: every driver's laps from any session of the weekend ----
+  if (!S.telSid || !HUB.session(S.telSid))
+    S.telSid = HUB.session(HUB.S.sid) ? HUB.S.sid : HUB.data.sessions.at(-1).id;
+  const showPick = S.tpOpen !== false;
+  const tog = document.createElement("button"); tog.className = "btn";
+  tog.textContent = showPick ? "Hide lap browser ▴" : "Add laps ▾";
+  tog.addEventListener("click", () => { S.tpOpen = !showPick; HUB.render(); });
+  c.querySelector(".right").appendChild(tog);
+  const pick = document.createElement("div"); pick.className = "telpick"; c.appendChild(pick);
+  if (!showPick) pick.style.display = "none";
+
+  const head = document.createElement("div"); head.className = "tp-head"; pick.appendChild(head);
+  const seg = document.createElement("div"); seg.className = "seg mini"; head.appendChild(seg);
+  for (const sid of (HUB.data.sids || HUB.data.sessions.map(x => x.id))) {
+    const loaded = !!HUB.session(sid);
+    const b = document.createElement("button"); b.textContent = (SNAMES[sid] || sid) + (loaded ? "" : " …");
+    if (sid === S.telSid) b.classList.add("on");
+    if (!loaded) { b.disabled = true; b.title = "still loading"; }
+    else b.addEventListener("click", () => { S.telSid = sid; S.telDrv = null; HUB.render(); });
+    seg.appendChild(b);
+  }
+  const s2 = HUB.session(S.telSid);
+  const timed = s2.laps.filter(l => l.t != null && s2.tel[l.drv + "-" + l.lap]);
+  const quick = document.createElement("div"); quick.className = "tp-quick"; head.appendChild(quick);
+  const qb = (label, fn, pri) => {
+    const b = document.createElement("button"); b.className = "btn" + (pri ? " pri" : ""); b.textContent = label;
+    b.addEventListener("click", fn); quick.appendChild(b);
   };
-  const fillLaps = () => {
-    const s2 = ps();
-    const laps = s2.laps.filter(l => l.drv === drvSel.value && s2.tel[l.drv + "-" + l.lap]).sort((a, b) => a.t - b.t);
-    lapSel.innerHTML = laps.map(l => `<option value="${l.lap}">L${l.lap} — ${fmtLap(l.t)}${l.pb ? " ·PB" : ""}${l.cmp ? " · " + CMP_LETTER[l.cmp] + (l.life ?? "") : ""}${l.del ? " ·DEL" : ""}</option>`).join("") || `<option value="">no telemetry laps</option>`;
-  };
-  fillDrivers(); fillLaps();
-  sessSel.addEventListener("change", () => { fillDrivers(); fillLaps(); });
-  drvSel.addEventListener("change", fillLaps);
-  const addBtn = document.createElement("button"); addBtn.className = "btn pri"; addBtn.textContent = "Add lap";
-  addBtn.addEventListener("click", () => { if (lapSel.value) addCompare(sessSel.value, drvSel.value, +lapSel.value); });
-  const fastBtn = document.createElement("button"); fastBtn.className = "btn"; fastBtn.textContent = "+ session fastest";
-  fastBtn.addEventListener("click", () => {
-    const s2 = ps();
-    const cand = s2.laps.filter(l => l.t != null && !l.del && s2.tel[l.drv + "-" + l.lap]).sort((a, b) => a.t - b.t)[0];
+  qb("+ Session fastest", () => {
+    const cand = timed.filter(l => !l.del).sort((a, b) => a.t - b.t)[0];
     if (cand) addCompare(s2.id, cand.drv, cand.lap);
+  }, true);
+  qb("+ Top 3, best lap each", () => {
+    const seen = new Set();
+    for (const l of [...timed].filter(l => !l.del).sort((a, b) => a.t - b.t)) {
+      if (seen.has(l.drv)) continue;
+      seen.add(l.drv); addCompare(s2.id, l.drv, l.lap);
+      if (seen.size >= 3) break;
+    }
   });
-  const clrBtn = document.createElement("button"); clrBtn.className = "btn"; clrBtn.textContent = "Clear";
-  clrBtn.addEventListener("click", () => { S.compare = []; S.telZoom = null; HUB.save(); HUB.render(); });
-  add.append("Add: ", sessSel, drvSel, lapSel, addBtn, fastBtn, clrBtn);
-  add.insertAdjacentHTML("beforeend", `<span class="hint">tip: tap any dot in the Pace view · drag on a trace to zoom, double-tap to reset</span>`);
+  if (S.compare.length) qb("Clear all", () => { S.compare = []; S.telZoom = null; HUB.save(); HUB.render(); });
+
+  const inCmp = (drv, lap) => S.compare.some(e2 => e2.sid === s2.id && e2.drv === drv && e2.lap === lap);
+  const bestOf = {};
+  for (const l of timed) if (!l.del && (!bestOf[l.drv] || l.t < bestOf[l.drv].t)) bestOf[l.drv] = l;
+  const bestVals = Object.values(bestOf).map(l => l.t);
+  const sesBest = bestVals.length ? Math.min(...bestVals) : null;
+  const roster = [...s2.drivers].filter(d => timed.some(l => l.drv === d.abbr))
+    .sort((a, b) => (bestOf[a.abbr]?.t ?? 9e12) - (bestOf[b.abbr]?.t ?? 9e12));
+  const list = document.createElement("div"); list.className = "tp-grid"; pick.appendChild(list);
+  if (!roster.length) list.innerHTML = `<div class="empty">No telemetry laps in this session yet.</div>`;
+  for (const d of roster) {
+    const best = bestOf[d.abbr];
+    const drvLaps = timed.filter(l => l.drv === d.abbr);
+    const open = S.telDrv === d.abbr;
+    const cell = document.createElement("div"); cell.className = "tp-cell" + (open ? " open" : ""); list.appendChild(cell);
+    const row = document.createElement("div"); row.className = "tp-drow"; cell.appendChild(row);
+    row.innerHTML = `<span class="dot" style="background:${teamCol(d.color)}"></span><b class="num tp-abbr">${d.abbr}</b>
+      <span class="num tp-best">${best ? fmtLap(best.t) : "—"}</span>
+      <span class="num hint">${best && sesBest != null ? (best.t === sesBest ? "fastest" : "+" + ((best.t - sesBest) / 1000).toFixed(3)) : ""}</span>
+      <span class="tp-n hint">${drvLaps.length} lap${drvLaps.length === 1 ? "" : "s"} ${open ? "▴" : "▾"}</span>`;
+    const addB = document.createElement("button"); addB.className = "btn tiny"; addB.textContent = "+ best";
+    if (!best) addB.disabled = true;
+    else if (inCmp(d.abbr, best.lap)) { addB.textContent = "✓ added"; addB.disabled = true; }
+    else addB.addEventListener("click", ev => { ev.stopPropagation(); addCompare(s2.id, d.abbr, best.lap); });
+    row.insertBefore(addB, row.querySelector(".tp-n"));
+    row.addEventListener("click", () => { S.telDrv = open ? null : d.abbr; HUB.render(); });
+    if (open) {
+      const lc = document.createElement("div"); lc.className = "tp-laps"; cell.appendChild(lc);
+      for (const l of [...drvLaps].sort((a, b) => a.lap - b.lap)) {
+        const added = inCmp(d.abbr, l.lap);
+        const b = document.createElement("button");
+        b.className = "tp-lap" + (added ? " added" : "") + (l.del ? " del" : "") + (l === best ? " pb" : "");
+        b.innerHTML = `<b class="num">L${l.lap}</b> <span class="num">${fmtLap(l.t)}</span>${l.cmp ? ` <span class="hint">${CMP_LETTER[l.cmp] || "?"}${l.life ?? ""}</span>` : ""}${l.del ? ` <span style="color:var(--red)">DEL</span>` : ""}${l === best ? " ★" : ""}`;
+        b.title = added ? "already in compare" : `add ${d.abbr} lap ${l.lap}${l.cmp ? ` — ${l.cmp}, ${l.life} laps on tyre` : ""}`;
+        if (!added) b.addEventListener("click", () => addCompare(s2.id, d.abbr, l.lap));
+        lc.appendChild(b);
+      }
+    }
+  }
+  pick.insertAdjacentHTML("beforeend", `<p class="hint" style="margin:8px 2px 0">tap a driver row to open every lap · ★ = driver's best · S/M/H + number = compound & tyre age · laps can also be added by tapping dots in the Pace view · drag on a trace to zoom, double-tap to reset</p>`);
 
   if (!ents.length) {
     const q = HUB.session("Q");
     const empty = document.createElement("div"); empty.className = "empty";
-    empty.innerHTML = `<b>No laps selected yet.</b><br>Pick laps above, click dots in the Pace view, or start with a preset:<br><br>`;
-    const b = document.createElement("button"); b.className = "btn pri"; b.textContent = "Compare the qualifying top 3";
-    b.addEventListener("click", () => {
-      if (!q) return;
-      for (const d of q.drivers.filter(d => d.pos <= 3)) {
-        const laps = q.laps.filter(l => l.drv === d.abbr && l.t != null && !l.del && q.tel[l.drv + "-" + l.lap]).sort((a, b) => a.t - b.t);
-        if (laps.length) addCompare("Q", d.abbr, laps[0].lap);
-      }
-      HUB.render();
-    });
-    empty.appendChild(b); c.appendChild(empty);
+    empty.innerHTML = `<b>No laps in the comparison yet.</b><br>Add laps from the list above — “+ best” takes a driver's fastest — or start with a preset:<br><br>`;
+    if (q) {
+      const b = document.createElement("button"); b.className = "btn pri"; b.textContent = "Compare the qualifying top 3";
+      b.addEventListener("click", () => {
+        for (const d of q.drivers.filter(d => d.pos <= 3)) {
+          const laps = q.laps.filter(l => l.drv === d.abbr && l.t != null && !l.del && q.tel[l.drv + "-" + l.lap]).sort((a, b) => a.t - b.t);
+          if (laps.length) addCompare("Q", d.abbr, laps[0].lap);
+        }
+        HUB.render();
+      });
+      empty.appendChild(b);
+    }
+    c.appendChild(empty);
     return;
   }
 

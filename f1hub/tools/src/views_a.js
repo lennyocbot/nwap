@@ -25,13 +25,13 @@ function driverRail(root, sess) {
     c.className = "chip " + (on ? "on" : "off");
     c.innerHTML = `<span class="dot" style="background:${teamCol(d.color)}"></span>${d.abbr}`;
     c.title = `${d.name} — ${d.team} (double-click to solo)`;
-    c.addEventListener("click", () => { HUB.S.sel.has(d.abbr) ? HUB.S.sel.delete(d.abbr) : HUB.S.sel.add(d.abbr); HUB.render(); });
-    c.addEventListener("dblclick", () => { HUB.S.sel = new Set([d.abbr]); HUB.render(); });
+    c.addEventListener("click", () => { HUB._selCustom = true; HUB.S.sel.has(d.abbr) ? HUB.S.sel.delete(d.abbr) : HUB.S.sel.add(d.abbr); HUB.render(); });
+    c.addEventListener("dblclick", () => { HUB._selCustom = true; HUB.S.sel = new Set([d.abbr]); HUB.render(); });
     wrap.appendChild(c);
   }
   const mk = (label, fn) => {
     const b = document.createElement("button"); b.className = "rail-btn"; b.textContent = label;
-    b.addEventListener("click", fn); wrap.appendChild(b);
+    b.addEventListener("click", () => { HUB._selCustom = true; fn(); }); wrap.appendChild(b);
   };
   mk("All", () => { HUB.S.sel = new Set(s.drivers.map(d => d.abbr)); HUB.render(); });
   mk("None", () => { HUB.S.sel = new Set(); HUB.render(); });

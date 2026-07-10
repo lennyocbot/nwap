@@ -18,7 +18,27 @@ async function decodeBundle() {
 }
 /* streamed fetch with progress callback, a stall watchdog and one retry —
    a phone on bad signal must never hang forever on the loading screen */
+/* compressed-bytes LRU (~64 MB): revisiting a session re-decodes from memory
+   instead of re-downloading, so weekend switches feel instant */
+const BYTE_CACHE = new Map();
+let BYTE_TOTAL = 0;
+const BYTE_MAX = 64 * 1024 * 1024;
+function byteCachePut(url, buf) {
+  if (buf.length > BYTE_MAX / 4) return;
+  if (BYTE_CACHE.has(url)) { BYTE_TOTAL -= BYTE_CACHE.get(url).length; BYTE_CACHE.delete(url); }
+  BYTE_CACHE.set(url, buf); BYTE_TOTAL += buf.length;
+  for (const [k, v] of BYTE_CACHE) {
+    if (BYTE_TOTAL <= BYTE_MAX) break;
+    BYTE_CACHE.delete(k); BYTE_TOTAL -= v.length;
+  }
+}
 async function fetchSession(url, onBytes) {
+  const hit = BYTE_CACHE.get(url);
+  if (hit) {
+    BYTE_CACHE.delete(url); BYTE_CACHE.set(url, hit);   // LRU touch
+    if (onBytes) onBytes(hit.length);
+    return await gunzipJSON(hit);
+  }
   let lastErr;
   for (let attempt = 0; attempt < 2; attempt++) {
     let got = 0;
@@ -38,6 +58,7 @@ async function fetchSession(url, onBytes) {
       }
       const buf = new Uint8Array(got);
       let o = 0; for (const c of chunks) { buf.set(c, o); o += c.length; }
+      byteCachePut(url, buf);
       return await gunzipJSON(buf);
     } catch (e) {
       lastErr = e && e.name === "AbortError" ? new Error("connection stalled — check your signal and retry") : e;
@@ -106,7 +127,7 @@ function tsFlags(ts) {
 /* ---- session helpers ---- */
 const SNAMES = { FP1: "FP1", FP2: "FP2", FP3: "FP3", SQ: "Sprint Quali", S: "Sprint", Q: "Qualifying", R: "Race" };
 HUB.session = id => HUB.data.sessions.find(s => s.id === (id ?? HUB.S.sid));
-HUB.driver = (abbr, sid) => (HUB.session(sid) || {}).drivers.find(d => d.abbr === abbr) || HUB.session("R")?.drivers.find(d => d.abbr === abbr);
+HUB.driver = (abbr, sid) => ((HUB.session(sid) || {}).drivers || []).find(d => d.abbr === abbr) || HUB.session("R")?.drivers.find(d => d.abbr === abbr);
 function drvColor(abbr, sid) { const d = HUB.driver(abbr, sid); return teamCol(d ? d.color : "#888"); }
 function drvDash(abbr, sid) { const d = HUB.driver(abbr, sid); return d && d.style === 1 ? "6 3" : null; }
 function lapsOf(sid, drv) {
@@ -169,7 +190,10 @@ HUB.save = () => { try { localStorage.setItem(HUB.storeKey(), JSON.stringify({ c
 HUB.restore = () => {
   try {
     const s = JSON.parse(localStorage.getItem(HUB.storeKey()) || "{}");
-    HUB.S.compare = (s.compare || []).filter(c => HUB.session(c.sid)?.tel[c.drv + "-" + c.lap]);
+    // keep basket entries pointing at sessions that are still background-loading;
+    // they're re-validated when the session arrives
+    HUB.S.compare = (s.compare || []).filter(c =>
+      HUB.session(c.sid)?.tel[c.drv + "-" + c.lap] || (HUB.data.pending || []).includes(c.sid));
     if (s.fuelK) HUB.S.fuelK = s.fuelK;
   } catch (e) { }
 };
