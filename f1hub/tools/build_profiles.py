@@ -71,6 +71,79 @@ def best_tel_lap(sess, abbr):
     return best
 
 
+def flat_avg(tel):
+    """Average speed while flat-out (throttle >= 98%, over 200 km/h) on a lap.
+
+    A far better straight-line metric than the peak speed-trap number: the
+    trap is one sample, inflated by slipstream tows and skinny-wing outliers,
+    while this integrates drag + energy deployment along every straight."""
+    v, th = tel.get("v"), tel.get("th")
+    if not v or not th:
+        return None
+    pts = [vv for vv, tt in zip(v, th) if tt >= 98 and vv >= 200]
+    return sum(pts) / len(pts) if len(pts) >= 15 else None
+
+
+ZONE_W = 140.0   # m either side of the apex for zone TIME (entry+apex+exit)
+
+
+def t_at(tel, dist):
+    """Interpolated cumulative lap time (ms) at a given distance."""
+    t, n = tel["t"], len(tel["t"])
+    tl = tel.get("len") or 1.0
+    f = max(0.0, min(1.0, dist / tl)) * (n - 1)
+    i = min(n - 2, int(f))
+    return t[i] + (t[i + 1] - t[i]) * (f - i)
+
+
+def corner_zone_times(tel, corners, map_len):
+    """Time (ms) to traverse +/-ZONE_W around each apex — measures the whole
+    corner (entry, apex, exit), not just the minimum speed point.
+
+    Distance channels drift (GPS glitches add phantom metres), so each
+    corner is rescaled to the lap's own length and then SNAPPED to the local
+    speed minimum within +/-160 m — the window follows the real apex."""
+    tl = tel.get("len") or 1.0
+    v = tel["v"]
+    n = len(v)
+    scale = tl / (map_len or tl)
+    out = []
+    for c in corners:
+        cd = c["d"] * scale
+        slo = max(0, int((cd - 160) / tl * (n - 1)))
+        shi = min(n - 1, int((cd + 160) / tl * (n - 1)))
+        if shi <= slo + 2:
+            out.append(None)
+            continue
+        imin = min(range(slo, shi + 1), key=lambda i: v[i])
+        if imin <= slo or imin >= shi:
+            out.append(None)          # no local apex inside the window — misaligned
+            continue
+        apex_d = imin / (n - 1) * tl
+        lo, hi = apex_d - ZONE_W, apex_d + ZONE_W
+        if lo < 0 or hi > tl:
+            out.append(None)          # zone crosses the start line — skip
+        else:
+            out.append(t_at(tel, hi) - t_at(tel, lo))
+    return out
+
+
+def flat_pace(tel):
+    """ms per km while flat-out (throttle >= 98%, >= 200 km/h): pure
+    drag + energy deployment, measured along every straight of the lap."""
+    v, th, t = tel.get("v"), tel.get("th"), tel.get("t")
+    if not v or not th or not t:
+        return None
+    n = len(v)
+    step = (tel.get("len") or 1.0) / (n - 1)
+    time = dist = 0.0
+    for i in range(n - 1):
+        if th[i] >= 98 and v[i] >= 200 and th[i + 1] >= 98:
+            time += t[i + 1] - t[i]
+            dist += step
+    return time / (dist / 1000) if dist >= 800 else None
+
+
 def corner_mins(tel, corners):
     """Min speed in a +/-90 m window around each corner apex."""
     v, n = tel["v"], len(tel["v"])
@@ -140,8 +213,11 @@ def analyze_weekend(wk):
     out["colors"] = team_color
 
     corners = (q.get("map") or {}).get("corners") or []
-    # per-team best quali lap + corner mins + speed trap
-    best_lap, team_mins, team_trap = {}, {}, {}
+    # per-team best quali lap (apex speeds for circuit character) plus, from
+    # EVERY telemetry lap the team drove: best zone time per corner and best
+    # flat-out pace — an order of magnitude more datapoints than one lap
+    best_lap, team_mins, team_trap, team_flat = {}, {}, {}, {}
+    team_zone, team_fp = {}, {}
     for abbr, team in team_of.items():
         bl = best_tel_lap(q, abbr)
         if not bl:
@@ -149,12 +225,62 @@ def analyze_weekend(wk):
         t, tel = bl
         if team not in best_lap or t < best_lap[team]:
             best_lap[team] = t
+        fa = flat_avg(tel)
+        if fa is not None:
+            team_flat[team] = max(team_flat.get(team, 0), fa)
         if corners:
             mins = corner_mins(tel, corners)
             prev = team_mins.get(team)
             team_mins[team] = mins if prev is None else [
                 (m if p is None else p if m is None else max(p, m))
                 for p, m in zip(prev, mins)]
+    # only genuine push laps feed the model: deleted laps are often track-limit
+    # CUTS (shorter path = impossibly quick corner zones), and in/out or slow
+    # laps carry no signal. Flat-out pace comes from each driver's single best
+    # lap so one lucky slipstream tow can't set a team's straight-line level.
+    lap_by = {}
+    for lp in q["laps"]:
+        lap_by[(lp["drv"], lp["lap"])] = lp
+    best_t = {}
+    for lp in q["laps"]:
+        if lp["t"] and not lp.get("del") and not lp.get("in") and not lp.get("out"):
+            best_t[lp["drv"]] = min(best_t.get(lp["drv"], 1e12), lp["t"])
+    drv_best_fp = {}
+    # a glitched distance channel (phantom metres) poisons every position on
+    # the lap — reject laps whose length strays >1.5% from the session median
+    push_lens = []
+    for key, tel in q["tel"].items():
+        abbr, _, ln = key.rpartition("-")
+        lp = lap_by.get((abbr, int(ln)))
+        if lp and lp["t"] and not lp.get("del") and not lp.get("in") and not lp.get("out") and tel.get("len"):
+            push_lens.append(tel["len"])
+    med_len = median(push_lens) if push_lens else None
+    for key, tel in q["tel"].items():
+        abbr, _, ln = key.rpartition("-")
+        team = team_of.get(abbr)
+        if not team:
+            continue
+        lp = lap_by.get((abbr, int(ln)))
+        if not lp or not lp["t"] or lp.get("del") or lp.get("in") or lp.get("out"):
+            continue
+        if lp["t"] > best_t.get(abbr, 0) * 1.10:
+            continue                        # not a push lap
+        if med_len and abs((tel.get("len") or 0) - med_len) > med_len * 0.015:
+            continue                        # corrupted distance channel
+        if corners:
+            zt = corner_zone_times(tel, corners, med_len)
+            prev = team_zone.get(team)
+            team_zone[team] = zt if prev is None else [
+                (z if p is None else p if z is None else min(p, z))
+                for p, z in zip(prev, zt)]
+        cur = drv_best_fp.get(abbr)
+        if cur is None or lp["t"] < cur[0]:
+            fp = flat_pace(tel)
+            if fp is not None:
+                drv_best_fp[abbr] = (lp["t"], fp)
+    for abbr, (_, fp) in drv_best_fp.items():
+        team = team_of[abbr]
+        team_fp[team] = min(team_fp.get(team, 1e12), fp)
     for lp in q["laps"]:
         team = team_of.get(lp["drv"])
         sp = lp.get("spST") or lp.get("spFL")
@@ -196,22 +322,38 @@ def analyze_weekend(wk):
             "counts": counts, "speeds": speeds, "flat": flat,
             "len": (q.get("map") or {}).get("len"),
         }
-        # per-team per-class deficits vs field best
+        # per-team per-class deficits vs field best: apex speed (km/h, for
+        # character) and zone TIME (ms/corner — what the model predicts with)
+        fieldZ = []
+        for i in range(len(corners)):
+            vals = [z[i] for z in team_zone.values() if z and z[i] is not None]
+            fieldZ.append(min(vals) if vals else None)
         for team, mins in team_mins.items():
             defs = {"slow": [], "med": [], "fast": []}
+            defsT = {"slow": [], "med": [], "fast": []}
+            zt = team_zone.get(team)
             for i, cls in cls_of.items():
                 if mins[i] is not None and field[i] is not None:
                     defs[cls].append(field[i] - mins[i])
+                if zt and zt[i] is not None and fieldZ[i] is not None:
+                    defsT[cls].append(zt[i] - fieldZ[i])
             out["teams"][team] = {
                 "def": {c: round(sum(v) / len(v), 2) if v else None
                         for c, v in defs.items()},
+                "defT": {c: round(sum(v) / len(v), 1) if v else None
+                         for c, v in defsT.items()},
             }
 
-    trap_best = max(team_trap.values()) if team_trap else None
+    # straight-line: flat-out average speed for display (km/h) and flat-out
+    # pace for the model (ms per km — lower is faster)
+    sl = team_flat if len(team_flat) >= 6 else team_trap
+    sl_best = max(sl.values()) if sl else None
+    fp_best = min(team_fp.values()) if team_fp else None
     for team in best_lap:
-        rec = out["teams"].setdefault(team, {"def": {"slow": None, "med": None, "fast": None}})
+        rec = out["teams"].setdefault(team, {"def": {"slow": None, "med": None, "fast": None}, "defT": {"slow": None, "med": None, "fast": None}})
         rec["quali"] = round((best_lap[team] / pole - 1) * 100, 3)
-        rec["trap"] = round(trap_best - team_trap[team], 1) if trap_best and team in team_trap else None
+        rec["trap"] = round(sl_best - sl[team], 1) if sl_best and team in sl else None
+        rec["slp"] = round(team_fp[team] - fp_best, 1) if fp_best is not None and team in team_fp else None
 
     # race pace + temps
     if "R" in files:
@@ -239,27 +381,24 @@ def analyze_weekend(wk):
     return out
 
 
-# --- physical circuit-fit model -------------------------------------------
-# Time lost per corner: dt = L * dv / v^2 with L = 2*WINDOW, v the field's
-# class-average apex speed AT THAT CIRCUIT, dv the team's measured class
-# deficit. Straights: dt = flat_len * dv_trap * 0.6 / v_straight^2 (0.6
-# because a speed-trap gap builds over the straight rather than being
-# carried end to end). All inputs measured; the model is just kinematics.
-V_STRAIGHT = 285 / 3.6
+# --- circuit-fit model: measured TIME deficits per track element -----------
+# Every term is a directly measured time: zone-time deficit per corner of
+# each class (ms) x how many such corners the circuit has, plus flat-out
+# pace deficit (ms/km) x how many flat-out km the circuit has. No kinematic
+# conversion — the sum is already an estimated lap-time gap in seconds.
 
 
 def fit_loss(prof, circ):
     loss = 0.0
+    dT = prof.get("defT") or {}
     for cls in ("slow", "med", "fast"):
-        d = prof["def"].get(cls)
+        d = dT.get(cls)
         n = circ["counts"].get(cls, 0)
-        v = circ["speeds"].get(cls)
-        if d is None or not n or not v:
+        if d is None or not n:
             continue
-        vms = v / 3.6
-        loss += n * (2 * WINDOW) * (max(d, 0.0) / 3.6) / (vms * vms)
-    if prof.get("trap") is not None and circ.get("flat") and circ.get("len"):
-        loss += circ["flat"] * circ["len"] * (max(prof["trap"], 0.0) / 3.6) * 0.6 / (V_STRAIGHT ** 2)
+        loss += n * max(d, 0.0) / 1000
+    if prof.get("slp") is not None and circ.get("flat") and circ.get("len"):
+        loss += max(prof["slp"], 0.0) * (circ["flat"] * circ["len"] / 1000) / 1000
     return loss
 
 
@@ -277,7 +416,8 @@ def build():
         # leave-one-out: each weekend is predicted by a model built WITHOUT it
         per_team = defaultdict(lambda: {
             "def": {"slow": [], "med": [], "fast": []},
-            "trap": [], "quali": [], "race": [], "temp_pairs": []})
+            "defT": {"slow": [], "med": [], "fast": []},
+            "trap": [], "slp": [], "quali": [], "race": [], "temp_pairs": []})
         for wk in wks:
             try:
                 res = analyze_weekend(wk)
@@ -302,8 +442,12 @@ def build():
                     for cls in ("slow", "med", "fast"):
                         if t["def"].get(cls) is not None:
                             agg["def"][cls].append((res["round"], t["def"][cls]))
+                        if t.get("defT", {}).get(cls) is not None:
+                            agg["defT"][cls].append((res["round"], t["defT"][cls]))
                     if t.get("trap") is not None:
                         agg["trap"].append((res["round"], t["trap"]))
+                    if t.get("slp") is not None:
+                        agg["slp"].append((res["round"], t["slp"]))
                     if t.get("quali") is not None:
                         agg["quali"].append(t["quali"])
                 if res.get("race") and tm in res["race"] and not res.get("wetR") \
@@ -316,10 +460,13 @@ def build():
             if not agg["quali"] and not agg["race"]:
                 continue
             prof = {
-                "def": {c: round(sum(x[1] for x in v) / len(v), 2) if v else None
+                "def": {c: round(median([x[1] for x in v]), 2) if v else None
                         for c, v in agg["def"].items()},
+                "defT": {c: round(median([x[1] for x in v]), 1) if v else None
+                         for c, v in agg["defT"].items()},
                 "defN": {c: len(v) for c, v in agg["def"].items()},
-                "trap": round(sum(x[1] for x in agg["trap"]) / len(agg["trap"]), 1) if agg["trap"] else None,
+                "trap": round(median([x[1] for x in agg["trap"]]), 1) if agg["trap"] else None,
+                "slp": round(median([x[1] for x in agg["slp"]]), 1) if agg["slp"] else None,
                 "quali": round(median(agg["quali"]), 3) if agg["quali"] else None,
                 "race": round(median(agg["race"]), 3) if agg["race"] else None,
                 "n": len(agg["quali"]),
@@ -360,15 +507,15 @@ def build():
                     a = agg.get(tm)
                     if not a:
                         continue
-                    defs, ns = {}, 0
+                    defsT, ns = {}, 0
                     for cls in ("slow", "med", "fast"):
-                        v = [x[1] for x in a["def"][cls] if x[0] != rnd["round"]]
-                        defs[cls] = sum(v) / len(v) if v else None
+                        v = [x[1] for x in a["defT"][cls] if x[0] != rnd["round"]]
+                        defsT[cls] = median(v) if v else None
                         ns = max(ns, len(v))
-                    tr = [x[1] for x in a["trap"] if x[0] != rnd["round"]]
+                    sp = [x[1] for x in a["slp"] if x[0] != rnd["round"]]
                     if ns >= 2:   # need at least two other weekends to predict this one
                         loo_fit[tm] = fit_loss(
-                            {"def": defs, "trap": sum(tr) / len(tr) if tr else None},
+                            {"defT": defsT, "slp": median(sp) if sp else None},
                             rnd["circuit"])
                 common = [tm for tm in loo_fit if tm in rnd["quali"]]
                 if len(common) >= 6:
@@ -392,6 +539,13 @@ def build():
             for tm, prof in teams.items():
                 fits.setdefault(tm, {})[slug] = round(fit_loss(prof, circ), 3)
         season["upcoming"] = sorted(upcoming, key=lambda u: u["event"])
+        circs = [r["circuit"] for r in season["rounds"] if r.get("circuit")]
+        if circs:
+            season["avgCirc"] = {
+                "counts": {c: round(sum(x["counts"].get(c, 0) for x in circs) / len(circs), 1)
+                           for c in ("slow", "med", "fast")},
+                "flatKm": round(sum((x.get("flat") or 0) * (x.get("len") or 0) for x in circs) / len(circs) / 1000, 2),
+            }
         season["fits"] = fits
         season["acc"] = acc
         season["accMean"] = round(sum(a["rho"] for a in acc) / len(acc), 2) if acc else None

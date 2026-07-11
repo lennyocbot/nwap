@@ -152,37 +152,46 @@ function renderTeams(P, year) {
     }
   }
 
+  // per team, per element: time lost per lap to the best car, scaled to the
+  // season's average circuit (zone-time deficits x corner counts + flat-out
+  // pace deficit x flat-out km). Rebased so the best team in each area = 0.
+  const AC = S.avgCirc || { counts: { slow: 6, med: 5, fast: 4 }, flatKm: 3 };
+  const ELEMS = ["slow", "med", "fast", "sl"];
+  const lapLoss = {};
+  for (const [tm, t] of teams) {
+    const L = {};
+    for (const cls of ["slow", "med", "fast"])
+      L[cls] = t.defT && t.defT[cls] != null ? t.defT[cls] * AC.counts[cls] / 1000 : null;
+    L.sl = t.slp != null ? t.slp * AC.flatKm / 1000 : null;
+    lapLoss[tm] = L;
+  }
+  const minEl = {}, maxEl = {}, rankEl = {};
+  for (const e of ELEMS) {
+    const vals = teams.map(([tm]) => lapLoss[tm][e]).filter(v => v != null);
+    minEl[e] = vals.length ? Math.min(...vals) : 0;
+    maxEl[e] = vals.length ? Math.max(...vals) : 1;
+    rankEl[e] = new Map(teams.filter(([tm]) => lapLoss[tm][e] != null)
+      .sort((a, b) => lapLoss[a[0]][e] - lapLoss[b[0]][e]).map(([tm], i) => [tm, i + 1]));
+  }
+
   /* team cards */
-  main.insertAdjacentHTML("beforeend", `<p class="note" style="margin:14px 2px 8px">bars = km/h given up to the best car in <span title="under 150 km/h">slow</span> / <span title="150–230 km/h">medium</span> / <span title="over 230 km/h">fast</span> corners (dry quali) · ★ P1 = best in class · ◦ = predicted from the track’s last archived visit</p>`);
+  main.insertAdjacentHTML("beforeend", `<p class="note" style="margin:14px 2px 8px">bars = time lost per lap to the best car in each area, on an average ${esc(y)} circuit (${AC.counts.slow}/${AC.counts.med}/${AC.counts.fast} slow/med/fast corners + ${AC.flatKm} km flat-out) · ★ = benchmark · ◦ = predicted from the track’s last visit · hover a bar for the raw telemetry numbers</p>`);
   const grid = document.createElement("div"); grid.className = "dna-grid"; main.appendChild(grid);
-  const maxDef = {}, minDef = {};
-  for (const cls of ["slow", "med", "fast"]) {
-    const vals = teams.map(([, t]) => t.def[cls]).filter(v => v != null);
-    maxDef[cls] = Math.max(...vals, 1);
-    minDef[cls] = Math.min(...vals);
-  }
-  const trapVals = teams.map(([, t]) => t.trap).filter(v => v != null);
-  const maxTrap = Math.max(...trapVals, 1), minTrap = Math.min(...trapVals);
-  // rank every team within each corner class (and straight-line)
-  const rankIn = {};
-  for (const cls of ["slow", "med", "fast"]) {
-    const order = teams.filter(([, t]) => t.def[cls] != null).sort((a, b) => a[1].def[cls] - b[1].def[cls]);
-    rankIn[cls] = new Map(order.map(([tm], i) => [tm, i + 1]));
-  }
-  rankIn.trap = new Map(teams.filter(([, t]) => t.trap != null).sort((a, b) => a[1].trap - b[1].trap).map(([tm], i) => [tm, i + 1]));
   const evName = slug => (circuits.find(c => c.slug === slug) || {}).event || slug;
 
   for (const [tm, t] of teams) {
     const col = teamCol(S.colors[tm] || "#888");
     const el = document.createElement("div"); el.className = "card dna-card"; grid.appendChild(el);
-    const rows = [
-      ["Slow corners", t.def.slow, maxDef.slow, "km/h", t.def.slow != null && t.def.slow === minDef.slow, rankIn.slow.get(tm)],
-      ["Medium corners", t.def.med, maxDef.med, "km/h", t.def.med != null && t.def.med === minDef.med, rankIn.med.get(tm)],
-      ["Fast corners", t.def.fast, maxDef.fast, "km/h", t.def.fast != null && t.def.fast === minDef.fast, rankIn.fast.get(tm)],
-      ["Straight-line", t.trap, maxTrap, "km/h", t.trap != null && t.trap === minTrap, rankIn.trap.get(tm)],
-    ];
-    // best/worst tracks relative to the car's OWN average across circuits —
-    // never a cross-team claim (the pure corner model has per-team bias)
+    const rows = [["Slow corners", "slow"], ["Medium corners", "med"], ["Fast corners", "fast"], ["Straights", "sl"]].map(([lab, e]) => {
+      const v = lapLoss[tm][e];
+      const rel2 = v != null ? v - minEl[e] : null;
+      const span = Math.max(maxEl[e] - minEl[e], 0.05);
+      const rk = rankEl[e].get(tm);
+      const tip = e === "sl"
+        ? `flat-out pace: +${t.slp ?? "?"} ms per km vs the best car`
+        : `${t.defT && t.defT[e] != null ? "+" + t.defT[e] + " ms per corner (zone time)" : ""}${t.def && t.def[e] != null ? " · apex speed −" + t.def[e] + " km/h vs per-corner best" : ""}`;
+      return { lab, rel2, w: rel2 != null ? Math.max(3, rel2 / span * 100) : 0, rk, best: rk === 1, tip };
+    });
     const myRel = rel[tm] || {};
     const own = median(Object.values(myRel)) ?? 0;
     const ranked = Object.entries(myRel).map(([slug, v]) => [slug, v - own]).sort((a, b) => a[1] - b[1]);
@@ -199,10 +208,10 @@ function renderTeams(P, year) {
     el.innerHTML = `
       <div class="dna-head"><span class="dot" style="background:${col};width:12px;height:12px"></span><b>${esc(tm)}</b>
         <span class="dna-gaps num">Quali ${fmtQ(t)}${fmtR(t) != null ? ` · Race ${fmtR(t)}` : ""}</span></div>
-      <div class="dna-bars">${rows.map(([lab, v, mx, unit, best, rk]) => `
-        <div class="dna-row"><span class="dna-lab">${lab}${rk ? ` <b class="num" style="color:${rk === 1 ? "var(--green)" : "var(--ink3)"}">P${rk}</b>` : ""}</span>
-          <span class="dna-track"><i style="width:${v == null ? 0 : Math.max(3, v / mx * 100).toFixed(1)}%;background:${col}"></i></span>
-          <span class="num dna-val" ${best ? 'style="color:var(--green);font-weight:700" title="best of all teams in this corner type"' : ""}>${v == null ? "—" : "−" + v.toFixed(1) + " " + unit}${best ? " ★" : ""}</span></div>`).join("")}
+      <div class="dna-bars">${rows.map(r => `
+        <div class="dna-row" title="${r.tip}"><span class="dna-lab">${r.lab}${r.rk ? ` <b class="num" style="color:${r.rk === 1 ? "var(--green)" : "var(--ink3)"}">P${r.rk}</b>` : ""}</span>
+          <span class="dna-track"><i style="width:${r.w.toFixed(1)}%;background:${col}"></i></span>
+          <span class="num dna-val" ${r.best ? 'style="color:var(--green);font-weight:700"' : ""}>${r.rel2 == null ? "—" : r.rel2 < 0.005 ? "best ★" : "+" + r.rel2.toFixed(2) + "s"}</span></div>`).join("")}
       </div>
       ${ranked.length ? `<div class="dna-fit" title="±s vs this car's own average circuit — layout sensitivity, not a cross-team ranking"><span><b>Best layouts:</b> ${best3.map(fmtC).join(" · ")}</span>
       <span><b>Worst layouts:</b> ${worst3.map(fmtC).join(" · ")}</span></div>` : ""}
