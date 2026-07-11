@@ -79,8 +79,8 @@ function renderTeams(P, year) {
   const relQ = t => t.quali - minQuali;
   const relR = t => t.race != null ? t.race - minRace : null;
   const qSec = t => relQ(t) / 100 * avgPoleS;
-  const fmtQ = t => qSec(t) < 0.005 ? "fastest" : "+" + qSec(t).toFixed(2) + "s";
-  const fmtR = t => relR(t) == null ? null : relR(t) < 0.005 ? "fastest" : "+" + relR(t).toFixed(2) + " s/lap";
+  const fmtQ = t => relQ(t) < 1e-9 ? "fastest" : "+" + (qSec(t) < 0.05 ? qSec(t).toFixed(3) : qSec(t).toFixed(2)) + "s";
+  const fmtR = t => relR(t) == null ? null : relR(t) < 1e-9 ? "fastest" : "+" + (relR(t) < 0.05 ? relR(t).toFixed(3) : relR(t).toFixed(2)) + " s/lap";
 
   /* season pace ranking: who has the fastest car right now */
   {
@@ -91,8 +91,8 @@ function renderTeams(P, year) {
     wr.innerHTML = `<table class="t"><thead><tr><th class="r">#</th><th>Team</th><th class="r" title="median dry qualifying gap, on the season\u2019s average pole lap">Quali gap (s)</th><th class="r">Race pace (s/lap)</th><th class="r">Weekends</th></tr></thead><tbody>` +
       teams.map(([tm, t], i) => `<tr><td class="r num">${i + 1}</td>
         <td><span class="drv-cell"><span class="dot" style="background:${teamCol(S.colors[tm] || "#888")}"></span>${esc(tm)}</span></td>
-        <td class="r num ${relQ(t) < 0.005 ? "best" : ""}" style="background:${heatBg(qSec(t), Math.max(...teams.map(([, x]) => qSec(x))))}">${fmtQ(t)}</td>
-        <td class="r num ${relR(t) != null && relR(t) < 0.005 ? "best" : ""}" style="background:${relR(t) == null ? "none" : heatBg(relR(t), Math.max(...teams.map(([, x]) => relR(x) ?? 0)))}">${fmtR(t) ?? "—"}</td>
+        <td class="r num ${relQ(t) < 1e-9 ? "best" : ""}" style="background:${heatBg(qSec(t), Math.max(...teams.map(([, x]) => qSec(x))))}">${fmtQ(t)}</td>
+        <td class="r num ${relR(t) != null && relR(t) < 1e-9 ? "best" : ""}" style="background:${relR(t) == null ? "none" : heatBg(relR(t), Math.max(...teams.map(([, x]) => relR(x) ?? 0)))}">${fmtR(t) ?? "—"}</td>
         <td class="r num">${t.n}</td></tr>`).join("") + "</tbody></table>";
   }
 
@@ -221,7 +221,7 @@ function renderTeams(P, year) {
       <div class="dna-bars">${rows.map(r => `
         <div class="dna-row" title="${r.tip}"><span class="dna-lab">${r.lab}${r.rk ? ` <b class="num" style="color:${r.rk === 1 ? "var(--green)" : "var(--ink3)"}">P${r.rk}</b>` : ""}</span>
           <span class="dna-track"><i style="width:${r.w.toFixed(1)}%;background:${col}"></i></span>
-          <span class="num dna-val" ${r.best ? 'style="color:var(--green);font-weight:700"' : ""}>${r.rel2 == null ? "—" : r.rel2 < 0.005 ? "best ★" : "+" + r.rel2.toFixed(2) + "s"}</span></div>`).join("")}
+          <span class="num dna-val" ${r.best ? 'style="color:var(--green);font-weight:700"' : ""}>${r.rel2 == null ? "—" : r.rk === 1 ? "best ★" : "+" + (r.rel2 < 0.05 ? r.rel2.toFixed(3) : r.rel2.toFixed(2)) + "s"}</span></div>`).join("")}
       </div>
       ${ranked.length ? `<div class="dna-fit" title="±s vs this car's own average circuit — layout sensitivity, not a cross-team ranking"><span><b>Best layouts:</b> ${best3.map(fmtC).join(" · ")}</span>
       <span><b>Worst layouts:</b> ${worst3.map(fmtC).join(" · ")}</span></div>` : ""}
@@ -257,7 +257,7 @@ function renderTeams(P, year) {
         rows.map((x, i) => `<tr><td class="r num">${i + 1}</td>
           <td><span class="drv-cell"><span class="dot" style="background:${teamCol(S.colors[x.tm] || "#888")}"></span>${esc(x.tm)}</span></td>
           <td class="r num ${i === 0 ? "best" : ""}" style="background:${heatBg(x.q - qBase, rows.at(-1).q - qBase)}">${i === 0 ? "fastest" : "+" + (x.q - qBase).toFixed(2) + "s"}</td>
-          <td class="r num" style="background:${x.r == null ? "none" : heatBg(x.r - rBase, Math.max(...rows.map(z => (z.r ?? rBase) - rBase)))}">${x.r == null ? "—" : x.r - rBase < 0.005 ? "fastest" : "+" + (x.r - rBase).toFixed(2) + " s/lap"}</td>
+          <td class="r num" style="background:${x.r == null ? "none" : heatBg(x.r - rBase, Math.max(...rows.map(z => (z.r ?? rBase) - rBase)))}">${x.r == null ? "—" : x.r === rBase ? "fastest" : "+" + (x.r - rBase).toFixed(2) + " s/lap"}</td>
           <td class="r num" style="color:${x.swing < -0.03 ? "var(--green)" : x.swing > 0.03 ? "var(--red)" : "var(--ink3)"}">${x.swing >= 0 ? "+" : "−"}${Math.abs(x.swing).toFixed(2)}s</td></tr>`).join("") + "</tbody></table>";
     };
     selEl.addEventListener("change", () => { renderTeams._pick = selEl.value; drawPick(); });
@@ -294,7 +294,7 @@ function renderTeams(P, year) {
       teams.map(([tm]) => {
         const v = relCell[c.slug]?.[tm];
         if (v == null) return `<td class="r num">—</td>`;
-        return `<td class="r num" style="background:${heatBg(v, vMax)}">${v < 0.005 ? "best" : "+" + v.toFixed(2)}</td>`;
+        return `<td class="r num" style="background:${heatBg(v, vMax)}">${v < 1e-9 ? "best" : "+" + v.toFixed(2)}</td>`;
       }).join("") + "</tr>").join("") + "</tbody></table>";
 
   /* honesty table */
