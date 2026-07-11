@@ -3384,16 +3384,18 @@ function renderTeams(P, year) {
     lapLoss[tm] = L;
   }
   const minEl = {}, maxEl = {}, rankEl = {};
+  let worstRel = 0.4;
   for (const e of ELEMS) {
     const vals = teams.map(([tm]) => lapLoss[tm][e]).filter(v => v != null);
     minEl[e] = vals.length ? Math.min(...vals) : 0;
     maxEl[e] = vals.length ? Math.max(...vals) : 1;
     rankEl[e] = new Map(teams.filter(([tm]) => lapLoss[tm][e] != null)
       .sort((a, b) => lapLoss[a[0]][e] - lapLoss[b[0]][e]).map(([tm], i) => [tm, i + 1]));
+    worstRel = Math.max(worstRel, maxEl[e] - minEl[e]);
   }
 
   /* team cards */
-  main.insertAdjacentHTML("beforeend", `<p class="note" style="margin:14px 2px 8px">bars = time lost per lap to the best car in each area, on an average ${esc(y)} circuit (${AC.counts.slow}/${AC.counts.med}/${AC.counts.fast} slow/med/fast corners + ${AC.flatKm} km flat-out) · ★ = benchmark · ◦ = predicted from the track’s last visit · hover a bar for the raw telemetry numbers</p>`);
+  main.insertAdjacentHTML("beforeend", `<p class="note" style="margin:14px 2px 8px">full bar = best car in that area, shorter = slower · number = time lost per lap to that best car, on an average ${esc(y)} circuit (${AC.counts.slow}/${AC.counts.med}/${AC.counts.fast} slow/med/fast corners + ${AC.flatKm} km flat-out) · ★ = benchmark · ◦ = predicted from the track’s last visit · hover a bar for the raw telemetry numbers</p>`);
   const grid = document.createElement("div"); grid.className = "dna-grid"; main.appendChild(grid);
   const evName = slug => (circuits.find(c => c.slug === slug) || {}).event || slug;
 
@@ -3408,7 +3410,7 @@ function renderTeams(P, year) {
       const tip = e === "sl"
         ? `flat-out pace: +${t.slp ?? "?"} ms per km vs the best car`
         : `${t.defT && t.defT[e] != null ? "+" + t.defT[e] + " ms per corner (zone time)" : ""}${t.def && t.def[e] != null ? " · apex speed −" + t.def[e] + " km/h vs per-corner best" : ""}`;
-      return { lab, rel2, w: rel2 != null ? Math.max(3, rel2 / span * 100) : 0, rk, best: rk === 1, tip };
+      return { lab, rel2, w: rel2 != null ? Math.max(5, 100 * (1 - rel2 / worstRel)) : 0, rk, best: rk === 1, tip };
     });
     const myRel = rel[tm] || {};
     const own = median(Object.values(myRel)) ?? 0;
