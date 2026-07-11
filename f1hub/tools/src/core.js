@@ -186,7 +186,7 @@ HUB.S = {
   telPanels: { delta: true, v: true, th: true, b: true, g: true, n: false, d: true },
 };
 HUB.storeKey = () => `f1hub_${HUB.data.year}_${HUB.data.round}`;
-HUB.save = () => { try { localStorage.setItem(HUB.storeKey(), JSON.stringify({ compare: HUB.S.compare, fuelK: HUB.S.fuelK })); } catch (e) { } };
+HUB.save = () => { try { localStorage.setItem(HUB.storeKey(), JSON.stringify({ compare: HUB.S.compare, fuelK: HUB.S.fuelK, lrMark: HUB.S.lrMark })); } catch (e) { } };
 HUB.restore = () => {
   try {
     const s = JSON.parse(localStorage.getItem(HUB.storeKey()) || "{}");
@@ -199,6 +199,7 @@ HUB.restore = () => {
       return !!ss.tel[c.drv + "-" + c.lap];
     });
     if (s.fuelK) HUB.S.fuelK = s.fuelK;
+    if (s.lrMark) HUB.S.lrMark = s.lrMark;
   } catch (e) { }
 };
 

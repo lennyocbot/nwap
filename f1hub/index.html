@@ -208,6 +208,10 @@ kbd.k { background:var(--surface3); border-radius:3px; padding:0 4px; font-size:
 .lapchip .x:hover { color:var(--red); }
 .lapchip.ref { border-color:var(--accent); }
 .lapchip .refmark { font-size:9.5px; letter-spacing:.06em; color:var(--accent); font-weight:800; }
+/* long-run detail row */
+.lr-laps { display:flex; flex-wrap:wrap; gap:5px; }
+tr.lr-detail > td { background:var(--surface2); padding:10px 12px; }
+
 /* team DNA */
 .dna-launch { display:block; margin:0 auto 26px; font-size:13px; padding:10px 18px; }
 .dna-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:14px; margin-bottom:18px; }
@@ -529,7 +533,7 @@ HUB.S = {
   telPanels: { delta: true, v: true, th: true, b: true, g: true, n: false, d: true },
 };
 HUB.storeKey = () => `f1hub_${HUB.data.year}_${HUB.data.round}`;
-HUB.save = () => { try { localStorage.setItem(HUB.storeKey(), JSON.stringify({ compare: HUB.S.compare, fuelK: HUB.S.fuelK })); } catch (e) { } };
+HUB.save = () => { try { localStorage.setItem(HUB.storeKey(), JSON.stringify({ compare: HUB.S.compare, fuelK: HUB.S.fuelK, lrMark: HUB.S.lrMark })); } catch (e) { } };
 HUB.restore = () => {
   try {
     const s = JSON.parse(localStorage.getItem(HUB.storeKey()) || "{}");
@@ -542,6 +546,7 @@ HUB.restore = () => {
       return !!ss.tel[c.drv + "-" + c.lap];
     });
     if (s.fuelK) HUB.S.fuelK = s.fuelK;
+    if (s.lrMark) HUB.S.lrMark = s.lrMark;
   } catch (e) { }
 };
 
@@ -729,8 +734,9 @@ function legend(container, items) {
   return el;
 }
 
-/* horizontal drag-zoom on a chart; cb([v0,v1]) in x-domain units, cb(null) on reset */
-function dragZoom(ch, cb) {
+/* horizontal drag-zoom on a chart; cb([v0,v1]) in x-domain units, cb(null) on
+   reset; onTap(v) fires for a press without a drag — the touch "hover" */
+function dragZoom(ch, cb, onTap) {
   const { svg, ml, mt, iw, ih } = ch;
   let sx = null, rect = null;
   const toVal = px => ch.xd[0] + (px - ml) / iw * (ch.xd[1] - ch.xd[0]);
@@ -738,7 +744,8 @@ function dragZoom(ch, cb) {
   svg.style.touchAction = "pan-y";  // vertical swipe scrolls the page, horizontal drag zooms
   svg.addEventListener("pointerdown", e => {
     const p = pt(e); if (p.x < ml || p.x > ml + iw) return;
-    sx = p.x; svg.setPointerCapture(e.pointerId);
+    sx = p.x;
+    try { svg.setPointerCapture(e.pointerId); } catch (err) { }  // ultra-fast taps: pointer may already be gone
     rect = svgEl("rect", { x: sx, y: mt, width: 0, height: ih, fill: "var(--accent)", opacity: .12 }, svg);
   });
   svg.addEventListener("pointermove", e => {
@@ -746,12 +753,23 @@ function dragZoom(ch, cb) {
     const p = pt(e), a = Math.min(sx, p.x), w = Math.abs(p.x - sx);
     rect.setAttribute("x", a); rect.setAttribute("width", w);
   });
+  let actedAt = 0;   // suppress the click that follows a handled pointerup/drag
   svg.addEventListener("pointerup", e => {
     if (sx == null) return;
     const p = pt(e), a = Math.min(sx, p.x), b = Math.max(sx, p.x);
     if (rect) rect.remove(); rect = null;
     const s0 = sx; sx = null;
+    actedAt = performance.now();
     if (b - a > 12) cb([toVal(a), toVal(b)]);
+    else if (onTap) onTap(toVal((a + b) / 2));
+  });
+  // some touch stacks swallow the pointer sequence but still deliver a click —
+  // treat that click as the tap so pinning works on every device
+  svg.addEventListener("click", e => {
+    if (!onTap || performance.now() - actedAt < 500) return;
+    const p = pt(e);
+    if (p.x < ml || p.x > ml + iw) return;
+    onTap(toVal(p.x));
   });
   svg.addEventListener("dblclick", () => cb(null));
   function pt(e) {
@@ -1432,10 +1450,13 @@ function viewLongRuns(root) {
   const sid = practiceIds.includes(HUB.S.sid) ? HUB.S.sid : pref;
   const s = HUB.session(sid);
   if (sid !== HUB.S.sid) root.insertAdjacentHTML("beforeend", `<p class="note">Showing <b>${SNAMES[sid]}</b> — the representative long-run session${practiceIds.length > 1 ? "; use the session picker for other practice sessions" : ""}.</p>`);
+  driverRail(root, s);
+  if (!s.drivers.some(d => HUB.S.sel.has(d.abbr))) { root.insertAdjacentHTML("beforeend", `<div class="empty">No drivers selected — pick some above.</div>`); return; }
 
-  // detect runs
+  // detect runs (only for the drivers selected in the rail)
   const runs = [];
   for (const t of stintsOf(s)) {
+    if (!HUB.S.sel.has(t.drv)) continue;
     const laps = t.laps.filter(l => l.t != null && !l.in && !l.out && !l.del);
     if (laps.length < 5) continue;
     const med = median(laps.map(l => l.t));
@@ -1452,13 +1473,19 @@ function viewLongRuns(root) {
     const ref = runs[0].med;
     for (let i = runs.length - 1; i >= 0; i--) if (runs[i].med > ref * 1.12) runs.splice(i, 1);
   }
-  if (!runs.length) { root.insertAdjacentHTML("beforeend", `<div class="empty">No stint of 5+ representative laps found — nobody did race sims here.</div>`); return; }
+  if (!runs.length) { root.insertAdjacentHTML("beforeend", `<div class="empty">No stint of 5+ representative laps from the selected drivers — add drivers above, or nobody did race sims here.</div>`); return; }
 
-  // tag how representative each run is: length ≈ fuel ≈ trust
+  // tag how representative each run is: length ≈ fuel ≈ trust. The automatic
+  // call can be overridden per run from the ranking table (✓ / ✗)
+  const mark = r => (HUB.S.lrMark || {})[r.key];
   for (const r of runs) {
     const valid = r.t.laps.filter(l => !l.in && !l.out && l.t != null).length;
     r.pushCool = valid > 0 && r.run.length / valid < 0.62;   // lots of stripped laps = push-cool program
-    r.tag = r.pushCool ? "push-cool?" : r.run.length >= 9 ? "race sim" : r.run.length <= 6 ? "short run" : "";
+    r.tag = mark(r) === "out" ? "excluded" : mark(r) === "in" ? "marked ✓"
+      : r.pushCool ? "push-cool?" : r.run.length >= 9 ? "race sim" : r.run.length <= 6 ? "short run" : "";
+    r.repr = mark(r) === "out" ? false
+      : mark(r) === "in" ? !!r.fit && r.run.length >= 5
+        : !!r.fit && r.run.length >= 7 && !r.pushCool;
   }
   if (!HUB.S.lrSel) {
     // default: each team's most representative run (longest, then fastest),
@@ -1513,7 +1540,7 @@ function viewLongRuns(root) {
   }
 
   /* ---- deg gradient: the fuel-proof comparison ---- */
-  const grads = runs.filter(r => r.fit && r.run.length >= 7 && !r.pushCool).sort((a, b) => a.fit.b - b.fit.b);
+  const grads = runs.filter(r => r.repr).sort((a, b) => a.fit.b - b.fit.b);
   if (grads.length >= 2) {
     const cg = card(root, "Deg gradient", "time lost per lap within each run — fuel load cancels out of the slope, so this IS comparable across cars");
     const div = document.createElement("div"); div.className = "chart"; cg.appendChild(div);
@@ -1533,22 +1560,52 @@ function viewLongRuns(root) {
       const r = grads[i];
       return `<div class="t-title">${r.d.abbr} — ${esc(r.t.cmp)} run, ${r.run.length} laps</div>deg <b class="num">+${(r.fit.b / 1000).toFixed(3)} s/lap</b> · over 20 laps that compounds to <b class="num">${(r.fit.b * 20 / 1000).toFixed(1)}s</b>`;
     });
-    cg.insertAdjacentHTML("beforeend", `<p class="note">Race sims only (7+ clean laps, no push-cool programs). A car burning fuel gets ~0.06 s/lap faster, so true tyre deg is roughly the shown slope <b>+ 0.06</b> — but that offset is the same for everyone, so the order stands.</p>`);
+    cg.insertAdjacentHTML("beforeend", `<p class="note">Representative runs only (7+ clean laps, no push-cool programs — or whatever you've marked ✓/✗ in the ranking below). A car burning fuel gets ~0.06 s/lap faster, so true tyre deg is roughly the shown slope <b>+ 0.06</b> — but that offset is the same for everyone, so the order stands.</p>`);
   }
 
-  const c2 = card(root, "Run ranking", "⚠ fuel unknown — two 10-lap runs can differ by 40 kg. Absolute pace here proves nothing; the gradient above is the honest signal");
+  const c2 = card(root, "Run ranking", "⚠ fuel unknown — two 10-lap runs can differ by 40 kg. Absolute pace here proves nothing; the gradient above is the honest signal · tap a run to inspect its laps and mark it ✓/✗");
   const w = document.createElement("div"); w.className = "tblwrap"; c2.appendChild(w);
-  w.innerHTML = `<table class="t"><thead><tr><th class="r">#</th><th>Driver</th><th>Tyre</th><th class="r">Laps</th><th></th><th class="r">Median</th><th class="r">Best</th><th class="r">Trend s/lap</th><th class="r">Gap</th></tr></thead><tbody>` +
-    runs.map((r, i) => `<tr${r.tag === "race sim" ? "" : ' style="opacity:.82"'}><td class="r num">${i + 1}</td><td>${drvCell(r.d)}</td><td>${cmpDot(r.t.cmp)}${r.t.startLife > 1 ? ` <span class="hint">used</span>` : ""}</td>
+  const tblRows = [];
+  runs.forEach((r, i) => {
+    const excluded = mark(r) === "out";
+    const tagStyle = r.tag === "race sim" || r.tag === "marked ✓" ? "background:rgba(74,222,128,.18);color:var(--green)"
+      : r.tag === "excluded" ? "background:var(--band-red);color:var(--red)" : "background:var(--surface3);color:var(--ink3)";
+    tblRows.push(`<tr class="lr-row" data-key="${esc(r.key)}" style="cursor:pointer;${excluded ? "opacity:.45" : r.tag === "race sim" || r.tag === "marked ✓" ? "" : "opacity:.82"}">
+      <td class="r num">${i + 1}</td><td>${drvCell(r.d)}</td><td>${cmpDot(r.t.cmp)}${r.t.startLife > 1 ? ` <span class="hint">used</span>` : ""}</td>
       <td class="r num">${r.run.length}</td>
-      <td>${r.tag ? `<span class="tag" style="${r.tag === "race sim" ? "background:rgba(74,222,128,.18);color:var(--green)" : "background:var(--surface3);color:var(--ink3)"}">${r.tag}</span>` : ""}</td>
+      <td>${r.tag ? `<span class="tag" style="${tagStyle}">${r.tag}</span>` : ""}</td>
       <td class="r num ${i === 0 ? "best" : ""}">${fmtLap(Math.round(r.med))}</td><td class="r num">${fmtLap(r.best)}</td>
       <td class="r num">${r.fit ? (r.fit.b >= 0 ? "+" : "") + (r.fit.b / 1000).toFixed(3) : "—"}</td>
-      <td class="r num">${i === 0 ? "—" : fmtDelta(r.med - runs[0].med)}</td></tr>`).join("") + "</tbody></table>";
-  c2.insertAdjacentHTML("beforeend", `<p class="note">Longer runs carry more fuel and mean more; <b>race sim</b> ≥ 9 laps, <b>short run</b> ≤ 6 laps, <b>push-cool?</b> = many stripped laps between pushes. Trends within a run are real; gaps across teams are indicative only.</p>`);
+      <td class="r num">${i === 0 ? "—" : fmtDelta(r.med - runs[0].med)}</td></tr>`);
+    if (HUB.S.lrOpen === r.key) {
+      // inline detail: every lap of the stint, stripped ones crossed out
+      const laps = r.t.laps.filter(l => !l.in && !l.out && l.t != null);
+      const inRun = new Set(r.run.map(l => l.lap));
+      tblRows.push(`<tr class="lr-detail"><td colspan="9">
+        <div class="lr-laps">${laps.map(l => `<span class="tp-lap${inRun.has(l.lap) ? "" : " del"}" style="cursor:default">${inRun.has(l.lap) ? "" : "✕ "}<b class="num">L${l.lap}</b> <span class="num">${fmtLap(l.t)}</span></span>`).join("")}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center">
+          <button class="btn lr-mark" data-key="${esc(r.key)}" data-m="in" ${mark(r) === "in" ? "disabled" : ""}>✓ representative — use in deg gradient</button>
+          <button class="btn lr-mark" data-key="${esc(r.key)}" data-m="out" ${mark(r) === "out" ? "disabled" : ""}>✗ not representative — exclude</button>
+          ${mark(r) ? `<button class="btn lr-mark" data-key="${esc(r.key)}" data-m="">auto (${r.pushCool ? "push-cool?" : r.run.length >= 9 ? "race sim" : r.run.length <= 6 ? "short run" : "mid run"})</button>` : ""}
+          <span class="hint">✕ laps were stripped as cool-down / traffic — a push-cool run alternates push laps with slow ones, so its average is misleading</span>
+        </div></td></tr>`);
+    }
+  });
+  w.innerHTML = `<table class="t"><thead><tr><th class="r">#</th><th>Driver</th><th>Tyre</th><th class="r">Laps</th><th></th><th class="r">Median</th><th class="r">Best</th><th class="r">Trend s/lap</th><th class="r">Gap</th></tr></thead><tbody>` +
+    tblRows.join("") + "</tbody></table>";
+  w.querySelectorAll("tr.lr-row").forEach(tr =>
+    tr.addEventListener("click", () => { HUB.S.lrOpen = HUB.S.lrOpen === tr.dataset.key ? null : tr.dataset.key; HUB.render(true); }));
+  w.querySelectorAll("button.lr-mark").forEach(b =>
+    b.addEventListener("click", ev => {
+      ev.stopPropagation();
+      HUB.S.lrMark = HUB.S.lrMark || {};
+      if (b.dataset.m) HUB.S.lrMark[b.dataset.key] = b.dataset.m; else delete HUB.S.lrMark[b.dataset.key];
+      HUB.save(); HUB.render(true);
+    }));
+  c2.insertAdjacentHTML("beforeend", `<p class="note">Longer runs carry more fuel and mean more; <b>race sim</b> ≥ 9 laps, <b>short run</b> ≤ 6 laps, <b>push-cool?</b> = many stripped laps between pushes. Tap any run to see its laps and overrule the automatic call — your ✓/✗ marks are remembered for this weekend and feed the deg gradient and headlines.</p>`);
 
   // headline goes to the most representative running, not the fastest light-fuel glory run
-  const rep = runs.filter(r => r.run.length >= 7 && !r.pushCool);
+  const rep = runs.filter(r => mark(r) === "out" ? false : mark(r) === "in" ? true : r.run.length >= 7 && !r.pushCool);
   const head = rep[0] || runs[0];
   insights(root, [
     `Best representative long run: <b>${head.d.abbr}</b> ${fmtLap(Math.round(head.med))} on ${head.t.cmp.toLowerCase()}s (${head.run.length} laps)${rep.length ? "" : " — no true race sims this session, treat with care"}`,
@@ -2203,7 +2260,7 @@ function viewTel(root) {
 
   /* ---- dominance + map row ---- */
   const g = document.createElement("div"); g.className = "grid2"; root.appendChild(g);
-  const cmap = card(g, "Track map", map ? `${map.corners.length} corners · hover traces to follow the cars` : "");
+  const cmap = card(g, "Track map", map ? `${map.corners.length} corners · tap the track to jump the traces to that point` : "");
   const cdom = card(g, ents.length >= 2 ? "Mini-sector dominance" : "Speed on the reference lap", ents.length >= 2 ? "who is fastest in each of 27 track segments" : "");
 
   let mapAPI = null;
@@ -2238,7 +2295,7 @@ function viewTel(root) {
   }
 
   /* ---- trace panels ---- */
-  const c3 = card(root, "Traces", "shared distance axis · drag to zoom all panels · double-click resets");
+  const c3 = card(root, "Traces", "shared distance axis · tap to pin the readout at a point · drag to zoom all panels · double-tap resets");
   const right = c3.querySelector(".right");
   const hasDrs = ents.some(en => en.tel.d.some(v => v));
   const PANELS = [
@@ -2286,9 +2343,15 @@ function viewTel(root) {
     for (const cn of map.corners) {
       const xm = cn.d / map.len * L;
       if (xm < xd[0] || xm > xd[1]) continue;
-      const t = svgEl("text", { x: ch.x(xm), y: 18, "text-anchor": "middle", "font-size": 9.5, "font-weight": 700, fill: "var(--ink2)", class: "num", cursor: "pointer" }, ch.svg);
+      const coarse = matchMedia("(pointer: coarse)").matches;
+      const t = svgEl("text", { x: ch.x(xm), y: 18, "text-anchor": "middle", "font-size": 9.5, "font-weight": 700, fill: "var(--ink2)", class: "num", cursor: coarse ? "default" : "pointer" }, ch.svg);
       t.textContent = "T" + cn.n + (cn.l || "");
-      t.addEventListener("click", () => { S.telZoom = [Math.max(0, (xm - 320) / L), Math.min(1, (xm + 320) / L)]; HUB.render(); });
+      // desktop: click a corner label to zoom straight to that corner. On touch
+      // the labels must NOT be click targets — the browser's touch-slop
+      // targeting snaps nearby finger taps onto them, hijacking tap-to-pin
+      // with surprise zooms (and the ruler strip is all labels)
+      if (!coarse) t.addEventListener("click", () => { S.telZoom = [Math.max(0, (xm - 320) / L), Math.min(1, (xm + 320) / L)]; HUB.render(true); });
+      else t.style.pointerEvents = "none";
     }
     svgEl("text", { x: 4, y: 18, "font-size": 9, fill: "var(--ink3)" }, ch.svg).textContent = "corners ▸";
   }
@@ -2394,30 +2457,43 @@ function viewTel(root) {
   readout.style.cssText = "position:absolute;top:6px;right:10px;background:var(--surface);border:1px solid var(--line2);border-radius:8px;padding:6px 9px;font-size:11px;box-shadow:var(--shadow);display:none;z-index:5;pointer-events:none";
   c3.style.position = "relative"; c3.appendChild(readout);
   const vlines = charts.map(ch => svgEl("line", { y1: ch.mt, y2: ch.mt + ch.ih, stroke: "var(--ink2)", "stroke-width": 1, opacity: 0 }, ch.svg));
+  // a tap pins the crosshair (there's no hover on a phone); tap the same spot
+  // again — or hover away on desktop — to release it
+  let pinnedXm = null;
+  function crossAt(xm) {
+    const inX = xm >= xd[0] && xm <= xd[1];
+    const r = Math.max(0, Math.min(1, xm / L));
+    charts.forEach((ch, i) => { vlines[i].setAttribute("x1", ch.x(xm)); vlines[i].setAttribute("x2", ch.x(xm)); vlines[i].setAttribute("opacity", inX ? .55 : 0); });
+    readout.style.display = "block";
+    readout.innerHTML = `<div style="color:var(--ink3);margin-bottom:2px" class="num">${pinnedXm != null ? "📌 " : ""}${(xm / 1000).toFixed(3)} km</div><table>` + ents.map((en, i) => {
+      const v = telAt(en.tel.v, r).toFixed(0), th = telAt(en.tel.th, r).toFixed(0), gg = Math.round(telAt(en.tel.g, r));
+      const dt = i === 0 ? "" : ` · Δ<b>${((telAt(en.tel.t, r) - telAt(ref.tel.t, r)) / 1000).toFixed(2)}s</b>`;
+      return `<tr><td><span class="drv-cell" style="gap:4px"><span class="dot" style="background:${en.col};height:10px"></span>${en.e.drv}</span></td><td class="num" style="padding-left:7px">${v} km/h · ${th}% · G${gg}${dt}</td></tr>`;
+    }).join("") + "</table>" + (pinnedXm != null ? `<div style="color:var(--ink3);margin-top:3px">pinned — tap the same spot to release</div>` : "");
+    if (mapAPI) mapAPI.moveDots(r);
+  }
   stack.addEventListener("pointermove", e => {
+    if (pinnedXm != null) return;
     const ref0 = charts[0];
     const rect0 = ref0.svg.getBoundingClientRect();
     const fx = (e.clientX - rect0.left) / rect0.width * ref0.W;
     if (fx < ref0.ml || fx > ref0.ml + ref0.iw) { hideCross(); return; }
-    const xm = xd[0] + (fx - ref0.ml) / ref0.iw * (xd[1] - xd[0]);
-    const r = Math.max(0, Math.min(1, xm / L));
-    charts.forEach((ch, i) => { vlines[i].setAttribute("x1", ch.x(xm)); vlines[i].setAttribute("x2", ch.x(xm)); vlines[i].setAttribute("opacity", .55); });
-    readout.style.display = "block";
-    readout.innerHTML = `<div style="color:var(--ink3);margin-bottom:2px" class="num">${(xm / 1000).toFixed(3)} km</div><table>` + ents.map((en, i) => {
-      const v = telAt(en.tel.v, r).toFixed(0), th = telAt(en.tel.th, r).toFixed(0), gg = Math.round(telAt(en.tel.g, r));
-      const dt = i === 0 ? "" : ` · Δ<b>${((telAt(en.tel.t, r) - telAt(ref.tel.t, r)) / 1000).toFixed(2)}s</b>`;
-      return `<tr><td><span class="drv-cell" style="gap:4px"><span class="dot" style="background:${en.col};height:10px"></span>${en.e.drv}</span></td><td class="num" style="padding-left:7px">${v} km/h · ${th}% · G${gg}${dt}</td></tr>`;
-    }).join("") + "</table>";
-    if (mapAPI) mapAPI.moveDots(r);
+    crossAt(xd[0] + (fx - ref0.ml) / ref0.iw * (xd[1] - xd[0]));
   });
-  stack.addEventListener("pointerleave", hideCross);
+  stack.addEventListener("pointerleave", () => { if (pinnedXm == null) hideCross(); });
   function hideCross() { vlines.forEach(v => v.setAttribute("opacity", 0)); readout.style.display = "none"; if (mapAPI) mapAPI.hideDots(); }
 
-  // drag zoom on all panels
+  // drag zooms all panels; a plain tap pins/releases the crosshair instead
   for (const ch of charts) dragZoom(ch, dom => {
     S.telZoom = dom ? [Math.max(0, dom[0] / L), Math.min(1, dom[1] / L)] : null;
-    HUB.render();
+    HUB.render(true);   // keep scroll — zooming must not fling the page to the top
+  }, xm => {
+    if (pinnedXm != null && Math.abs(xm - pinnedXm) < (xd[1] - xd[0]) * 0.03) { pinnedXm = null; hideCross(); }
+    else { pinnedXm = xm; crossAt(xm); }
   });
+
+  // tapping the track map jumps the crosshair to that point of the lap
+  if (mapAPI) mapAPI.onPick(r => { pinnedXm = r * L; crossAt(pinnedXm); });
 
   /* map dominance colouring uses same winners */
   if (mapAPI && ents.length >= 2) mapAPI.dominance(domWinner);
@@ -2606,6 +2682,25 @@ function drawTrackMap(cardEl, map, ents, L) {
   // hover dots per lap
   const dots = ents.map(en => svgEl("circle", { r: sw * 0.75, fill: en.col, stroke: "var(--bg)", "stroke-width": sw / 5, opacity: 0 }, svg));
   return {
+    onPick(cb) {
+      // tap anywhere near the track line → distance fraction of that point
+      svg.style.cursor = "crosshair";
+      svg.addEventListener("pointerdown", e => {
+        const rct = svg.getBoundingClientRect();
+        // default preserveAspectRatio (xMidYMid meet): undo the letterboxing
+        const vbW = x1 - x0, vbH = y1 - y0;
+        const scale = Math.min(rct.width / vbW, rct.height / vbH);
+        const mx = x0 + (e.clientX - rct.left - (rct.width - vbW * scale) / 2) / scale;
+        const my = y0 + (e.clientY - rct.top - (rct.height - vbH * scale) / 2) / scale;
+        let bi = 0, bd = Infinity;
+        for (let i = 0; i < M; i++) {
+          const dx = X[i] - mx, dy = Y[i] - my, dd = dx * dx + dy * dy;
+          if (dd < bd) { bd = dd; bi = i; }
+        }
+        if (Math.sqrt(bd) > (x1 - x0) / 7) return;   // tapped empty space, not the track
+        cb(bi / (M - 1));
+      });
+    },
     moveDots(r) {
       const f = r * (M - 1), i = Math.min(M - 2, Math.floor(f)), k = f - i;
       const px = X[i] + (X[i + 1] - X[i]) * k, py = Y[i] + (Y[i + 1] - Y[i]) * k;
@@ -3017,14 +3112,16 @@ function replayCard(root, s) {
     dots.set(car.d.abbr, { g, dot });
   }
 
-  /* position of a car at session time T */
+  /* position of a car at session time T. Progress = laps completed + lap
+     fraction, and it FREEZES at the car's last real datapoint — a retired car
+     keeps the progress it had and sinks down the order as others pass it. */
   function locate(car, T) {
-    if (T >= car.lastEnd) return { done: true, prog: 1e6 - car.finPos };
+    if (T >= car.lastEnd) return { done: true, prog: car.laps.at(-1).lap, end: car.lastEnd };
     let lapRec = null, idx = 0;
     for (let i = car.laps.length - 1; i >= 0; i--) {
       if (car.laps[i].st <= T) { lapRec = car.laps[i]; idx = i; break; }
     }
-    if (!lapRec) return { pre: true, prog: -1 };
+    if (!lapRec) return { pre: true, prog: -((car.d.grid || 30) / 1000), r: 0 };
     const tel = s.tel[car.d.abbr + "-" + lapRec.lap];
     const dtc = Math.max(0, Math.min(T - lapRec.st, lapRec.t));
     let r;
@@ -3054,9 +3151,10 @@ function replayCard(root, s) {
     const states = cars.map(car => ({ car, st: locate(car, T) }));
     for (const { car, st } of states) {
       const el = dots.get(car.d.abbr);
-      if (st.done || st.pre) { el.g.setAttribute("opacity", 0); continue; }
-      const f = st.r * (M - 1), i = Math.min(M - 2, Math.floor(f)), k = f - i;
-      el.g.setAttribute("opacity", st.inPit ? 0.35 : 1);
+      if (st.done) { el.g.setAttribute("opacity", 0); continue; }
+      const f = (st.r || 0) * (M - 1), i = Math.min(M - 2, Math.floor(f)), k = f - i;
+      // pre-start cars wait on the line at half opacity
+      el.g.setAttribute("opacity", st.pre ? 0.45 : st.inPit ? 0.35 : 1);
       el.dot.setAttribute("cx", X[i] + (X[i + 1] - X[i]) * k);
       el.dot.setAttribute("cy", Y[i] + (Y[i + 1] - Y[i]) * k);
       el.dot.setAttribute("stroke", st.lapRec && st.lapRec.cmp ? cmpCol(st.lapRec.cmp) : "#fff");
@@ -3064,9 +3162,19 @@ function replayCard(root, s) {
     // leaderboard + lap/flag, throttled
     if (now - lastBoard > 350) {
       lastBoard = now;
-      const running = states.filter(x => !x.st.pre).sort((a, b) => b.st.prog - a.st.prog);
-      const leader = running.find(x => !x.st.done);
-      const leadLap = leader ? Math.min(total, Math.floor(leader.st.prog) + 1) : total;
+      // order: progress, then who reached their final progress first (that IS
+      // the finishing order for cars that end on the same lap), then grid
+      const sorted = [...states].sort((a, b) => (b.st.prog - a.st.prog)
+        || ((a.st.end ?? 9e15) - (b.st.end ?? 9e15))
+        || ((a.car.d.grid ?? 99) - (b.car.d.grid ?? 99)));
+      const leader = sorted.find(x => !x.st.done && !x.st.pre);
+      // until the field is properly away, show the grid — lap-1 start times in
+      // the source data are staggered and would invent fake gaps
+      const gridPhase = !leader || leader.st.prog < 0.03;
+      const board = gridPhase
+        ? [...states].sort((a, b) => (a.car.d.grid ?? 99) - (b.car.d.grid ?? 99))
+        : sorted;
+      const leadLap = leader ? Math.min(total, Math.floor(Math.max(0, leader.st.prog)) + 1) : total;
       lapEl.textContent = `Lap ${leadLap}/${total}`;
       scrub.value = Math.round((T - t0) / 1000);
       // flag from any lap record at the leader's lap
@@ -3075,13 +3183,14 @@ function replayCard(root, s) {
       flagEl.className = "rp-flag" + (w >= 3 ? " red" : w >= 1 ? " sc" : "");
       flagEl.textContent = w >= 3 ? "RED FLAG" : w === 2 ? "SAFETY CAR" : w === 1 ? "VIRTUAL SC" : "";
       const leaderLapTime = leader && leader.st.lapRec ? leader.st.lapRec.t : 95000;
-      right.innerHTML = `<table>` + running.map((x, i) => {
-        const gapP = i === 0 ? null : running[0].st.prog - x.st.prog;
+      right.innerHTML = `<table>` + board.map((x, i) => {
+        const gapP = i === 0 ? null : Math.max(0, board[0].st.prog - x.st.prog);
         const lappedBy = Math.floor(gapP ?? 0);
         const gapTxt = x.st.done ? (x.car.d.status && !/Finished|\+/.test(x.car.d.status) ? "OUT" : "FIN")
-          : i === 0 ? "Leader"
-            : lappedBy >= 1 ? `+${lappedBy}L`
-              : `+${(gapP * leaderLapTime / 1000).toFixed(1)}`;
+          : gridPhase ? (x.car.d.grid ? `P${x.car.d.grid} grid` : "pit lane")
+            : i === 0 ? "Leader"
+              : lappedBy >= 1 ? `+${lappedBy}L`
+                : `+${(gapP * leaderLapTime / 1000).toFixed(1)}`;
         const cmp = x.st.lapRec && x.st.lapRec.cmp;
         return `<tr class="${x.st.done && gapTxt === "OUT" ? "out" : ""}"><td class="num" style="color:var(--ink3)">${i + 1}</td>
           <td><span class="drv-cell" style="gap:5px"><span class="dot" style="background:${teamCol(x.car.d.color)}"></span>${x.car.d.abbr}</span></td>
@@ -3143,7 +3252,7 @@ function renderTeams(P, year) {
       if (location.hash.startsWith("#teams")) history.replaceState(null, "", target);
       else history.pushState(null, "", target);
     }
-    document.title = `Team DNA ${y} — Minisector`;
+    document.title = `Car rankings ${y} — Minisector`;
   } catch (e) { }
 
   root.innerHTML = `
@@ -3152,9 +3261,9 @@ function renderTeams(P, year) {
       <span class="picker">
         <button id="homeBtn" class="btn" title="All weekends" aria-label="All weekends">≡</button>
         <select id="dnaYear" aria-label="Season">${years.map(yy => `<option ${yy === y ? "selected" : ""}>${yy}</option>`).join("")}</select>
-        <span class="gp" style="font-size:16px">Team DNA — ${esc(y)} only</span>
+        <span class="gp" style="font-size:16px">Car rankings — ${esc(y)} only</span>
       </span>
-      <span class="meta">one season at a time: cars change every year, so no performance data crosses seasons</span>
+      <span class="meta">one season at a time: cars change every year, so no performance data crosses seasons · updates automatically as new weekends land</span>
       <span class="brand">Mini<b>sector</b> · F1 analysis</span>
       <span id="themeSlot"></span>
     </div>
@@ -3180,7 +3289,65 @@ function renderTeams(P, year) {
     <b>slow</b> (&lt;150 km/h), <b>medium</b> (&lt;230) or <b>fast</b> (≥230), and each car's best qualifying speed through it is compared with
     the fastest car through that same corner. A bar of <span class="num">−6.7 km/h</span> in slow corners means: through slow corners, this car
     is on average 6.7 km/h down on whoever is quickest there. Shorter bar = stronger. Straight-line comes from speed traps.
-    ${S.accMean != null ? `The circuit predictions are checked against reality below — average rank correlation <b class="num">ρ = ${S.accMean.toFixed(2)}</b> across ${S.acc.length} rounds (1 = predicts the exact order, 0 = random guessing).` : ""}</p>`);
+    <br><br><b>Why nobody shows 0.0:</b> the reference is the best car at each <i>individual</i> corner — no team is quickest through every slow corner on the calendar, so even the class leader (marked ★) averages a little above zero. Same for the Race gap: it's measured against whoever was fastest <i>that weekend</i>, and the race-pace crown changed hands during the season, so even the best race car (★) shows a small median gap rather than 0.
+    ${S.accMean != null ? `<br><br>The circuit predictions are checked against reality below — average rank correlation <b class="num">ρ = ${S.accMean.toFixed(2)}</b> across ${S.acc.length} rounds (1 = predicts the exact order, 0 = random guessing).` : ""}</p>`);
+
+  /* season pace ranking: who has the fastest car right now */
+  {
+    const cr = card(main, `${y} season pace ranking`,
+      "sorted by median dry qualifying gap · race pace = median clean-lap gap to each weekend's fastest race car");
+    const wr = document.createElement("div"); wr.className = "tblwrap"; cr.appendChild(wr);
+    const minR = Math.min(...teams.map(([, t]) => t.race).filter(v => v != null));
+    wr.innerHTML = `<table class="t"><thead><tr><th class="r">#</th><th>Team</th><th class="r">Quali gap</th><th class="r">Race pace</th><th class="r">Weekends</th></tr></thead><tbody>` +
+      teams.map(([tm, t], i) => `<tr><td class="r num">${i + 1}</td>
+        <td><span class="drv-cell"><span class="dot" style="background:${teamCol(S.colors[tm] || "#888")}"></span>${esc(tm)}</span></td>
+        <td class="r num ${i === 0 ? "best" : ""}">${t.quali === 0 ? "fastest" : "+" + t.quali.toFixed(2) + "%"}</td>
+        <td class="r num ${t.race === minR ? "best" : ""}">${t.race == null ? "—" : (t.race === 0 ? "fastest" : "+" + t.race.toFixed(2) + " s/lap") + (t.race === minR ? " ★" : "")}</td>
+        <td class="r num">${t.n}</td></tr>`).join("") + "</tbody></table>";
+  }
+
+  /* pace evolution: gap to each weekend's pole, round by round — upgrades
+     (or a car falling behind the development race) show up as the trend */
+  {
+    const dryRounds = S.rounds.filter(r => !r.wetQ && r.quali && Object.keys(r.quali).length >= 6);
+    if (dryRounds.length >= 3) {
+      const ce = card(main, "Pace evolution — gap to pole, round by round",
+        "dry qualifying only · 0% = fastest that weekend · a line trending down = the car is gaining relative pace (upgrades working)");
+      const div = document.createElement("div"); div.className = "chart"; ce.appendChild(div);
+      const allV = dryRounds.flatMap(r => teams.map(([tm]) => r.quali[tm]).filter(v => v != null));
+      const rMin = Math.min(...dryRounds.map(r => r.round)), rMax = Math.max(...dryRounds.map(r => r.round));
+      const mob = innerWidth < 700;
+      const ch = Chart(div, {
+        h: mob ? 300 : 380, mr: 52, xd: [rMin - 0.4, rMax + 0.4], yd: [-0.1, Math.min(Math.max(...allV) + 0.3, quantile(allV, 0.97) + 0.8)],
+        yflip: true, xticksArr: dryRounds.map(r => r.round), xfmt: v => "R" + v,
+        yfmt: v => v.toFixed(1) + "%", xlab: "round", ylab: "quali gap to pole", label: "Pace evolution",
+      });
+      const endL = [];
+      const nodes = [], nData = [];
+      for (const [tm] of teams) {
+        const col = teamCol(S.colors[tm] || "#888");
+        const pts = dryRounds.map(r => r.quali[tm] != null ? [r.round, r.quali[tm]] : null);
+        svgEl("path", { d: linePath(pts, ch.x, ch.y), fill: "none", stroke: col, "stroke-width": 1.7, opacity: .85 }, ch.plot);
+        for (const p of pts) {
+          if (!p) continue;
+          const n = svgEl("circle", { cx: ch.x(p[0]), cy: ch.y(p[1]), r: 6, fill: "transparent" }, ch.plot);
+          svgEl("circle", { cx: ch.x(p[0]), cy: ch.y(p[1]), r: 2.6, fill: col, "pointer-events": "none" }, ch.plot);
+          nodes.push(n); nData.push({ tm, p, col });
+        }
+        const last = [...pts].reverse().find(Boolean);
+        if (last) endL.push({ y: ch.y(last[1]) + 3.5, txt: tAbbr(tm), col });
+      }
+      spreadLabels(endL, 11, ch.mt + 4, ch.mt + ch.ih);
+      for (const L2 of endL)
+        svgEl("text", { x: ch.ml + ch.iw + 5, y: L2.y, "font-size": 10, "font-weight": 700, fill: L2.col, class: "num" }, ch.svg).textContent = L2.txt;
+      hoverMarks(nodes, i => {
+        const { tm, p } = nData[i];
+        const rnd = dryRounds.find(r => r.round === p[0]);
+        return `<div class="t-title">${esc(tm)} — R${p[0]} ${esc(rnd ? rnd.event : "")}</div>quali gap to pole: <b class="num">${p[1] === 0 ? "fastest" : "+" + p[1].toFixed(2) + "%"}</b>`;
+      });
+      ce.insertAdjacentHTML("beforeend", `<p class="note">Wet qualifying weekends are left out (gaps mean nothing in changing rain). Round-to-round wiggle is normal — circuits suit different cars — so read the <b>trend</b>, not single spikes.</p>`);
+    }
+  }
 
   /* relative calibrated fits: per circuit, gap to the best team's score */
   const k = S.calib || 1;
@@ -3200,19 +3367,32 @@ function renderTeams(P, year) {
 
   /* team cards */
   const grid = document.createElement("div"); grid.className = "dna-grid"; main.appendChild(grid);
-  const maxDef = {};
-  for (const cls of ["slow", "med", "fast"]) maxDef[cls] = Math.max(...teams.map(([, t]) => t.def[cls] ?? 0), 1);
-  const maxTrap = Math.max(...teams.map(([, t]) => t.trap ?? 0), 1);
+  const maxDef = {}, minDef = {};
+  for (const cls of ["slow", "med", "fast"]) {
+    const vals = teams.map(([, t]) => t.def[cls]).filter(v => v != null);
+    maxDef[cls] = Math.max(...vals, 1);
+    minDef[cls] = Math.min(...vals);
+  }
+  const trapVals = teams.map(([, t]) => t.trap).filter(v => v != null);
+  const maxTrap = Math.max(...trapVals, 1), minTrap = Math.min(...trapVals);
+  const minRace = Math.min(...teams.map(([, t]) => t.race).filter(v => v != null));
+  // rank every team within each corner class (and straight-line)
+  const rankIn = {};
+  for (const cls of ["slow", "med", "fast"]) {
+    const order = teams.filter(([, t]) => t.def[cls] != null).sort((a, b) => a[1].def[cls] - b[1].def[cls]);
+    rankIn[cls] = new Map(order.map(([tm], i) => [tm, i + 1]));
+  }
+  rankIn.trap = new Map(teams.filter(([, t]) => t.trap != null).sort((a, b) => a[1].trap - b[1].trap).map(([tm], i) => [tm, i + 1]));
   const evName = slug => (circuits.find(c => c.slug === slug) || {}).event || slug;
 
   for (const [tm, t] of teams) {
     const col = teamCol(S.colors[tm] || "#888");
     const el = document.createElement("div"); el.className = "card dna-card"; grid.appendChild(el);
     const rows = [
-      ["Slow corners", t.def.slow, maxDef.slow, "km/h", t.defN?.slow],
-      ["Medium corners", t.def.med, maxDef.med, "km/h", t.defN?.med],
-      ["Fast corners", t.def.fast, maxDef.fast, "km/h", t.defN?.fast],
-      ["Straight-line", t.trap, maxTrap, "km/h", null],
+      ["Slow corners", t.def.slow, maxDef.slow, "km/h", t.def.slow != null && t.def.slow === minDef.slow, rankIn.slow.get(tm)],
+      ["Medium corners", t.def.med, maxDef.med, "km/h", t.def.med != null && t.def.med === minDef.med, rankIn.med.get(tm)],
+      ["Fast corners", t.def.fast, maxDef.fast, "km/h", t.def.fast != null && t.def.fast === minDef.fast, rankIn.fast.get(tm)],
+      ["Straight-line", t.trap, maxTrap, "km/h", t.trap != null && t.trap === minTrap, rankIn.trap.get(tm)],
     ];
     // best/worst tracks relative to the car's OWN average across circuits —
     // never a cross-team claim (the pure corner model has per-team bias)
@@ -3231,11 +3411,11 @@ function renderTeams(P, year) {
 
     el.innerHTML = `
       <div class="dna-head"><span class="dot" style="background:${col};width:12px;height:12px"></span><b>${esc(tm)}</b>
-        <span class="dna-gaps num">Quali ${t.quali === 0 ? "fastest" : "+" + t.quali.toFixed(2) + "%"}${t.race != null ? ` · Race ${t.race === 0 ? "fastest" : "+" + t.race.toFixed(2) + " s/lap"}` : ""}</span></div>
-      <div class="dna-bars">${rows.map(([lab, v, mx, unit, n]) => `
-        <div class="dna-row"><span class="dna-lab">${lab}</span>
+        <span class="dna-gaps num">Quali ${t.quali === 0 ? "fastest" : "+" + t.quali.toFixed(2) + "%"}${t.race != null ? ` · Race ${t.race === 0 ? "fastest" : "+" + t.race.toFixed(2) + " s/lap"}${t.race === minRace ? " ★" : ""}` : ""}</span></div>
+      <div class="dna-bars">${rows.map(([lab, v, mx, unit, best, rk]) => `
+        <div class="dna-row"><span class="dna-lab">${lab}${rk ? ` <b class="num" style="color:${rk === 1 ? "var(--green)" : "var(--ink3)"}">P${rk}</b>` : ""}</span>
           <span class="dna-track"><i style="width:${v == null ? 0 : Math.max(3, v / mx * 100).toFixed(1)}%;background:${col}"></i></span>
-          <span class="num dna-val">${v == null ? "—" : "−" + v.toFixed(1) + " " + unit}</span></div>`).join("")}
+          <span class="num dna-val" ${best ? 'style="color:var(--green);font-weight:700" title="best of all teams in this corner type"' : ""}>${v == null ? "—" : "−" + v.toFixed(1) + " " + unit}${best ? " ★" : ""}</span></div>`).join("")}
       </div>
       <p class="dna-note hint">speed given up to the best car through each corner type · averaged over ${t.n} dry ${esc(y)} weekends</p>
       ${ranked.length ? `<div class="dna-fit"><span><b>Should over-perform at:</b> ${best3.map(fmtC).join(" · ")}</span>
@@ -3244,6 +3424,43 @@ function renderTeams(P, year) {
       ${tempNote}`;
   }
   main.insertAdjacentHTML("beforeend", `<p class="note">◦ = circuit not run yet in ${y}: layout characterised from the most recent archived visit — a genuine prediction.</p>`);
+
+  /* circuit predictor: pick any track → full predicted order with margins */
+  const ownMed0 = {};
+  for (const [tm] of teams) ownMed0[tm] = median(Object.values(rel[tm] || {})) ?? 0;
+  {
+    const cp = card(main, "Circuit predictor",
+      "pick a circuit — predicted order with margins, before the weekend happens · baseline = measured season pace, circuit swing from the corner-class model");
+    const selEl = document.createElement("select");
+    const opts = circuits.filter(c => teams.some(([tm]) => rel[tm]?.[c.slug] != null));
+    const firstUp = opts.find(c => !c.done);
+    if (!renderTeams._pick || !opts.some(c => c.slug === renderTeams._pick)) renderTeams._pick = (firstUp || opts.at(-1) || {}).slug;
+    selEl.innerHTML = opts.map(c => `<option value="${esc(c.slug)}" ${c.slug === renderTeams._pick ? "selected" : ""}>${c.done ? "✓" : "◦"} ${esc(c.event)}${c.from ? ` ('${String(c.from).slice(2)} layout)` : ""}</option>`).join("");
+    cp.querySelector(".right").appendChild(selEl);
+    const holder = document.createElement("div"); cp.appendChild(holder);
+    const drawPick = () => {
+      holder.innerHTML = "";
+      const slug = renderTeams._pick;
+      const rows = teams.map(([tm, t]) => {
+        const r = rel[tm]?.[slug];
+        if (r == null) return null;
+        const swing = r - ownMed0[tm];
+        return { tm, q: t.quali / 100 * 90 + swing, r: t.race != null ? t.race + swing : null, swing };
+      }).filter(Boolean).sort((a, b) => a.q - b.q);
+      if (!rows.length) { holder.innerHTML = `<div class="empty">No prediction possible here.</div>`; return; }
+      const qBase = rows[0].q, rBase = Math.min(...rows.map(x => x.r).filter(v => v != null));
+      const wrp = document.createElement("div"); wrp.className = "tblwrap"; holder.appendChild(wrp);
+      wrp.innerHTML = `<table class="t"><thead><tr><th class="r">#</th><th>Team</th><th class="r">Predicted quali gap</th><th class="r">Predicted race pace</th><th class="r">Layout swing</th></tr></thead><tbody>` +
+        rows.map((x, i) => `<tr><td class="r num">${i + 1}</td>
+          <td><span class="drv-cell"><span class="dot" style="background:${teamCol(S.colors[x.tm] || "#888")}"></span>${esc(x.tm)}</span></td>
+          <td class="r num ${i === 0 ? "best" : ""}">${i === 0 ? "fastest" : "+" + (x.q - qBase).toFixed(2) + "s"}</td>
+          <td class="r num">${x.r == null ? "—" : x.r - rBase < 0.005 ? "fastest" : "+" + (x.r - rBase).toFixed(2) + " s/lap"}</td>
+          <td class="r num" style="color:${x.swing < -0.03 ? "var(--green)" : x.swing > 0.03 ? "var(--red)" : "var(--ink3)"}">${x.swing >= 0 ? "+" : "−"}${Math.abs(x.swing).toFixed(2)}s</td></tr>`).join("") + "</tbody></table>";
+      holder.insertAdjacentHTML("beforeend", `<p class="note">Layout swing = how much this track's corner mix helps (green) or hurts (red) each car vs its own average circuit — that's the model's contribution; the rest is measured ${y} pace. Quali gaps on a nominal 90 s lap; race pace in s/lap. Reliability of the ordering: ρ = ${S.accMean != null ? S.accMean.toFixed(2) : "—"} (leave-one-out, see bottom).</p>`);
+    };
+    selEl.addEventListener("change", () => { renderTeams._pick = selEl.value; drawPick(); });
+    drawPick();
+  }
 
   /* prediction matrix: each car anchored to its measured season quali pace,
      the model contributes only circuit-to-circuit variation */
@@ -3461,7 +3678,7 @@ function showPicker() {
   root.innerHTML = `<div class="pick-screen">
     <div class="pick-brand">Mini<b>sector</b><span id="pickTheme"></span></div>
     <div class="pick-sub">F1 race-weekend analysis — pick a Grand Prix</div>
-    <button class="btn dna-launch" id="dnaLaunch">🧬 Team DNA — what each car is good at, and which circuits should suit it</button>
+    <button class="btn dna-launch" id="dnaLaunch">🏁 Car rankings — who has the fastest car, what it's good at, and which circuits should suit it</button>
     ${years.map(y => `<div class="pick-year">${y} <span>${m.years[y].length} weekend${m.years[y].length > 1 ? "s" : ""}</span></div>
       <div class="pick-grid">${[...m.years[y]].reverse().map(e => `
         <button class="pick-card" data-y="${y}" data-r="${e.round}">
@@ -3496,6 +3713,7 @@ function initState() {
   else S.sel = new Set(HUB.data.sessions.flatMap(ss => ss.drivers.map(dd => dd.abbr)));
   S.compare = []; S.telZoom = null; S.lrSel = null; S.degCmp = null; S.qseg = 3;
   S.telSid = null; S.telDrv = null; S.tpOpen = undefined;
+  S.lrMark = {}; S.lrOpen = null;
   HUB._selCustom = false;
   HUB.restore();
 }

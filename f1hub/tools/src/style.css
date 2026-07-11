@@ -200,6 +200,10 @@ kbd.k { background:var(--surface3); border-radius:3px; padding:0 4px; font-size:
 .lapchip .x:hover { color:var(--red); }
 .lapchip.ref { border-color:var(--accent); }
 .lapchip .refmark { font-size:9.5px; letter-spacing:.06em; color:var(--accent); font-weight:800; }
+/* long-run detail row */
+.lr-laps { display:flex; flex-wrap:wrap; gap:5px; }
+tr.lr-detail > td { background:var(--surface2); padding:10px 12px; }
+
 /* team DNA */
 .dna-launch { display:block; margin:0 auto 26px; font-size:13px; padding:10px 18px; }
 .dna-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:14px; margin-bottom:18px; }

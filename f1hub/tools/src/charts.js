@@ -155,8 +155,9 @@ function legend(container, items) {
   return el;
 }
 
-/* horizontal drag-zoom on a chart; cb([v0,v1]) in x-domain units, cb(null) on reset */
-function dragZoom(ch, cb) {
+/* horizontal drag-zoom on a chart; cb([v0,v1]) in x-domain units, cb(null) on
+   reset; onTap(v) fires for a press without a drag — the touch "hover" */
+function dragZoom(ch, cb, onTap) {
   const { svg, ml, mt, iw, ih } = ch;
   let sx = null, rect = null;
   const toVal = px => ch.xd[0] + (px - ml) / iw * (ch.xd[1] - ch.xd[0]);
@@ -164,7 +165,8 @@ function dragZoom(ch, cb) {
   svg.style.touchAction = "pan-y";  // vertical swipe scrolls the page, horizontal drag zooms
   svg.addEventListener("pointerdown", e => {
     const p = pt(e); if (p.x < ml || p.x > ml + iw) return;
-    sx = p.x; svg.setPointerCapture(e.pointerId);
+    sx = p.x;
+    try { svg.setPointerCapture(e.pointerId); } catch (err) { }  // ultra-fast taps: pointer may already be gone
     rect = svgEl("rect", { x: sx, y: mt, width: 0, height: ih, fill: "var(--accent)", opacity: .12 }, svg);
   });
   svg.addEventListener("pointermove", e => {
@@ -172,12 +174,23 @@ function dragZoom(ch, cb) {
     const p = pt(e), a = Math.min(sx, p.x), w = Math.abs(p.x - sx);
     rect.setAttribute("x", a); rect.setAttribute("width", w);
   });
+  let actedAt = 0;   // suppress the click that follows a handled pointerup/drag
   svg.addEventListener("pointerup", e => {
     if (sx == null) return;
     const p = pt(e), a = Math.min(sx, p.x), b = Math.max(sx, p.x);
     if (rect) rect.remove(); rect = null;
     const s0 = sx; sx = null;
+    actedAt = performance.now();
     if (b - a > 12) cb([toVal(a), toVal(b)]);
+    else if (onTap) onTap(toVal((a + b) / 2));
+  });
+  // some touch stacks swallow the pointer sequence but still deliver a click —
+  // treat that click as the tap so pinning works on every device
+  svg.addEventListener("click", e => {
+    if (!onTap || performance.now() - actedAt < 500) return;
+    const p = pt(e);
+    if (p.x < ml || p.x > ml + iw) return;
+    onTap(toVal(p.x));
   });
   svg.addEventListener("dblclick", () => cb(null));
   function pt(e) {

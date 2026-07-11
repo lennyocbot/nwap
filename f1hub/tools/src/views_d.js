@@ -183,7 +183,7 @@ function viewTel(root) {
 
   /* ---- dominance + map row ---- */
   const g = document.createElement("div"); g.className = "grid2"; root.appendChild(g);
-  const cmap = card(g, "Track map", map ? `${map.corners.length} corners · hover traces to follow the cars` : "");
+  const cmap = card(g, "Track map", map ? `${map.corners.length} corners · tap the track to jump the traces to that point` : "");
   const cdom = card(g, ents.length >= 2 ? "Mini-sector dominance" : "Speed on the reference lap", ents.length >= 2 ? "who is fastest in each of 27 track segments" : "");
 
   let mapAPI = null;
@@ -218,7 +218,7 @@ function viewTel(root) {
   }
 
   /* ---- trace panels ---- */
-  const c3 = card(root, "Traces", "shared distance axis · drag to zoom all panels · double-click resets");
+  const c3 = card(root, "Traces", "shared distance axis · tap to pin the readout at a point · drag to zoom all panels · double-tap resets");
   const right = c3.querySelector(".right");
   const hasDrs = ents.some(en => en.tel.d.some(v => v));
   const PANELS = [
@@ -266,9 +266,15 @@ function viewTel(root) {
     for (const cn of map.corners) {
       const xm = cn.d / map.len * L;
       if (xm < xd[0] || xm > xd[1]) continue;
-      const t = svgEl("text", { x: ch.x(xm), y: 18, "text-anchor": "middle", "font-size": 9.5, "font-weight": 700, fill: "var(--ink2)", class: "num", cursor: "pointer" }, ch.svg);
+      const coarse = matchMedia("(pointer: coarse)").matches;
+      const t = svgEl("text", { x: ch.x(xm), y: 18, "text-anchor": "middle", "font-size": 9.5, "font-weight": 700, fill: "var(--ink2)", class: "num", cursor: coarse ? "default" : "pointer" }, ch.svg);
       t.textContent = "T" + cn.n + (cn.l || "");
-      t.addEventListener("click", () => { S.telZoom = [Math.max(0, (xm - 320) / L), Math.min(1, (xm + 320) / L)]; HUB.render(); });
+      // desktop: click a corner label to zoom straight to that corner. On touch
+      // the labels must NOT be click targets — the browser's touch-slop
+      // targeting snaps nearby finger taps onto them, hijacking tap-to-pin
+      // with surprise zooms (and the ruler strip is all labels)
+      if (!coarse) t.addEventListener("click", () => { S.telZoom = [Math.max(0, (xm - 320) / L), Math.min(1, (xm + 320) / L)]; HUB.render(true); });
+      else t.style.pointerEvents = "none";
     }
     svgEl("text", { x: 4, y: 18, "font-size": 9, fill: "var(--ink3)" }, ch.svg).textContent = "corners ▸";
   }
@@ -374,30 +380,43 @@ function viewTel(root) {
   readout.style.cssText = "position:absolute;top:6px;right:10px;background:var(--surface);border:1px solid var(--line2);border-radius:8px;padding:6px 9px;font-size:11px;box-shadow:var(--shadow);display:none;z-index:5;pointer-events:none";
   c3.style.position = "relative"; c3.appendChild(readout);
   const vlines = charts.map(ch => svgEl("line", { y1: ch.mt, y2: ch.mt + ch.ih, stroke: "var(--ink2)", "stroke-width": 1, opacity: 0 }, ch.svg));
+  // a tap pins the crosshair (there's no hover on a phone); tap the same spot
+  // again — or hover away on desktop — to release it
+  let pinnedXm = null;
+  function crossAt(xm) {
+    const inX = xm >= xd[0] && xm <= xd[1];
+    const r = Math.max(0, Math.min(1, xm / L));
+    charts.forEach((ch, i) => { vlines[i].setAttribute("x1", ch.x(xm)); vlines[i].setAttribute("x2", ch.x(xm)); vlines[i].setAttribute("opacity", inX ? .55 : 0); });
+    readout.style.display = "block";
+    readout.innerHTML = `<div style="color:var(--ink3);margin-bottom:2px" class="num">${pinnedXm != null ? "📌 " : ""}${(xm / 1000).toFixed(3)} km</div><table>` + ents.map((en, i) => {
+      const v = telAt(en.tel.v, r).toFixed(0), th = telAt(en.tel.th, r).toFixed(0), gg = Math.round(telAt(en.tel.g, r));
+      const dt = i === 0 ? "" : ` · Δ<b>${((telAt(en.tel.t, r) - telAt(ref.tel.t, r)) / 1000).toFixed(2)}s</b>`;
+      return `<tr><td><span class="drv-cell" style="gap:4px"><span class="dot" style="background:${en.col};height:10px"></span>${en.e.drv}</span></td><td class="num" style="padding-left:7px">${v} km/h · ${th}% · G${gg}${dt}</td></tr>`;
+    }).join("") + "</table>" + (pinnedXm != null ? `<div style="color:var(--ink3);margin-top:3px">pinned — tap the same spot to release</div>` : "");
+    if (mapAPI) mapAPI.moveDots(r);
+  }
   stack.addEventListener("pointermove", e => {
+    if (pinnedXm != null) return;
     const ref0 = charts[0];
     const rect0 = ref0.svg.getBoundingClientRect();
     const fx = (e.clientX - rect0.left) / rect0.width * ref0.W;
     if (fx < ref0.ml || fx > ref0.ml + ref0.iw) { hideCross(); return; }
-    const xm = xd[0] + (fx - ref0.ml) / ref0.iw * (xd[1] - xd[0]);
-    const r = Math.max(0, Math.min(1, xm / L));
-    charts.forEach((ch, i) => { vlines[i].setAttribute("x1", ch.x(xm)); vlines[i].setAttribute("x2", ch.x(xm)); vlines[i].setAttribute("opacity", .55); });
-    readout.style.display = "block";
-    readout.innerHTML = `<div style="color:var(--ink3);margin-bottom:2px" class="num">${(xm / 1000).toFixed(3)} km</div><table>` + ents.map((en, i) => {
-      const v = telAt(en.tel.v, r).toFixed(0), th = telAt(en.tel.th, r).toFixed(0), gg = Math.round(telAt(en.tel.g, r));
-      const dt = i === 0 ? "" : ` · Δ<b>${((telAt(en.tel.t, r) - telAt(ref.tel.t, r)) / 1000).toFixed(2)}s</b>`;
-      return `<tr><td><span class="drv-cell" style="gap:4px"><span class="dot" style="background:${en.col};height:10px"></span>${en.e.drv}</span></td><td class="num" style="padding-left:7px">${v} km/h · ${th}% · G${gg}${dt}</td></tr>`;
-    }).join("") + "</table>";
-    if (mapAPI) mapAPI.moveDots(r);
+    crossAt(xd[0] + (fx - ref0.ml) / ref0.iw * (xd[1] - xd[0]));
   });
-  stack.addEventListener("pointerleave", hideCross);
+  stack.addEventListener("pointerleave", () => { if (pinnedXm == null) hideCross(); });
   function hideCross() { vlines.forEach(v => v.setAttribute("opacity", 0)); readout.style.display = "none"; if (mapAPI) mapAPI.hideDots(); }
 
-  // drag zoom on all panels
+  // drag zooms all panels; a plain tap pins/releases the crosshair instead
   for (const ch of charts) dragZoom(ch, dom => {
     S.telZoom = dom ? [Math.max(0, dom[0] / L), Math.min(1, dom[1] / L)] : null;
-    HUB.render();
+    HUB.render(true);   // keep scroll — zooming must not fling the page to the top
+  }, xm => {
+    if (pinnedXm != null && Math.abs(xm - pinnedXm) < (xd[1] - xd[0]) * 0.03) { pinnedXm = null; hideCross(); }
+    else { pinnedXm = xm; crossAt(xm); }
   });
+
+  // tapping the track map jumps the crosshair to that point of the lap
+  if (mapAPI) mapAPI.onPick(r => { pinnedXm = r * L; crossAt(pinnedXm); });
 
   /* map dominance colouring uses same winners */
   if (mapAPI && ents.length >= 2) mapAPI.dominance(domWinner);
@@ -586,6 +605,25 @@ function drawTrackMap(cardEl, map, ents, L) {
   // hover dots per lap
   const dots = ents.map(en => svgEl("circle", { r: sw * 0.75, fill: en.col, stroke: "var(--bg)", "stroke-width": sw / 5, opacity: 0 }, svg));
   return {
+    onPick(cb) {
+      // tap anywhere near the track line → distance fraction of that point
+      svg.style.cursor = "crosshair";
+      svg.addEventListener("pointerdown", e => {
+        const rct = svg.getBoundingClientRect();
+        // default preserveAspectRatio (xMidYMid meet): undo the letterboxing
+        const vbW = x1 - x0, vbH = y1 - y0;
+        const scale = Math.min(rct.width / vbW, rct.height / vbH);
+        const mx = x0 + (e.clientX - rct.left - (rct.width - vbW * scale) / 2) / scale;
+        const my = y0 + (e.clientY - rct.top - (rct.height - vbH * scale) / 2) / scale;
+        let bi = 0, bd = Infinity;
+        for (let i = 0; i < M; i++) {
+          const dx = X[i] - mx, dy = Y[i] - my, dd = dx * dx + dy * dy;
+          if (dd < bd) { bd = dd; bi = i; }
+        }
+        if (Math.sqrt(bd) > (x1 - x0) / 7) return;   // tapped empty space, not the track
+        cb(bi / (M - 1));
+      });
+    },
     moveDots(r) {
       const f = r * (M - 1), i = Math.min(M - 2, Math.floor(f)), k = f - i;
       const px = X[i] + (X[i + 1] - X[i]) * k, py = Y[i] + (Y[i + 1] - Y[i]) * k;

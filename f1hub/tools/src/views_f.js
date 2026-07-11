@@ -61,14 +61,16 @@ function replayCard(root, s) {
     dots.set(car.d.abbr, { g, dot });
   }
 
-  /* position of a car at session time T */
+  /* position of a car at session time T. Progress = laps completed + lap
+     fraction, and it FREEZES at the car's last real datapoint — a retired car
+     keeps the progress it had and sinks down the order as others pass it. */
   function locate(car, T) {
-    if (T >= car.lastEnd) return { done: true, prog: 1e6 - car.finPos };
+    if (T >= car.lastEnd) return { done: true, prog: car.laps.at(-1).lap, end: car.lastEnd };
     let lapRec = null, idx = 0;
     for (let i = car.laps.length - 1; i >= 0; i--) {
       if (car.laps[i].st <= T) { lapRec = car.laps[i]; idx = i; break; }
     }
-    if (!lapRec) return { pre: true, prog: -1 };
+    if (!lapRec) return { pre: true, prog: -((car.d.grid || 30) / 1000), r: 0 };
     const tel = s.tel[car.d.abbr + "-" + lapRec.lap];
     const dtc = Math.max(0, Math.min(T - lapRec.st, lapRec.t));
     let r;
@@ -98,9 +100,10 @@ function replayCard(root, s) {
     const states = cars.map(car => ({ car, st: locate(car, T) }));
     for (const { car, st } of states) {
       const el = dots.get(car.d.abbr);
-      if (st.done || st.pre) { el.g.setAttribute("opacity", 0); continue; }
-      const f = st.r * (M - 1), i = Math.min(M - 2, Math.floor(f)), k = f - i;
-      el.g.setAttribute("opacity", st.inPit ? 0.35 : 1);
+      if (st.done) { el.g.setAttribute("opacity", 0); continue; }
+      const f = (st.r || 0) * (M - 1), i = Math.min(M - 2, Math.floor(f)), k = f - i;
+      // pre-start cars wait on the line at half opacity
+      el.g.setAttribute("opacity", st.pre ? 0.45 : st.inPit ? 0.35 : 1);
       el.dot.setAttribute("cx", X[i] + (X[i + 1] - X[i]) * k);
       el.dot.setAttribute("cy", Y[i] + (Y[i + 1] - Y[i]) * k);
       el.dot.setAttribute("stroke", st.lapRec && st.lapRec.cmp ? cmpCol(st.lapRec.cmp) : "#fff");
@@ -108,9 +111,19 @@ function replayCard(root, s) {
     // leaderboard + lap/flag, throttled
     if (now - lastBoard > 350) {
       lastBoard = now;
-      const running = states.filter(x => !x.st.pre).sort((a, b) => b.st.prog - a.st.prog);
-      const leader = running.find(x => !x.st.done);
-      const leadLap = leader ? Math.min(total, Math.floor(leader.st.prog) + 1) : total;
+      // order: progress, then who reached their final progress first (that IS
+      // the finishing order for cars that end on the same lap), then grid
+      const sorted = [...states].sort((a, b) => (b.st.prog - a.st.prog)
+        || ((a.st.end ?? 9e15) - (b.st.end ?? 9e15))
+        || ((a.car.d.grid ?? 99) - (b.car.d.grid ?? 99)));
+      const leader = sorted.find(x => !x.st.done && !x.st.pre);
+      // until the field is properly away, show the grid — lap-1 start times in
+      // the source data are staggered and would invent fake gaps
+      const gridPhase = !leader || leader.st.prog < 0.03;
+      const board = gridPhase
+        ? [...states].sort((a, b) => (a.car.d.grid ?? 99) - (b.car.d.grid ?? 99))
+        : sorted;
+      const leadLap = leader ? Math.min(total, Math.floor(Math.max(0, leader.st.prog)) + 1) : total;
       lapEl.textContent = `Lap ${leadLap}/${total}`;
       scrub.value = Math.round((T - t0) / 1000);
       // flag from any lap record at the leader's lap
@@ -119,13 +132,14 @@ function replayCard(root, s) {
       flagEl.className = "rp-flag" + (w >= 3 ? " red" : w >= 1 ? " sc" : "");
       flagEl.textContent = w >= 3 ? "RED FLAG" : w === 2 ? "SAFETY CAR" : w === 1 ? "VIRTUAL SC" : "";
       const leaderLapTime = leader && leader.st.lapRec ? leader.st.lapRec.t : 95000;
-      right.innerHTML = `<table>` + running.map((x, i) => {
-        const gapP = i === 0 ? null : running[0].st.prog - x.st.prog;
+      right.innerHTML = `<table>` + board.map((x, i) => {
+        const gapP = i === 0 ? null : Math.max(0, board[0].st.prog - x.st.prog);
         const lappedBy = Math.floor(gapP ?? 0);
         const gapTxt = x.st.done ? (x.car.d.status && !/Finished|\+/.test(x.car.d.status) ? "OUT" : "FIN")
-          : i === 0 ? "Leader"
-            : lappedBy >= 1 ? `+${lappedBy}L`
-              : `+${(gapP * leaderLapTime / 1000).toFixed(1)}`;
+          : gridPhase ? (x.car.d.grid ? `P${x.car.d.grid} grid` : "pit lane")
+            : i === 0 ? "Leader"
+              : lappedBy >= 1 ? `+${lappedBy}L`
+                : `+${(gapP * leaderLapTime / 1000).toFixed(1)}`;
         const cmp = x.st.lapRec && x.st.lapRec.cmp;
         return `<tr class="${x.st.done && gapTxt === "OUT" ? "out" : ""}"><td class="num" style="color:var(--ink3)">${i + 1}</td>
           <td><span class="drv-cell" style="gap:5px"><span class="dot" style="background:${teamCol(x.car.d.color)}"></span>${x.car.d.abbr}</span></td>

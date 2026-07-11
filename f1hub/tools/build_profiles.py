@@ -399,10 +399,12 @@ def build():
         # show the score on a realistic seconds scale
         sxx = sum(x * x for x in cal_x)
         season["calib"] = round(sum(x * y for x, y in zip(cal_x, cal_y)) / sxx, 4) if sxx else None
-        # strip heavy per-round quali/race maps we no longer need client-side
+        # keep per-round quali gaps (they power the pace-evolution chart);
+        # strip the rest of the per-round detail
         season.pop("_agg", None)
         for rnd in season["rounds"]:
-            rnd.pop("quali", None)
+            if rnd.get("quali"):
+                rnd["quali"] = {tm: round(v, 3) for tm, v in rnd["quali"].items()}
             rnd.pop("race", None)
             rnd.pop("poleMs", None)
 

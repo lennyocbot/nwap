@@ -207,10 +207,13 @@ function viewLongRuns(root) {
   const sid = practiceIds.includes(HUB.S.sid) ? HUB.S.sid : pref;
   const s = HUB.session(sid);
   if (sid !== HUB.S.sid) root.insertAdjacentHTML("beforeend", `<p class="note">Showing <b>${SNAMES[sid]}</b> — the representative long-run session${practiceIds.length > 1 ? "; use the session picker for other practice sessions" : ""}.</p>`);
+  driverRail(root, s);
+  if (!s.drivers.some(d => HUB.S.sel.has(d.abbr))) { root.insertAdjacentHTML("beforeend", `<div class="empty">No drivers selected — pick some above.</div>`); return; }
 
-  // detect runs
+  // detect runs (only for the drivers selected in the rail)
   const runs = [];
   for (const t of stintsOf(s)) {
+    if (!HUB.S.sel.has(t.drv)) continue;
     const laps = t.laps.filter(l => l.t != null && !l.in && !l.out && !l.del);
     if (laps.length < 5) continue;
     const med = median(laps.map(l => l.t));
@@ -227,13 +230,19 @@ function viewLongRuns(root) {
     const ref = runs[0].med;
     for (let i = runs.length - 1; i >= 0; i--) if (runs[i].med > ref * 1.12) runs.splice(i, 1);
   }
-  if (!runs.length) { root.insertAdjacentHTML("beforeend", `<div class="empty">No stint of 5+ representative laps found — nobody did race sims here.</div>`); return; }
+  if (!runs.length) { root.insertAdjacentHTML("beforeend", `<div class="empty">No stint of 5+ representative laps from the selected drivers — add drivers above, or nobody did race sims here.</div>`); return; }
 
-  // tag how representative each run is: length ≈ fuel ≈ trust
+  // tag how representative each run is: length ≈ fuel ≈ trust. The automatic
+  // call can be overridden per run from the ranking table (✓ / ✗)
+  const mark = r => (HUB.S.lrMark || {})[r.key];
   for (const r of runs) {
     const valid = r.t.laps.filter(l => !l.in && !l.out && l.t != null).length;
     r.pushCool = valid > 0 && r.run.length / valid < 0.62;   // lots of stripped laps = push-cool program
-    r.tag = r.pushCool ? "push-cool?" : r.run.length >= 9 ? "race sim" : r.run.length <= 6 ? "short run" : "";
+    r.tag = mark(r) === "out" ? "excluded" : mark(r) === "in" ? "marked ✓"
+      : r.pushCool ? "push-cool?" : r.run.length >= 9 ? "race sim" : r.run.length <= 6 ? "short run" : "";
+    r.repr = mark(r) === "out" ? false
+      : mark(r) === "in" ? !!r.fit && r.run.length >= 5
+        : !!r.fit && r.run.length >= 7 && !r.pushCool;
   }
   if (!HUB.S.lrSel) {
     // default: each team's most representative run (longest, then fastest),
@@ -288,7 +297,7 @@ function viewLongRuns(root) {
   }
 
   /* ---- deg gradient: the fuel-proof comparison ---- */
-  const grads = runs.filter(r => r.fit && r.run.length >= 7 && !r.pushCool).sort((a, b) => a.fit.b - b.fit.b);
+  const grads = runs.filter(r => r.repr).sort((a, b) => a.fit.b - b.fit.b);
   if (grads.length >= 2) {
     const cg = card(root, "Deg gradient", "time lost per lap within each run — fuel load cancels out of the slope, so this IS comparable across cars");
     const div = document.createElement("div"); div.className = "chart"; cg.appendChild(div);
@@ -308,22 +317,52 @@ function viewLongRuns(root) {
       const r = grads[i];
       return `<div class="t-title">${r.d.abbr} — ${esc(r.t.cmp)} run, ${r.run.length} laps</div>deg <b class="num">+${(r.fit.b / 1000).toFixed(3)} s/lap</b> · over 20 laps that compounds to <b class="num">${(r.fit.b * 20 / 1000).toFixed(1)}s</b>`;
     });
-    cg.insertAdjacentHTML("beforeend", `<p class="note">Race sims only (7+ clean laps, no push-cool programs). A car burning fuel gets ~0.06 s/lap faster, so true tyre deg is roughly the shown slope <b>+ 0.06</b> — but that offset is the same for everyone, so the order stands.</p>`);
+    cg.insertAdjacentHTML("beforeend", `<p class="note">Representative runs only (7+ clean laps, no push-cool programs — or whatever you've marked ✓/✗ in the ranking below). A car burning fuel gets ~0.06 s/lap faster, so true tyre deg is roughly the shown slope <b>+ 0.06</b> — but that offset is the same for everyone, so the order stands.</p>`);
   }
 
-  const c2 = card(root, "Run ranking", "⚠ fuel unknown — two 10-lap runs can differ by 40 kg. Absolute pace here proves nothing; the gradient above is the honest signal");
+  const c2 = card(root, "Run ranking", "⚠ fuel unknown — two 10-lap runs can differ by 40 kg. Absolute pace here proves nothing; the gradient above is the honest signal · tap a run to inspect its laps and mark it ✓/✗");
   const w = document.createElement("div"); w.className = "tblwrap"; c2.appendChild(w);
-  w.innerHTML = `<table class="t"><thead><tr><th class="r">#</th><th>Driver</th><th>Tyre</th><th class="r">Laps</th><th></th><th class="r">Median</th><th class="r">Best</th><th class="r">Trend s/lap</th><th class="r">Gap</th></tr></thead><tbody>` +
-    runs.map((r, i) => `<tr${r.tag === "race sim" ? "" : ' style="opacity:.82"'}><td class="r num">${i + 1}</td><td>${drvCell(r.d)}</td><td>${cmpDot(r.t.cmp)}${r.t.startLife > 1 ? ` <span class="hint">used</span>` : ""}</td>
+  const tblRows = [];
+  runs.forEach((r, i) => {
+    const excluded = mark(r) === "out";
+    const tagStyle = r.tag === "race sim" || r.tag === "marked ✓" ? "background:rgba(74,222,128,.18);color:var(--green)"
+      : r.tag === "excluded" ? "background:var(--band-red);color:var(--red)" : "background:var(--surface3);color:var(--ink3)";
+    tblRows.push(`<tr class="lr-row" data-key="${esc(r.key)}" style="cursor:pointer;${excluded ? "opacity:.45" : r.tag === "race sim" || r.tag === "marked ✓" ? "" : "opacity:.82"}">
+      <td class="r num">${i + 1}</td><td>${drvCell(r.d)}</td><td>${cmpDot(r.t.cmp)}${r.t.startLife > 1 ? ` <span class="hint">used</span>` : ""}</td>
       <td class="r num">${r.run.length}</td>
-      <td>${r.tag ? `<span class="tag" style="${r.tag === "race sim" ? "background:rgba(74,222,128,.18);color:var(--green)" : "background:var(--surface3);color:var(--ink3)"}">${r.tag}</span>` : ""}</td>
+      <td>${r.tag ? `<span class="tag" style="${tagStyle}">${r.tag}</span>` : ""}</td>
       <td class="r num ${i === 0 ? "best" : ""}">${fmtLap(Math.round(r.med))}</td><td class="r num">${fmtLap(r.best)}</td>
       <td class="r num">${r.fit ? (r.fit.b >= 0 ? "+" : "") + (r.fit.b / 1000).toFixed(3) : "—"}</td>
-      <td class="r num">${i === 0 ? "—" : fmtDelta(r.med - runs[0].med)}</td></tr>`).join("") + "</tbody></table>";
-  c2.insertAdjacentHTML("beforeend", `<p class="note">Longer runs carry more fuel and mean more; <b>race sim</b> ≥ 9 laps, <b>short run</b> ≤ 6 laps, <b>push-cool?</b> = many stripped laps between pushes. Trends within a run are real; gaps across teams are indicative only.</p>`);
+      <td class="r num">${i === 0 ? "—" : fmtDelta(r.med - runs[0].med)}</td></tr>`);
+    if (HUB.S.lrOpen === r.key) {
+      // inline detail: every lap of the stint, stripped ones crossed out
+      const laps = r.t.laps.filter(l => !l.in && !l.out && l.t != null);
+      const inRun = new Set(r.run.map(l => l.lap));
+      tblRows.push(`<tr class="lr-detail"><td colspan="9">
+        <div class="lr-laps">${laps.map(l => `<span class="tp-lap${inRun.has(l.lap) ? "" : " del"}" style="cursor:default">${inRun.has(l.lap) ? "" : "✕ "}<b class="num">L${l.lap}</b> <span class="num">${fmtLap(l.t)}</span></span>`).join("")}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center">
+          <button class="btn lr-mark" data-key="${esc(r.key)}" data-m="in" ${mark(r) === "in" ? "disabled" : ""}>✓ representative — use in deg gradient</button>
+          <button class="btn lr-mark" data-key="${esc(r.key)}" data-m="out" ${mark(r) === "out" ? "disabled" : ""}>✗ not representative — exclude</button>
+          ${mark(r) ? `<button class="btn lr-mark" data-key="${esc(r.key)}" data-m="">auto (${r.pushCool ? "push-cool?" : r.run.length >= 9 ? "race sim" : r.run.length <= 6 ? "short run" : "mid run"})</button>` : ""}
+          <span class="hint">✕ laps were stripped as cool-down / traffic — a push-cool run alternates push laps with slow ones, so its average is misleading</span>
+        </div></td></tr>`);
+    }
+  });
+  w.innerHTML = `<table class="t"><thead><tr><th class="r">#</th><th>Driver</th><th>Tyre</th><th class="r">Laps</th><th></th><th class="r">Median</th><th class="r">Best</th><th class="r">Trend s/lap</th><th class="r">Gap</th></tr></thead><tbody>` +
+    tblRows.join("") + "</tbody></table>";
+  w.querySelectorAll("tr.lr-row").forEach(tr =>
+    tr.addEventListener("click", () => { HUB.S.lrOpen = HUB.S.lrOpen === tr.dataset.key ? null : tr.dataset.key; HUB.render(true); }));
+  w.querySelectorAll("button.lr-mark").forEach(b =>
+    b.addEventListener("click", ev => {
+      ev.stopPropagation();
+      HUB.S.lrMark = HUB.S.lrMark || {};
+      if (b.dataset.m) HUB.S.lrMark[b.dataset.key] = b.dataset.m; else delete HUB.S.lrMark[b.dataset.key];
+      HUB.save(); HUB.render(true);
+    }));
+  c2.insertAdjacentHTML("beforeend", `<p class="note">Longer runs carry more fuel and mean more; <b>race sim</b> ≥ 9 laps, <b>short run</b> ≤ 6 laps, <b>push-cool?</b> = many stripped laps between pushes. Tap any run to see its laps and overrule the automatic call — your ✓/✗ marks are remembered for this weekend and feed the deg gradient and headlines.</p>`);
 
   // headline goes to the most representative running, not the fastest light-fuel glory run
-  const rep = runs.filter(r => r.run.length >= 7 && !r.pushCool);
+  const rep = runs.filter(r => mark(r) === "out" ? false : mark(r) === "in" ? true : r.run.length >= 7 && !r.pushCool);
   const head = rep[0] || runs[0];
   insights(root, [
     `Best representative long run: <b>${head.d.abbr}</b> ${fmtLap(Math.round(head.med))} on ${head.t.cmp.toLowerCase()}s (${head.run.length} laps)${rep.length ? "" : " — no true race sims this session, treat with care"}`,

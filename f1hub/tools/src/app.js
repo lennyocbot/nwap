@@ -167,7 +167,7 @@ function showPicker() {
   root.innerHTML = `<div class="pick-screen">
     <div class="pick-brand">Mini<b>sector</b><span id="pickTheme"></span></div>
     <div class="pick-sub">F1 race-weekend analysis — pick a Grand Prix</div>
-    <button class="btn dna-launch" id="dnaLaunch">🧬 Team DNA — what each car is good at, and which circuits should suit it</button>
+    <button class="btn dna-launch" id="dnaLaunch">🏁 Car rankings — who has the fastest car, what it's good at, and which circuits should suit it</button>
     ${years.map(y => `<div class="pick-year">${y} <span>${m.years[y].length} weekend${m.years[y].length > 1 ? "s" : ""}</span></div>
       <div class="pick-grid">${[...m.years[y]].reverse().map(e => `
         <button class="pick-card" data-y="${y}" data-r="${e.round}">
@@ -202,6 +202,7 @@ function initState() {
   else S.sel = new Set(HUB.data.sessions.flatMap(ss => ss.drivers.map(dd => dd.abbr)));
   S.compare = []; S.telZoom = null; S.lrSel = null; S.degCmp = null; S.qseg = 3;
   S.telSid = null; S.telDrv = null; S.tpOpen = undefined;
+  S.lrMark = {}; S.lrOpen = null;
   HUB._selCustom = false;
   HUB.restore();
 }
