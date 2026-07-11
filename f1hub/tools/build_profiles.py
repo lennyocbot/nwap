@@ -173,6 +173,80 @@ def corner_mins(tel, corners):
     return out
 
 
+def race_deg(r):
+    """Per team: extra degradation (ms/lap) vs the kindest team, compound-fair.
+
+    Clean green-flag stints only, first lap of stint dropped, fuel-corrected
+    at 0.06 s/lap, robust refit; slopes pooled per team PER COMPOUND and
+    compared against the best team on that same compound, then averaged —
+    so running softer tyres can't masquerade as being harder on them."""
+    total = r.get("totalLaps")
+    if not total:
+        return None
+    team_of = {d["abbr"]: d["team"] for d in r["drivers"] if d.get("team")}
+    stints = {}
+    for l in r["laps"]:
+        if l.get("stint") is None:
+            continue
+        stints.setdefault((l["drv"], l["stint"]), []).append(l)
+    pooled = {}   # (team, cmp) -> [(life, fc-a)]
+    for (drv, _), laps in stints.items():
+        team = team_of.get(drv)
+        if not team:
+            continue
+        laps.sort(key=lambda l: l["lap"])
+        cmp_ = next((l["cmp"] for l in laps if l.get("cmp")), None)
+        if not cmp_ or cmp_ in ("UNKNOWN", "TEST_UNKNOWN", "INTERMEDIATE", "WET"):
+            continue
+        first = laps[0]["lap"]
+        pts = [(l["life"], l["t"] - (total - l["lap"]) * 60.0) for l in laps
+               if l["t"] and l.get("life") is not None and l["lap"] > first
+               and not l.get("in") and not l.get("out") and not l.get("del")
+               and str(l.get("ts") or "1") == "1" and l.get("acc")]
+        if len(pts) < 4:
+            continue
+        fit = linfit_py(pts)
+        if not fit:
+            continue
+        a, b = fit
+        pts = [(x, y) for x, y in pts if abs(y - (a + b * x)) < 1200]
+        if len(pts) < 4:
+            continue
+        fit = linfit_py(pts)
+        if not fit:
+            continue
+        a, b = fit
+        pooled.setdefault((team, cmp_), []).extend((x, y - a) for x, y in pts)
+    slopes = {}
+    for (team, cmp_), pts in pooled.items():
+        if len(pts) < 8:
+            continue
+        fit = linfit_py(pts)
+        if fit:
+            slopes.setdefault(cmp_, {})[team] = fit[1]
+    defs = {}
+    for cmp_, by_team in slopes.items():
+        if len(by_team) < 3:
+            continue
+        best = min(by_team.values())
+        for team, b in by_team.items():
+            defs.setdefault(team, []).append(b - best)
+    return {team: round(sum(v) / len(v), 1) for team, v in defs.items()} or None
+
+
+def linfit_py(pts):
+    n = len(pts)
+    if n < 3:
+        return None
+    sx = sum(x for x, _ in pts); sy = sum(y for _, y in pts)
+    sxx = sum(x * x for x, _ in pts); sxy = sum(x * y for x, y in pts)
+    den = n * sxx - sx * sx
+    if abs(den) < 1e-9:
+        return None
+    b = (n * sxy - sx * sy) / den
+    return ((sy - b * sx) / n, b)
+
+
 def spearman(a, b):
     """Spearman rank correlation of two equal-length lists."""
     def ranks(x):
@@ -404,6 +478,8 @@ def analyze_weekend(wk):
         if r:
             out["tempR"] = track_temp(r.get("weather"))
             out["wetR"] = wet_fraction(r.get("weather")) > WET_FRAC
+            if not out["wetR"]:
+                out["deg"] = race_deg(r)
             rteam = {d["abbr"]: d["team"] for d in r["drivers"] if d.get("team")}
             clean = [lp for lp in r["laps"]
                      if lp["t"] and lp.get("ts") == "1" and lp["lap"] > 1
@@ -457,7 +533,7 @@ def build():
         per_team = defaultdict(lambda: {
             "def": {"slow": [], "med": [], "fast": []},
             "defT": {"slow": [], "med": [], "fast": []},
-            "trap": [], "slp": [], "quali": [], "race": [], "temp_pairs": []})
+            "trap": [], "slp": [], "deg": [], "quali": [], "race": [], "temp_pairs": []})
         for wk in wks:
             try:
                 res = analyze_weekend(wk)
@@ -491,6 +567,8 @@ def build():
                         agg["slp"].append((res["round"], t["slp"]))
                     if t.get("quali") is not None:
                         agg["quali"].append(t["quali"])
+                if res.get("deg") and tm in res["deg"]:
+                    agg["deg"].append((res["round"], res["deg"][tm]))
                 if res.get("race") and tm in res["race"] and not res.get("wetR") \
                         and res["tempR"] is not None:
                     agg["race"].append(res["race"][tm])
@@ -508,6 +586,8 @@ def build():
                 "defN": {c: len(v) for c, v in agg["def"].items()},
                 "trap": round(median([x[1] for x in agg["trap"]]), 1) if agg["trap"] else None,
                 "slp": round(median([x[1] for x in agg["slp"]]), 1) if agg["slp"] else None,
+                "deg": round(median([x[1] for x in agg["deg"]]), 1) if len(agg["deg"]) >= 3 else None,
+                "degN": len(agg["deg"]),
                 "quali": round(median(agg["quali"]), 3) if agg["quali"] else None,
                 "race": round(median(agg["race"]), 3) if agg["race"] else None,
                 "n": len(agg["quali"]),

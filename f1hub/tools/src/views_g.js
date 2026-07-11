@@ -82,17 +82,44 @@ function renderTeams(P, year) {
   const fmtQ = t => relQ(t) < 1e-9 ? "fastest" : "+" + (qSec(t) < 0.05 ? qSec(t).toFixed(3) : qSec(t).toFixed(2)) + "s";
   const fmtR = t => relR(t) == null ? null : relR(t) < 1e-9 ? "fastest" : "+" + (relR(t) < 0.05 ? relR(t).toFixed(3) : relR(t).toFixed(2)) + " s/lap";
 
+  // per team, per element: time lost per lap to the best car, scaled to the
+  // season's average circuit (zone-time deficits x corner counts + flat-out
+  // pace deficit x flat-out km). Rebased so the best team in each area = 0.
+  const AC = S.avgCirc || { counts: { slow: 6, med: 5, fast: 4 }, flatKm: 3 };
+  const ELEMS = ["slow", "med", "fast", "sl", "deg"];
+  const lapLoss = {};
+  for (const [tm, t] of teams) {
+    const L = {};
+    for (const cls of ["slow", "med", "fast"])
+      L[cls] = t.defT && t.defT[cls] != null ? t.defT[cls] * AC.counts[cls] / 1000 : null;
+    L.sl = t.slp != null ? t.slp * AC.flatKm / 1000 : null;
+    L.deg = t.deg != null ? t.deg / 1000 : null;   // s/lap of extra tyre wear
+    lapLoss[tm] = L;
+  }
+  const minEl = {}, maxEl = {}, rankEl = {};
+  let worstRel = 0.4;
+  for (const e of ELEMS) {
+    const vals = teams.map(([tm]) => lapLoss[tm][e]).filter(v => v != null);
+    minEl[e] = vals.length ? Math.min(...vals) : 0;
+    maxEl[e] = vals.length ? Math.max(...vals) : 1;
+    rankEl[e] = new Map(teams.filter(([tm]) => lapLoss[tm][e] != null)
+      .sort((a, b) => lapLoss[a[0]][e] - lapLoss[b[0]][e]).map(([tm], i) => [tm, i + 1]));
+    if (e !== "deg") worstRel = Math.max(worstRel, maxEl[e] - minEl[e]);
+  }
+
+
   /* season pace ranking: who has the fastest car right now */
   {
     const doneN = S.rounds.filter(r => r.circuit).length;
     const cr = card(main, `${y} season pace ranking`,
       `gaps to the fastest car · ${doneN} dry weekend${doneN > 1 ? "s" : ""}, this season only`);
     const wr = document.createElement("div"); wr.className = "tblwrap"; cr.appendChild(wr);
-    wr.innerHTML = `<table class="t"><thead><tr><th class="r">#</th><th>Team</th><th class="r" title="median dry qualifying gap, on the season\u2019s average pole lap">Quali gap (s)</th><th class="r">Race pace (s/lap)</th><th class="r">Weekends</th></tr></thead><tbody>` +
+    wr.innerHTML = `<table class="t"><thead><tr><th class="r">#</th><th>Team</th><th class="r" title="median dry qualifying gap, on the season\u2019s average pole lap">Quali gap (s)</th><th class="r">Race pace (s/lap)</th><th class="r" title="extra degradation vs the kindest car · clean race stints, same compound, fuel-corrected">Tyre deg</th><th class="r">Weekends</th></tr></thead><tbody>` +
       teams.map(([tm, t], i) => `<tr><td class="r num">${i + 1}</td>
         <td><span class="drv-cell"><span class="dot" style="background:${teamCol(S.colors[tm] || "#888")}"></span>${esc(tm)}</span></td>
         <td class="r num ${relQ(t) < 1e-9 ? "best" : ""}" style="background:${heatBg(qSec(t), Math.max(...teams.map(([, x]) => qSec(x))))}">${fmtQ(t)}</td>
         <td class="r num ${relR(t) != null && relR(t) < 1e-9 ? "best" : ""}" style="background:${relR(t) == null ? "none" : heatBg(relR(t), Math.max(...teams.map(([, x]) => relR(x) ?? 0)))}">${fmtR(t) ?? "—"}</td>
+        <td class="r num" style="background:${t.deg == null ? "none" : heatBg(t.deg / 1000 - minEl.deg, Math.max(maxEl.deg - minEl.deg, 0.001))}">${t.deg == null ? "\u2014" : (t.deg / 1000 - minEl.deg) < 1e-9 ? "kindest" : "+" + (t.deg - minEl.deg * 1000).toFixed(0) + " ms/lap"}</td>
         <td class="r num">${t.n}</td></tr>`).join("") + "</tbody></table>";
   }
 
@@ -154,47 +181,25 @@ function renderTeams(P, year) {
     }
   }
 
-  // per team, per element: time lost per lap to the best car, scaled to the
-  // season's average circuit (zone-time deficits x corner counts + flat-out
-  // pace deficit x flat-out km). Rebased so the best team in each area = 0.
-  const AC = S.avgCirc || { counts: { slow: 6, med: 5, fast: 4 }, flatKm: 3 };
-  const ELEMS = ["slow", "med", "fast", "sl"];
-  const lapLoss = {};
-  for (const [tm, t] of teams) {
-    const L = {};
-    for (const cls of ["slow", "med", "fast"])
-      L[cls] = t.defT && t.defT[cls] != null ? t.defT[cls] * AC.counts[cls] / 1000 : null;
-    L.sl = t.slp != null ? t.slp * AC.flatKm / 1000 : null;
-    lapLoss[tm] = L;
-  }
-  const minEl = {}, maxEl = {}, rankEl = {};
-  let worstRel = 0.4;
-  for (const e of ELEMS) {
-    const vals = teams.map(([tm]) => lapLoss[tm][e]).filter(v => v != null);
-    minEl[e] = vals.length ? Math.min(...vals) : 0;
-    maxEl[e] = vals.length ? Math.max(...vals) : 1;
-    rankEl[e] = new Map(teams.filter(([tm]) => lapLoss[tm][e] != null)
-      .sort((a, b) => lapLoss[a[0]][e] - lapLoss[b[0]][e]).map(([tm], i) => [tm, i + 1]));
-    worstRel = Math.max(worstRel, maxEl[e] - minEl[e]);
-  }
-
   /* team cards */
-  main.insertAdjacentHTML("beforeend", `<p class="note" style="margin:14px 2px 8px">full bar = best car in that area, shorter = slower · number = time lost per lap to that best car, on an average ${esc(y)} circuit (${AC.counts.slow}/${AC.counts.med}/${AC.counts.fast} slow/med/fast corners + ${AC.flatKm} km flat-out) · ★ = benchmark · ◦ = predicted from the track’s last visit · hover a bar for the raw telemetry numbers</p>`);
+  main.insertAdjacentHTML("beforeend", `<p class="note" style="margin:14px 2px 8px">full bar = best car in that area, shorter = slower · number = time lost per lap to that best car, on an average ${esc(y)} circuit (${AC.counts.slow}/${AC.counts.med}/${AC.counts.fast} slow/med/fast corners + ${AC.flatKm} km flat-out) · ★ = benchmark · ◦ = predicted from the track’s last visit · tyre life = same-compound race-stint degradation · hover any bar for raw numbers</p>`);
   const grid = document.createElement("div"); grid.className = "dna-grid"; main.appendChild(grid);
   const evName = slug => (circuits.find(c => c.slug === slug) || {}).event || slug;
 
   for (const [tm, t] of teams) {
     const col = teamCol(S.colors[tm] || "#888");
     const el = document.createElement("div"); el.className = "card dna-card"; grid.appendChild(el);
-    const rows = [["Slow corners", "slow"], ["Medium corners", "med"], ["Fast corners", "fast"], ["Straights", "sl"]].map(([lab, e]) => {
+    const rows = [["Slow corners", "slow"], ["Medium corners", "med"], ["Fast corners", "fast"], ["Straights", "sl"], ["Tyre life", "deg"]].map(([lab, e]) => {
       const v = lapLoss[tm][e];
       const rel2 = v != null ? v - minEl[e] : null;
-      const span = Math.max(maxEl[e] - minEl[e], 0.05);
       const rk = rankEl[e].get(tm);
-      const tip = e === "sl"
+      const tip = e === "deg"
+        ? `extra tyre degradation vs the kindest car: +${t.deg ?? "?"} ms/lap (clean race stints, same-compound comparison, fuel-corrected) ≈ +${t.deg != null ? (t.deg * 20 / 1000).toFixed(1) : "?"}s over a 20-lap stint · ${t.degN ?? "?"} races`
+        : e === "sl"
         ? `flat-out pace: +${t.slp ?? "?"} ms per km vs the best car`
         : `${t.defT && t.defT[e] != null ? "+" + t.defT[e] + " ms per corner (zone time)" : ""}${t.def && t.def[e] != null ? " · apex speed −" + t.def[e] + " km/h vs per-corner best" : ""}`;
-      return { lab, rel2, w: rel2 != null ? Math.max(5, 100 * (1 - rel2 / worstRel)) : 0, rk, best: rk === 1, tip };
+      const span = e === "deg" ? Math.max(maxEl.deg - minEl.deg, 0.01) : worstRel;
+      return { lab, e, rel2, w: rel2 != null ? Math.max(5, 100 * (1 - rel2 / span)) : 0, rk, best: rk === 1, tip };
     });
     const myRel = rel[tm] || {};
     const own = median(Object.values(myRel)) ?? 0;
@@ -221,7 +226,7 @@ function renderTeams(P, year) {
       <div class="dna-bars">${rows.map(r => `
         <div class="dna-row" title="${r.tip}"><span class="dna-lab">${r.lab}${r.rk ? ` <b class="num" style="color:${r.rk === 1 ? "var(--green)" : "var(--ink3)"}">P${r.rk}</b>` : ""}</span>
           <span class="dna-track"><i style="width:${r.w.toFixed(1)}%;background:${col}"></i></span>
-          <span class="num dna-val" ${r.best ? 'style="color:var(--green);font-weight:700"' : ""}>${r.rel2 == null ? "—" : r.rk === 1 ? "best ★" : "+" + (r.rel2 < 0.05 ? r.rel2.toFixed(3) : r.rel2.toFixed(2)) + "s"}</span></div>`).join("")}
+          <span class="num dna-val" ${r.best ? 'style="color:var(--green);font-weight:700"' : ""}>${r.rel2 == null ? "—" : r.rk === 1 ? (r.e === "deg" ? "kindest ★" : "best ★") : r.e === "deg" ? "+" + (r.rel2 * 1000).toFixed(0) + " ms/lap" : "+" + (r.rel2 < 0.05 ? r.rel2.toFixed(3) : r.rel2.toFixed(2)) + "s"}</span></div>`).join("")}
       </div>
       ${ranked.length ? `<div class="dna-fit" title="±s vs this car's own average circuit — layout sensitivity, not a cross-team ranking"><span><b>Best layouts:</b> ${best3.map(fmtC).join(" · ")}</span>
       <span><b>Worst layouts:</b> ${worst3.map(fmtC).join(" · ")}</span></div>` : ""}
