@@ -73,11 +73,13 @@ function renderTeams(P, year) {
   // the fastest car shows "fastest", everyone else their gap to it). Raw
   // values are medians vs each weekend's best — rebasing shifts all teams
   // equally, so no ordering or margin between teams changes.
+  const avgPoleS = (S.avgPole || 90000) / 1000;   // season average pole lap
   const minQuali = Math.min(...teams.map(([, t]) => t.quali));
   const minRace = Math.min(...teams.map(([, t]) => t.race).filter(v => v != null));
   const relQ = t => t.quali - minQuali;
   const relR = t => t.race != null ? t.race - minRace : null;
-  const fmtQ = t => relQ(t) < 0.005 ? "fastest" : "+" + relQ(t).toFixed(2) + "%";
+  const qSec = t => relQ(t) / 100 * avgPoleS;
+  const fmtQ = t => qSec(t) < 0.005 ? "fastest" : "+" + qSec(t).toFixed(2) + "s";
   const fmtR = t => relR(t) == null ? null : relR(t) < 0.005 ? "fastest" : "+" + relR(t).toFixed(2) + " s/lap";
 
   /* season pace ranking: who has the fastest car right now */
@@ -86,11 +88,11 @@ function renderTeams(P, year) {
     const cr = card(main, `${y} season pace ranking`,
       `gaps to the fastest car · ${doneN} dry weekend${doneN > 1 ? "s" : ""}, this season only`);
     const wr = document.createElement("div"); wr.className = "tblwrap"; cr.appendChild(wr);
-    wr.innerHTML = `<table class="t"><thead><tr><th class="r">#</th><th>Team</th><th class="r">Quali gap</th><th class="r">Race pace</th><th class="r">Weekends</th></tr></thead><tbody>` +
+    wr.innerHTML = `<table class="t"><thead><tr><th class="r">#</th><th>Team</th><th class="r" title="median dry qualifying gap, on the season\u2019s average pole lap">Quali gap (s)</th><th class="r">Race pace (s/lap)</th><th class="r">Weekends</th></tr></thead><tbody>` +
       teams.map(([tm, t], i) => `<tr><td class="r num">${i + 1}</td>
         <td><span class="drv-cell"><span class="dot" style="background:${teamCol(S.colors[tm] || "#888")}"></span>${esc(tm)}</span></td>
-        <td class="r num ${relQ(t) < 0.005 ? "best" : ""}">${fmtQ(t)}</td>
-        <td class="r num ${relR(t) != null && relR(t) < 0.005 ? "best" : ""}">${fmtR(t) ?? "—"}</td>
+        <td class="r num ${relQ(t) < 0.005 ? "best" : ""}" style="background:${heatBg(qSec(t), Math.max(...teams.map(([, x]) => qSec(x))))}">${fmtQ(t)}</td>
+        <td class="r num ${relR(t) != null && relR(t) < 0.005 ? "best" : ""}" style="background:${relR(t) == null ? "none" : heatBg(relR(t), Math.max(...teams.map(([, x]) => relR(x) ?? 0)))}">${fmtR(t) ?? "—"}</td>
         <td class="r num">${t.n}</td></tr>`).join("") + "</tbody></table>";
   }
 
@@ -99,22 +101,22 @@ function renderTeams(P, year) {
   {
     const dryRounds = S.rounds.filter(r => !r.wetQ && r.quali && Object.keys(r.quali).length >= 6);
     if (dryRounds.length >= 3) {
-      const ce = card(main, "Pace evolution — gap to pole, round by round",
+      const ce = card(main, "Pace evolution — gap to pole (s), round by round",
         "dry rounds only · trending down = gaining pace (upgrades working)");
       const div = document.createElement("div"); div.className = "chart"; ce.appendChild(div);
-      const allV = dryRounds.flatMap(r => teams.map(([tm]) => r.quali[tm]).filter(v => v != null));
+      const allV = dryRounds.flatMap(r => teams.map(([tm]) => r.quali[tm] != null ? r.quali[tm] / 100 * ((r.poleMs || S.avgPole || 90000) / 1000) : null).filter(v => v != null));
       const rMin = Math.min(...dryRounds.map(r => r.round)), rMax = Math.max(...dryRounds.map(r => r.round));
       const mob = innerWidth < 700;
       const ch = Chart(div, {
-        h: mob ? 300 : 380, mr: 52, xd: [rMin - 0.4, rMax + 0.4], yd: [-0.1, Math.min(Math.max(...allV) + 0.3, quantile(allV, 0.97) + 0.8)],
+        h: mob ? 300 : 380, mr: 52, xd: [rMin - 0.4, rMax + 0.4], yd: [-0.08, Math.min(Math.max(...allV) + 0.25, quantile(allV, 0.97) + 0.7)],
         yflip: true, xticksArr: dryRounds.map(r => r.round), xfmt: v => "R" + v,
-        yfmt: v => v.toFixed(1) + "%", xlab: "round", ylab: "quali gap to pole", label: "Pace evolution",
+        yfmt: v => "+" + v.toFixed(1) + "s", xlab: "round", ylab: "gap to pole (s)", label: "Pace evolution",
       });
       const endL = [];
       const nodes = [], nData = [];
       for (const [tm] of teams) {
         const col = teamCol(S.colors[tm] || "#888");
-        const pts = dryRounds.map(r => r.quali[tm] != null ? [r.round, r.quali[tm]] : null);
+        const pts = dryRounds.map(r => r.quali[tm] != null ? [r.round, r.quali[tm] / 100 * ((r.poleMs || S.avgPole || 90000) / 1000)] : null);
         svgEl("path", { d: linePath(pts, ch.x, ch.y), fill: "none", stroke: col, "stroke-width": 1.7, opacity: .85 }, ch.plot);
         for (const p of pts) {
           if (!p) continue;
@@ -131,7 +133,7 @@ function renderTeams(P, year) {
       hoverMarks(nodes, i => {
         const { tm, p } = nData[i];
         const rnd = dryRounds.find(r => r.round === p[0]);
-        return `<div class="t-title">${esc(tm)} — R${p[0]} ${esc(rnd ? rnd.event : "")}</div>quali gap to pole: <b class="num">${p[1] === 0 ? "fastest" : "+" + p[1].toFixed(2) + "%"}</b>`;
+        return `<div class="t-title">${esc(tm)} — R${p[0]} ${esc(rnd ? rnd.event : "")}</div>gap to pole: <b class="num">${p[1] < 0.005 ? "fastest" : "+" + p[1].toFixed(2) + "s"}</b>`;
       });
     }
   }
@@ -139,7 +141,7 @@ function renderTeams(P, year) {
   /* relative calibrated fits: per circuit, gap to the best team's score */
   const k = S.calib || 1;
   const slugsDone = S.rounds.filter(r => r.circuit).map(r => ({ slug: r.slug, event: r.event, round: r.round, done: true }));
-  const slugsUp = (S.upcoming || []).map(u => ({ slug: u.slug, event: u.event, from: u.from, done: false }));
+  const slugsUp = (S.upcoming || []).filter(u => !u.noData).map(u => ({ slug: u.slug, event: u.event, from: u.from, alt: u.alt, done: false }));
   const circuits = [...slugsDone.sort((a, b) => a.round - b.round), ...slugsUp];
   const rel = {};   // team -> slug -> calibrated gap-to-best (s)
   for (const c of circuits) {
@@ -199,6 +201,12 @@ function renderTeams(P, year) {
     const up = new Set(slugsUp.map(u => u.slug));
     const fmtC = ([slug, v]) => `${esc(evName(slug)).replace(" Grand Prix", "")}${up.has(slug) ? " ◦" : ""} <span class="num" style="color:var(--ink3)">${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(2)}</span>`;
 
+    let altNote = "";
+    if (t.alt && Math.abs(t.alt.r) >= 0.45) {
+      const worse = t.alt.slopeKm > 0;
+      const secKm = Math.abs(t.alt.slopeKm) / 100 * avgPoleS;
+      altNote = `<p class="dna-temp" title="quali gap ${worse ? "grows" : "shrinks"} ${secKm.toFixed(2)}s per 1000 m of track altitude \u2014 correlation over ${t.alt.n} rounds, suggestive not proof">\u26f0 ${worse ? "weaker" : "stronger"} at high-altitude tracks (r = ${t.alt.r})</p>`;
+    }
     let tempNote = "";
     if (t.temp && Math.abs(t.temp.r) >= 0.45) {
       const hot = t.temp.slope10 < 0;
@@ -215,7 +223,7 @@ function renderTeams(P, year) {
       </div>
       ${ranked.length ? `<div class="dna-fit" title="±s vs this car's own average circuit — layout sensitivity, not a cross-team ranking"><span><b>Best layouts:</b> ${best3.map(fmtC).join(" · ")}</span>
       <span><b>Worst layouts:</b> ${worst3.map(fmtC).join(" · ")}</span></div>` : ""}
-      ${tempNote}`;
+      ${altNote}${tempNote}`;
   }
 
   /* circuit predictor: pick any track → full predicted order with margins */
@@ -228,7 +236,7 @@ function renderTeams(P, year) {
     const opts = circuits.filter(c => teams.some(([tm]) => rel[tm]?.[c.slug] != null));
     const firstUp = opts.find(c => !c.done);
     if (!renderTeams._pick || !opts.some(c => c.slug === renderTeams._pick)) renderTeams._pick = (firstUp || opts.at(-1) || {}).slug;
-    selEl.innerHTML = opts.map(c => `<option value="${esc(c.slug)}" ${c.slug === renderTeams._pick ? "selected" : ""}>${c.done ? "✓" : "◦"} ${esc(c.event)}${c.from ? ` ('${String(c.from).slice(2)} layout)` : ""}</option>`).join("");
+    selEl.innerHTML = opts.map(c => `<option value="${esc(c.slug)}" ${c.slug === renderTeams._pick ? "selected" : ""}>${c.done ? "✓" : "◦"} ${esc(c.event)}${c.from ? ` ('${String(c.from).slice(2)} layout)` : ""}${c.alt >= 400 ? ` ⛰ ${c.alt} m` : ""}</option>`).join("");
     cp.querySelector(".right").appendChild(selEl);
     const holder = document.createElement("div"); cp.appendChild(holder);
     const drawPick = () => {
@@ -238,7 +246,7 @@ function renderTeams(P, year) {
         const r = rel[tm]?.[slug];
         if (r == null) return null;
         const swing = r - ownMed0[tm];
-        return { tm, q: t.quali / 100 * 90 + swing, r: t.race != null ? t.race + swing : null, swing };
+        return { tm, q: t.quali / 100 * avgPoleS + swing, r: t.race != null ? t.race + swing : null, swing };
       }).filter(Boolean).sort((a, b) => a.q - b.q);
       if (!rows.length) { holder.innerHTML = `<div class="empty">No prediction possible here.</div>`; return; }
       const qBase = rows[0].q, rBase = Math.min(...rows.map(x => x.r).filter(v => v != null));
@@ -246,8 +254,8 @@ function renderTeams(P, year) {
       wrp.innerHTML = `<table class="t"><thead><tr><th class="r">#</th><th>Team</th><th class="r">Predicted quali gap</th><th class="r">Predicted race pace</th><th class="r" title="how much this layout helps (green) or hurts (red) the car vs its own average circuit">Layout swing</th></tr></thead><tbody>` +
         rows.map((x, i) => `<tr><td class="r num">${i + 1}</td>
           <td><span class="drv-cell"><span class="dot" style="background:${teamCol(S.colors[x.tm] || "#888")}"></span>${esc(x.tm)}</span></td>
-          <td class="r num ${i === 0 ? "best" : ""}">${i === 0 ? "fastest" : "+" + (x.q - qBase).toFixed(2) + "s"}</td>
-          <td class="r num">${x.r == null ? "—" : x.r - rBase < 0.005 ? "fastest" : "+" + (x.r - rBase).toFixed(2) + " s/lap"}</td>
+          <td class="r num ${i === 0 ? "best" : ""}" style="background:${heatBg(x.q - qBase, rows.at(-1).q - qBase)}">${i === 0 ? "fastest" : "+" + (x.q - qBase).toFixed(2) + "s"}</td>
+          <td class="r num" style="background:${x.r == null ? "none" : heatBg(x.r - rBase, Math.max(...rows.map(z => (z.r ?? rBase) - rBase)))}">${x.r == null ? "—" : x.r - rBase < 0.005 ? "fastest" : "+" + (x.r - rBase).toFixed(2) + " s/lap"}</td>
           <td class="r num" style="color:${x.swing < -0.03 ? "var(--green)" : x.swing > 0.03 ? "var(--red)" : "var(--ink3)"}">${x.swing >= 0 ? "+" : "−"}${Math.abs(x.swing).toFixed(2)}s</td></tr>`).join("") + "</tbody></table>";
     };
     selEl.addEventListener("change", () => { renderTeams._pick = selEl.value; drawPick(); });
@@ -264,7 +272,7 @@ function renderTeams(P, year) {
   const pred = (tm, slug) => {
     const r = rel[tm]?.[slug];
     if (r == null) return null;
-    return S.teams[tm].quali / 100 * 90 + (r - ownMed[tm]);
+    return S.teams[tm].quali / 100 * avgPoleS + (r - ownMed[tm]);
   };
   const cells = circuits.filter(c => teams.some(([tm]) => pred(tm, c.slug) != null));
   let vMax = 0.5;
@@ -284,8 +292,7 @@ function renderTeams(P, year) {
       teams.map(([tm]) => {
         const v = relCell[c.slug]?.[tm];
         if (v == null) return `<td class="r num">—</td>`;
-        const heat = Math.min(1, v / vMax);
-        return `<td class="r num" style="background:rgba(224,57,58,${(heat * 0.28).toFixed(3)})">${v < 0.005 ? "best" : "+" + v.toFixed(2)}</td>`;
+        return `<td class="r num" style="background:${heatBg(v, vMax)}">${v < 0.005 ? "best" : "+" + v.toFixed(2)}</td>`;
       }).join("") + "</tr>").join("") + "</tbody></table>";
 
   /* honesty table */

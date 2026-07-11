@@ -32,6 +32,23 @@ ROOT = TOOLS.parent if TOOLS.name == "tools" else TOOLS
 DATA = ROOT / "data"
 
 WINDOW = 90.0          # m either side of the apex, same as the app
+
+# circuit altitude in metres (public geography, keyed by event slug)
+ALTITUDE = {
+    "mexico-city-grand-prix": 2240, "s-o-paulo-grand-prix": 760, "brazilian-grand-prix": 760,
+    "austrian-grand-prix": 660, "styrian-grand-prix": 660, "eifel-grand-prix": 620,
+    "las-vegas-grand-prix": 610, "belgian-grand-prix": 400, "french-grand-prix": 400,
+    "hungarian-grand-prix": 250, "tuscan-grand-prix": 250, "madrid-grand-prix": 650,
+    "united-states-grand-prix": 160, "italian-grand-prix": 160, "british-grand-prix": 150,
+    "70th-anniversary-grand-prix": 150, "turkish-grand-prix": 130, "spanish-grand-prix": 100,
+    "barcelona-grand-prix": 100, "portuguese-grand-prix": 100, "german-grand-prix": 100,
+    "japanese-grand-prix": 45, "emilia-romagna-grand-prix": 37, "australian-grand-prix": 30,
+    "canadian-grand-prix": 13, "monaco-grand-prix": 10, "qatar-grand-prix": 10,
+    "bahrain-grand-prix": 7, "sakhir-grand-prix": 7, "dutch-grand-prix": 5,
+    "singapore-grand-prix": 5, "abu-dhabi-grand-prix": 5, "russian-grand-prix": 5,
+    "chinese-grand-prix": 4, "saudi-arabian-grand-prix": 3, "miami-grand-prix": 2,
+    "azerbaijan-grand-prix": -28,
+}
 CLASS_SLOW, CLASS_MED = 150.0, 230.0
 WET_FRAC = 0.15        # fraction of weather samples reporting rain => wet
 MIN_TEMP_N = 6         # weekends needed before temp correlation is reported
@@ -186,6 +203,29 @@ def pearson(xs, ys):
     dx = math.sqrt(sum((x - mx) ** 2 for x in xs))
     dy = math.sqrt(sum((y - my) ** 2 for y in ys))
     return num / (dx * dy) if dx and dy else 0.0
+
+
+def season_calendar(year):
+    """[(round, slug, event)] for the season's OFFICIAL calendar — the source
+    of truth for which circuits still count as 'upcoming' (calendars change
+    year on year). Fetched via FastF1 and cached beside the data."""
+    cache = DATA / f"calendar_{year}.json"
+    try:
+        import re as _re
+        import fastf1
+        sched = fastf1.get_event_schedule(int(year), include_testing=False)
+        cal = []
+        for _, ev in sched.iterrows():
+            name = str(ev["EventName"])
+            sl = _re.sub(r"-+", "-", _re.sub(r"[^a-z0-9]+", "-", name.lower())).strip("-")
+            cal.append([int(ev["RoundNumber"]), sl, name])
+        cache.write_text(json.dumps(cal))
+        return cal
+    except Exception:
+        try:
+            return json.loads(cache.read_text())
+        except Exception:
+            return None
 
 
 def slug_of(path):
@@ -428,6 +468,7 @@ def build():
                 continue
             season["colors"].update(res.get("colors", {}))
             rnd = {"round": res["round"], "event": res["event"], "slug": res["slug"],
+                   "alt": ALTITUDE.get(res["slug"]),
                    "wetQ": res["wetQ"], "temp": res["tempR"],
                    "circuit": res["circuit"], "done": True, "poleMs": res.get("poleMs"),
                    "quali": {tm: t.get("quali") for tm, t in res["teams"].items()
@@ -471,6 +512,17 @@ def build():
                 "race": round(median(agg["race"]), 3) if agg["race"] else None,
                 "n": len(agg["quali"]),
             }
+            apairs = [(ALTITUDE.get(r["slug"]), (r.get("quali") or {}).get(tm))
+                      for r in season["rounds"] if not r["wetQ"]]
+            apairs = [(a, v) for a, v in apairs if a is not None and v is not None]
+            if len(apairs) >= MIN_TEMP_N and sum(1 for a, _ in apairs if a >= 500) >= 2:
+                xs = [a / 1000 for a, _ in apairs]
+                ys = [v for _, v in apairs]
+                r_ = pearson(xs, ys)
+                mx = sum(xs) / len(xs)
+                den = sum((x - mx) ** 2 for x in xs)
+                slope = (sum((x - mx) * y for x, y in zip(xs, ys)) / den) if den else 0.0
+                prof["alt"] = {"r": round(r_, 2), "slopeKm": round(slope, 3), "n": len(apairs)}
             pairs = agg["temp_pairs"]
             if len(pairs) >= MIN_TEMP_N:
                 xs = [p[0] for p in pairs]
@@ -528,17 +580,27 @@ def build():
                     for tm in common:
                         cal_x.append(fits[tm][rnd["slug"]] - base)
                         cal_y.append(rnd["quali"][tm] / 100 * rnd["poleMs"] / 1000)
-        # upcoming: only circuits that were on the *previous* season's calendar
-        # (keeps one-off covid-era events out of a modern season's predictions)
-        prev = slugs_of_season.get(int(year) - 1, set())
+        # upcoming: rounds on THIS season's official calendar not yet in the
+        # archive; layout characterised from the most recent archived visit
+        cal = season_calendar(year)
         upcoming = []
-        for slug, (cy, circ, event) in circ_by_slug.items():
-            if slug in done_slugs or slug not in prev or cy >= int(year):
-                continue
-            upcoming.append({"slug": slug, "event": event, "from": cy, "circuit": circ})
-            for tm, prof in teams.items():
-                fits.setdefault(tm, {})[slug] = round(fit_loss(prof, circ), 3)
-        season["upcoming"] = sorted(upcoming, key=lambda u: u["event"])
+        if cal:
+            done_rounds = {r["round"] for r in season["rounds"]}
+            for rno, slug, event in cal:
+                if rno in done_rounds or slug in done_slugs:
+                    continue
+                hit = circ_by_slug.get(slug)
+                if hit and hit[0] < int(year):
+                    cy, circ, _ = hit
+                    upcoming.append({"slug": slug, "event": event, "round": rno,
+                                     "from": cy, "circuit": circ,
+                                     "alt": ALTITUDE.get(slug)})
+                    for tm, prof in teams.items():
+                        fits.setdefault(tm, {})[slug] = round(fit_loss(prof, circ), 3)
+                else:
+                    upcoming.append({"slug": slug, "event": event, "round": rno,
+                                     "noData": True, "alt": ALTITUDE.get(slug)})
+        season["upcoming"] = sorted(upcoming, key=lambda u: u.get("round", 99))
         circs = [r["circuit"] for r in season["rounds"] if r.get("circuit")]
         if circs:
             season["avgCirc"] = {
@@ -549,6 +611,8 @@ def build():
         season["fits"] = fits
         season["acc"] = acc
         season["accMean"] = round(sum(a["rho"] for a in acc) / len(acc), 2) if acc else None
+        poles = [r["poleMs"] for r in season["rounds"] if not r["wetQ"] and r.get("poleMs")]
+        season["avgPole"] = int(sum(poles) / len(poles)) if poles else None
         # least-squares through origin: seconds-per-fit-point, so the UI can
         # show the score on a realistic seconds scale
         sxx = sum(x * x for x in cal_x)
@@ -560,7 +624,8 @@ def build():
             if rnd.get("quali"):
                 rnd["quali"] = {tm: round(v, 3) for tm, v in rnd["quali"].items()}
             rnd.pop("race", None)
-            rnd.pop("poleMs", None)
+            if rnd.get("poleMs"):
+                rnd["poleMs"] = int(rnd["poleMs"])
 
     out = {"generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
            "classes": {"slow": CLASS_SLOW, "med": CLASS_MED}, "seasons": seasons}

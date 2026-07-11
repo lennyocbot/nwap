@@ -169,7 +169,7 @@ function viewDeg(root) {
     const wrap = document.createElement("div"); wrap.className = "tblwrap"; c2.appendChild(wrap);
     wrap.innerHTML = `<table class="t"><thead><tr><th>Team</th><th class="r">Deg (s/lap)</th><th class="r">±10 laps costs</th><th class="r">Stints</th><th class="r">Laps</th><th>Drivers</th></tr></thead><tbody>` +
       rows.map((r, i) => `<tr><td><span class="drv-cell"><span class="dot" style="background:${r.col}"></span>${esc(r.team)}</span></td>
-        <td class="r num" style="${i === 0 ? "color:var(--green);font-weight:700" : i === rows.length - 1 ? "color:var(--red);font-weight:700" : ""}">+${(r.fit.b / 1000).toFixed(3)}</td>
+        <td class="r num" style="background:${heatBg(r.fit.b - rows[0].fit.b, rows.at(-1).fit.b - rows[0].fit.b)};${i === 0 ? "color:var(--green);font-weight:700" : i === rows.length - 1 ? "color:var(--red);font-weight:700" : ""}">+${(r.fit.b / 1000).toFixed(3)}</td>
         <td class="r num">${(r.fit.b / 100).toFixed(2)}s</td>
         <td class="r num">${r.stints}</td><td class="r num">${r.pts.length}</td><td>${[...r.drvs].join(" ")}</td></tr>`).join("") + "</tbody></table>";
 
@@ -331,7 +331,7 @@ function viewLongRuns(root) {
       <td>${r.tag ? `<span class="tag" style="${tagStyle}" title="${r.tag === "race sim" ? "a real race simulation: 9+ representative laps" : r.tag === "short run" ? "6 laps or fewer - light fuel likely" : r.tag === "push-cool?" ? "push laps alternated with slow laps - the average misleads" : r.tag === "excluded" ? "marked not representative by you" : "marked representative by you"}">${r.tag}</span>` : ""}</td>
       <td class="r num ${i === 0 ? "best" : ""}">${fmtLap(Math.round(r.med))}</td><td class="r num">${fmtLap(r.best)}</td>
       <td class="r num">${r.fit ? (r.fit.b >= 0 ? "+" : "") + (r.fit.b / 1000).toFixed(3) : "—"}</td>
-      <td class="r num">${i === 0 ? "—" : fmtDelta(r.med - runs[0].med)}</td></tr>`);
+      <td class="r num" style="background:${heatBg((r.med - runs[0].med) / 1000, (runs.at(-1).med - runs[0].med) / 1000)}">${i === 0 ? "—" : fmtDelta(r.med - runs[0].med)}</td></tr>`);
     if (HUB.S.lrOpen === r.key) {
       // inline detail: every lap of the stint, stripped ones crossed out
       const laps = r.t.laps.filter(l => !l.in && !l.out && l.t != null);

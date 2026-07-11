@@ -121,6 +121,14 @@ function spreadLabels(items, gap, lo, hi) {
   return items;
 }
 
+/* aggressive diverging heat tint: 0 = best (green) .. vmax = worst (red) */
+function heatBg(v, vmax) {
+  const t = Math.max(0, Math.min(1, v / (vmax || 1)));
+  return t < 0.5
+    ? `rgba(34,197,94,${(0.40 * (1 - t * 2) + 0.05).toFixed(3)})`
+    : `rgba(224,57,58,${(0.05 + (t - 0.5) * 2 * 0.42).toFixed(3)})`;
+}
+
 /* shared tooltip */
 let TIP;
 function tip() {
