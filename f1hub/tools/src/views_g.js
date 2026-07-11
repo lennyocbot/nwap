@@ -69,6 +69,16 @@ function renderTeams(P, year) {
   const teams = Object.entries(S.teams).filter(([, t]) => t.quali != null)
     .sort((a, b) => a[1].quali - b[1].quali);
   if (!teams.length) { main.innerHTML = `<div class="empty">Not enough dry weekends in ${y} yet.</div>`; return; }
+  // gaps are DISPLAYED relative to the leading team (the intuitive reading:
+  // the fastest car shows "fastest", everyone else their gap to it). Raw
+  // values are medians vs each weekend's best — rebasing shifts all teams
+  // equally, so no ordering or margin between teams changes.
+  const minQuali = Math.min(...teams.map(([, t]) => t.quali));
+  const minRace = Math.min(...teams.map(([, t]) => t.race).filter(v => v != null));
+  const relQ = t => t.quali - minQuali;
+  const relR = t => t.race != null ? t.race - minRace : null;
+  const fmtQ = t => relQ(t) < 0.005 ? "fastest" : "+" + relQ(t).toFixed(2) + "%";
+  const fmtR = t => relR(t) == null ? null : relR(t) < 0.005 ? "fastest" : "+" + relR(t).toFixed(2) + " s/lap";
 
   /* header card: what this is + honesty */
   const doneN = S.rounds.filter(r => r.circuit).length;
@@ -78,20 +88,19 @@ function renderTeams(P, year) {
     <b>slow</b> (&lt;150 km/h), <b>medium</b> (&lt;230) or <b>fast</b> (≥230), and each car's best qualifying speed through it is compared with
     the fastest car through that same corner. A bar of <span class="num">−6.7 km/h</span> in slow corners means: through slow corners, this car
     is on average 6.7 km/h down on whoever is quickest there. Shorter bar = stronger. Straight-line comes from speed traps.
-    <br><br><b>Why nobody shows 0.0:</b> the reference is the best car at each <i>individual</i> corner — no team is quickest through every slow corner on the calendar, so even the class leader (marked ★) averages a little above zero. Same for the Race gap: it's measured against whoever was fastest <i>that weekend</i>, and the race-pace crown changed hands during the season, so even the best race car (★) shows a small median gap rather than 0.
+    <br><br><b>Why no corner bar shows 0.0:</b> the reference there is the best car at each <i>individual</i> corner — no team is quickest through every slow corner on the calendar, so even the class leader (marked ★, ranked P1) averages a little above zero. The quali and race <b>gaps</b>, by contrast, are shown relative to the leading team: the fastest car reads “fastest”, everyone else their gap to it.
     ${S.accMean != null ? `<br><br>The circuit predictions are checked against reality below — average rank correlation <b class="num">ρ = ${S.accMean.toFixed(2)}</b> across ${S.acc.length} rounds (1 = predicts the exact order, 0 = random guessing).` : ""}</p>`);
 
   /* season pace ranking: who has the fastest car right now */
   {
     const cr = card(main, `${y} season pace ranking`,
-      "sorted by median dry qualifying gap · race pace = median clean-lap gap to each weekend's fastest race car");
+      "gaps to the fastest car · quali = median dry qualifying gap · race = median clean-lap race pace");
     const wr = document.createElement("div"); wr.className = "tblwrap"; cr.appendChild(wr);
-    const minR = Math.min(...teams.map(([, t]) => t.race).filter(v => v != null));
     wr.innerHTML = `<table class="t"><thead><tr><th class="r">#</th><th>Team</th><th class="r">Quali gap</th><th class="r">Race pace</th><th class="r">Weekends</th></tr></thead><tbody>` +
       teams.map(([tm, t], i) => `<tr><td class="r num">${i + 1}</td>
         <td><span class="drv-cell"><span class="dot" style="background:${teamCol(S.colors[tm] || "#888")}"></span>${esc(tm)}</span></td>
-        <td class="r num ${i === 0 ? "best" : ""}">${t.quali === 0 ? "fastest" : "+" + t.quali.toFixed(2) + "%"}</td>
-        <td class="r num ${t.race === minR ? "best" : ""}">${t.race == null ? "—" : (t.race === 0 ? "fastest" : "+" + t.race.toFixed(2) + " s/lap") + (t.race === minR ? " ★" : "")}</td>
+        <td class="r num ${relQ(t) < 0.005 ? "best" : ""}">${fmtQ(t)}</td>
+        <td class="r num ${relR(t) != null && relR(t) < 0.005 ? "best" : ""}">${fmtR(t) ?? "—"}</td>
         <td class="r num">${t.n}</td></tr>`).join("") + "</tbody></table>";
   }
 
@@ -164,7 +173,6 @@ function renderTeams(P, year) {
   }
   const trapVals = teams.map(([, t]) => t.trap).filter(v => v != null);
   const maxTrap = Math.max(...trapVals, 1), minTrap = Math.min(...trapVals);
-  const minRace = Math.min(...teams.map(([, t]) => t.race).filter(v => v != null));
   // rank every team within each corner class (and straight-line)
   const rankIn = {};
   for (const cls of ["slow", "med", "fast"]) {
@@ -200,7 +208,7 @@ function renderTeams(P, year) {
 
     el.innerHTML = `
       <div class="dna-head"><span class="dot" style="background:${col};width:12px;height:12px"></span><b>${esc(tm)}</b>
-        <span class="dna-gaps num">Quali ${t.quali === 0 ? "fastest" : "+" + t.quali.toFixed(2) + "%"}${t.race != null ? ` · Race ${t.race === 0 ? "fastest" : "+" + t.race.toFixed(2) + " s/lap"}${t.race === minRace ? " ★" : ""}` : ""}</span></div>
+        <span class="dna-gaps num">Quali ${fmtQ(t)}${fmtR(t) != null ? ` · Race ${fmtR(t)}` : ""}</span></div>
       <div class="dna-bars">${rows.map(([lab, v, mx, unit, best, rk]) => `
         <div class="dna-row"><span class="dna-lab">${lab}${rk ? ` <b class="num" style="color:${rk === 1 ? "var(--green)" : "var(--ink3)"}">P${rk}</b>` : ""}</span>
           <span class="dna-track"><i style="width:${v == null ? 0 : Math.max(3, v / mx * 100).toFixed(1)}%;background:${col}"></i></span>
