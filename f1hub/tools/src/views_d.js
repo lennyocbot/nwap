@@ -126,7 +126,7 @@ function viewTel(root) {
       }
     }
   }
-  pick.insertAdjacentHTML("beforeend", `<p class="hint" style="margin:8px 2px 0">tap a driver row to open every lap · ★ = driver's best · S/M/H + number = compound & tyre age · laps can also be added by tapping dots in the Pace view · drag on a trace to zoom, double-tap to reset</p>`);
+  pick.insertAdjacentHTML("beforeend", `<p class="hint" style="margin:8px 2px 0">★ = driver’s best · S3 = softs, 3 laps old</p>`);
 
   if (!ents.length && S.compare.some(cmp => { const ss = HUB.session(cmp.sid); return ss && !ss.tel; })) {
     const hold = document.createElement("div"); hold.className = "empty";
@@ -494,7 +494,7 @@ function whyCard(root, ents) {
   if (!(S.whyIdx >= 1 && S.whyIdx < ents.length)) S.whyIdx = 1;
   const other = ents[S.whyIdx];
 
-  const c = card(root, "Why the slower lap is slower", "the reference lap is split into corner zones and straights — the pieces sum to the whole gap, and every label is a measured fact");
+  const c = card(root, "Why the slower lap is slower", "the zones sum to the whole gap · every number is measured");
   if (ents.length > 2) {
     const sel = document.createElement("select");
     sel.innerHTML = ents.slice(1).map((en, i) => `<option value="${i + 1}" ${i + 1 === S.whyIdx ? "selected" : ""}>${esc(en.label)} vs ${esc(ref.label)}</option>`).join("");

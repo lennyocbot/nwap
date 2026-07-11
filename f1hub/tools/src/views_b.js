@@ -121,8 +121,6 @@ function viewDeg(root) {
     segEl.appendChild(b);
   }
   c2.querySelector(".right").appendChild(segEl);
-  if (unfittable.length)
-    c2.insertAdjacentHTML("beforeend", `<p class="note">${unfittable.map(cc => cmpDot(cc) + " " + cc.toLowerCase()).join(", ")} ${unfittable.length > 1 ? "were" : "was"} used but never for a long enough clean run (4+ laps) to measure degradation — greyed out, not hidden.</p>`);
 
   // pooled normalized points per team
   const teams = new Map(); // team -> {col, pts:[[life, dMs]], drvs:Set}
@@ -317,10 +315,10 @@ function viewLongRuns(root) {
       const r = grads[i];
       return `<div class="t-title">${r.d.abbr} — ${esc(r.t.cmp)} run, ${r.run.length} laps</div>deg <b class="num">+${(r.fit.b / 1000).toFixed(3)} s/lap</b> · over 20 laps that compounds to <b class="num">${(r.fit.b * 20 / 1000).toFixed(1)}s</b>`;
     });
-    cg.insertAdjacentHTML("beforeend", `<p class="note">Representative runs only (7+ clean laps, no push-cool programs — or whatever you've marked ✓/✗ in the ranking below). A car burning fuel gets ~0.06 s/lap faster, so true tyre deg is roughly the shown slope <b>+ 0.06</b> — but that offset is the same for everyone, so the order stands.</p>`);
+    cg.insertAdjacentHTML("beforeend", `<p class="note">representative runs only · fuel burn (~0.06 s/lap) shifts every car equally, so the order stands</p>`);
   }
 
-  const c2 = card(root, "Run ranking", "⚠ fuel unknown — two 10-lap runs can differ by 40 kg. Absolute pace here proves nothing; the gradient above is the honest signal · tap a run to inspect its laps and mark it ✓/✗");
+  const c2 = card(root, "Run ranking", "fuel loads unknown · trust the gradient above, not raw pace · tap a run to inspect + mark \u2713/\u2717");
   const w = document.createElement("div"); w.className = "tblwrap"; c2.appendChild(w);
   const tblRows = [];
   runs.forEach((r, i) => {
@@ -330,7 +328,7 @@ function viewLongRuns(root) {
     tblRows.push(`<tr class="lr-row" data-key="${esc(r.key)}" style="cursor:pointer;${excluded ? "opacity:.45" : r.tag === "race sim" || r.tag === "marked ✓" ? "" : "opacity:.82"}">
       <td class="r num">${i + 1}</td><td>${drvCell(r.d)}</td><td>${cmpDot(r.t.cmp)}${r.t.startLife > 1 ? ` <span class="hint">used</span>` : ""}</td>
       <td class="r num">${r.run.length}</td>
-      <td>${r.tag ? `<span class="tag" style="${tagStyle}">${r.tag}</span>` : ""}</td>
+      <td>${r.tag ? `<span class="tag" style="${tagStyle}" title="${r.tag === "race sim" ? "a real race simulation: 9+ representative laps" : r.tag === "short run" ? "6 laps or fewer - light fuel likely" : r.tag === "push-cool?" ? "push laps alternated with slow laps - the average misleads" : r.tag === "excluded" ? "marked not representative by you" : "marked representative by you"}">${r.tag}</span>` : ""}</td>
       <td class="r num ${i === 0 ? "best" : ""}">${fmtLap(Math.round(r.med))}</td><td class="r num">${fmtLap(r.best)}</td>
       <td class="r num">${r.fit ? (r.fit.b >= 0 ? "+" : "") + (r.fit.b / 1000).toFixed(3) : "—"}</td>
       <td class="r num">${i === 0 ? "—" : fmtDelta(r.med - runs[0].med)}</td></tr>`);
@@ -344,7 +342,7 @@ function viewLongRuns(root) {
           <button class="btn lr-mark" data-key="${esc(r.key)}" data-m="in" ${mark(r) === "in" ? "disabled" : ""}>✓ representative — use in deg gradient</button>
           <button class="btn lr-mark" data-key="${esc(r.key)}" data-m="out" ${mark(r) === "out" ? "disabled" : ""}>✗ not representative — exclude</button>
           ${mark(r) ? `<button class="btn lr-mark" data-key="${esc(r.key)}" data-m="">auto (${r.pushCool ? "push-cool?" : r.run.length >= 9 ? "race sim" : r.run.length <= 6 ? "short run" : "mid run"})</button>` : ""}
-          <span class="hint">✕ laps were stripped as cool-down / traffic — a push-cool run alternates push laps with slow ones, so its average is misleading</span>
+          <span class="hint">✕ = stripped (cool-down / traffic)</span>
         </div></td></tr>`);
     }
   });
@@ -359,7 +357,6 @@ function viewLongRuns(root) {
       if (b.dataset.m) HUB.S.lrMark[b.dataset.key] = b.dataset.m; else delete HUB.S.lrMark[b.dataset.key];
       HUB.save(); HUB.render(true);
     }));
-  c2.insertAdjacentHTML("beforeend", `<p class="note">Longer runs carry more fuel and mean more; <b>race sim</b> ≥ 9 laps, <b>short run</b> ≤ 6 laps, <b>push-cool?</b> = many stripped laps between pushes. Tap any run to see its laps and overrule the automatic call — your ✓/✗ marks are remembered for this weekend and feed the deg gradient and headlines.</p>`);
 
   // headline goes to the most representative running, not the fastest light-fuel glory run
   const rep = runs.filter(r => mark(r) === "out" ? false : mark(r) === "in" ? true : r.run.length >= 7 && !r.pushCool);

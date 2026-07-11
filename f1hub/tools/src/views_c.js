@@ -197,7 +197,7 @@ function viewRace(root) {
   /* ---- race trace ---- */
   const drifted = (wClean.length >= 8 && (quantile(wClean, 0.9) - quantile(wClean, 0.1)) > 5000)
     || (winner && wEnd != null && (wEnd - raceStart) - refAvg * wLaps > 420000);
-  const c1 = card(root, "Race trace", `gap to a constant ${fmtLap(Math.round(refAvg))} reference (winner's clean-lap median) — flat = reference pace, pit stops and SC are the drops${drifted ? " · ⚠ heavy SC/weather influence this race: everyone drifts far from the clean-pace reference, so read the vertical gaps between cars, not the slope" : ""}`);
+  const c1 = card(root, "Race trace", `vs a constant ${fmtLap(Math.round(refAvg))} lap · flat = that pace, drops = pits/SC${drifted ? " · ⚠ heavy SC/weather: read vertical gaps, not slopes" : ""}`);
   if (drvs.length) {
     const div = document.createElement("div"); div.className = "chart"; c1.appendChild(div);
     const series = drvs.map(d => {
@@ -215,7 +215,7 @@ function viewRace(root) {
     const deepLo = quantile(ys, 0.01) - 4;
     const yLo = Math.max(deepLo, quantile(ys, 0.30) - 90);
     if (deepLo < yLo - 20)
-      c1.insertAdjacentHTML("beforeend", `<p class="note">⚑ the field falls far off the reference late on (long SC / red flag — the clock keeps running): those laps dive off the bottom of the scale so the actual racing stays readable. Gaps between cars are unaffected.</p>`);
+      c1.insertAdjacentHTML("beforeend", `<p class="note">⚑ late SC/red-flag laps run off the bottom of the scale · gaps between cars stay readable</p>`);
     const ch = Chart(div, { h: 420, mr: 46, xd: [0, total], yd: [yLo, Math.max(...ys) + 4], xlab: "lap", ylab: "gap to reference (s)", yfmt: v => v.toFixed(0), label: "Race trace" });
     drawBands(ch);
     const nodes = [], data = [];

@@ -23,7 +23,7 @@ const tAbbr = t => TEAM_ABBR[t] || t.slice(0, 3).toUpperCase();
 
 function showTeams(year) {
   const root = document.getElementById("app");
-  root.innerHTML = `<div id="loading"><div style="font-size:15px;font-weight:700;letter-spacing:.12em;text-transform:uppercase">Team <span style="color:var(--accent)">DNA</span></div><div class="bar"><i></i></div><div style="font-size:12px">loading team profiles…</div></div>`;
+  root.innerHTML = `<div id="loading"><div style="font-size:15px;font-weight:700;letter-spacing:.12em;text-transform:uppercase">Car <span style="color:var(--accent)">rankings</span></div><div class="bar"><i></i></div><div style="font-size:12px">loading…</div></div>`;
   loadProfiles().then(P => renderTeams(P, year)).catch(err => {
     showError("Team profiles not available yet: " + err.message);
   });
@@ -58,7 +58,7 @@ function renderTeams(P, year) {
     </div>
   </div></header>
   <main id="view"></main>
-  <footer>Every input is measured: corner minimum speeds (±90 m windows, best car per corner as reference), speed traps, dry qualifying and clean-lap race gaps. The circuit-fit score pushes those deficits through simple kinematics (Δt = L·Δv/v² per corner) with one season calibration constant — wet sessions excluded, no hand-tuning. Unofficial analysis, not associated with Formula 1.</footer>`;
+  <footer>All inputs measured (corner minimum speeds, speed traps, dry quali/race gaps); predictions = kinematics + one calibration constant, accuracy checked above. Unofficial, not associated with Formula 1.</footer>`;
 
   document.getElementById("homeBtn").addEventListener("click", showPicker);
   document.getElementById("dnaYear").addEventListener("change", e => renderTeams(P, e.target.value));
@@ -80,21 +80,11 @@ function renderTeams(P, year) {
   const fmtQ = t => relQ(t) < 0.005 ? "fastest" : "+" + relQ(t).toFixed(2) + "%";
   const fmtR = t => relR(t) == null ? null : relR(t) < 0.005 ? "fastest" : "+" + relR(t).toFixed(2) + " s/lap";
 
-  /* header card: what this is + honesty */
-  const doneN = S.rounds.filter(r => r.circuit).length;
-  const intro = card(main, `What the ${y} cars are actually good at`,
-    `built ONLY from ${y}'s ${doneN} dry weekend${doneN > 1 ? "s" : ""} — other seasons are never mixed in`);
-  intro.insertAdjacentHTML("beforeend", `<p class="note"><b>How to read the cards:</b> every corner of every ${y} track is sorted into
-    <b>slow</b> (&lt;150 km/h), <b>medium</b> (&lt;230) or <b>fast</b> (≥230), and each car's best qualifying speed through it is compared with
-    the fastest car through that same corner. A bar of <span class="num">−6.7 km/h</span> in slow corners means: through slow corners, this car
-    is on average 6.7 km/h down on whoever is quickest there. Shorter bar = stronger. Straight-line comes from speed traps.
-    <br><br><b>Why no corner bar shows 0.0:</b> the reference there is the best car at each <i>individual</i> corner — no team is quickest through every slow corner on the calendar, so even the class leader (marked ★, ranked P1) averages a little above zero. The quali and race <b>gaps</b>, by contrast, are shown relative to the leading team: the fastest car reads “fastest”, everyone else their gap to it.
-    ${S.accMean != null ? `<br><br>The circuit predictions are checked against reality below — average rank correlation <b class="num">ρ = ${S.accMean.toFixed(2)}</b> across ${S.acc.length} rounds (1 = predicts the exact order, 0 = random guessing).` : ""}</p>`);
-
   /* season pace ranking: who has the fastest car right now */
   {
+    const doneN = S.rounds.filter(r => r.circuit).length;
     const cr = card(main, `${y} season pace ranking`,
-      "gaps to the fastest car · quali = median dry qualifying gap · race = median clean-lap race pace");
+      `gaps to the fastest car · ${doneN} dry weekend${doneN > 1 ? "s" : ""}, this season only`);
     const wr = document.createElement("div"); wr.className = "tblwrap"; cr.appendChild(wr);
     wr.innerHTML = `<table class="t"><thead><tr><th class="r">#</th><th>Team</th><th class="r">Quali gap</th><th class="r">Race pace</th><th class="r">Weekends</th></tr></thead><tbody>` +
       teams.map(([tm, t], i) => `<tr><td class="r num">${i + 1}</td>
@@ -110,7 +100,7 @@ function renderTeams(P, year) {
     const dryRounds = S.rounds.filter(r => !r.wetQ && r.quali && Object.keys(r.quali).length >= 6);
     if (dryRounds.length >= 3) {
       const ce = card(main, "Pace evolution — gap to pole, round by round",
-        "dry qualifying only · 0% = fastest that weekend · a line trending down = the car is gaining relative pace (upgrades working)");
+        "dry rounds only · trending down = gaining pace (upgrades working)");
       const div = document.createElement("div"); div.className = "chart"; ce.appendChild(div);
       const allV = dryRounds.flatMap(r => teams.map(([tm]) => r.quali[tm]).filter(v => v != null));
       const rMin = Math.min(...dryRounds.map(r => r.round)), rMax = Math.max(...dryRounds.map(r => r.round));
@@ -143,7 +133,6 @@ function renderTeams(P, year) {
         const rnd = dryRounds.find(r => r.round === p[0]);
         return `<div class="t-title">${esc(tm)} — R${p[0]} ${esc(rnd ? rnd.event : "")}</div>quali gap to pole: <b class="num">${p[1] === 0 ? "fastest" : "+" + p[1].toFixed(2) + "%"}</b>`;
       });
-      ce.insertAdjacentHTML("beforeend", `<p class="note">Wet qualifying weekends are left out (gaps mean nothing in changing rain). Round-to-round wiggle is normal — circuits suit different cars — so read the <b>trend</b>, not single spikes.</p>`);
     }
   }
 
@@ -164,6 +153,7 @@ function renderTeams(P, year) {
   }
 
   /* team cards */
+  main.insertAdjacentHTML("beforeend", `<p class="note" style="margin:14px 2px 8px">bars = km/h given up to the best car in <span title="under 150 km/h">slow</span> / <span title="150–230 km/h">medium</span> / <span title="over 230 km/h">fast</span> corners (dry quali) · ★ P1 = best in class · ◦ = predicted from the track’s last archived visit</p>`);
   const grid = document.createElement("div"); grid.className = "dna-grid"; main.appendChild(grid);
   const maxDef = {}, minDef = {};
   for (const cls of ["slow", "med", "fast"]) {
@@ -203,7 +193,7 @@ function renderTeams(P, year) {
     let tempNote = "";
     if (t.temp && Math.abs(t.temp.r) >= 0.45) {
       const hot = t.temp.slope10 < 0;
-      tempNote = `<p class="dna-temp">${hot ? "🌡 relatively stronger in <b>hot</b> races" : "❄ relatively stronger in <b>cool</b> races"} — race-pace gap ${hot ? "shrinks" : "grows"} ${Math.abs(t.temp.slope10).toFixed(2)}s per +10 °C track temp (correlation r = ${t.temp.r}, ${t.temp.n} races; suggestive, not proof)</p>`;
+      tempNote = `<p class="dna-temp" title="race-pace gap ${hot ? "shrinks" : "grows"} ${Math.abs(t.temp.slope10).toFixed(2)}s per +10 °C track temp over ${t.temp.n} races — suggestive, not proof">${hot ? "🌡 stronger in hot races" : "❄ stronger in cool races"} (r = ${t.temp.r})</p>`;
     }
 
     el.innerHTML = `
@@ -214,20 +204,17 @@ function renderTeams(P, year) {
           <span class="dna-track"><i style="width:${v == null ? 0 : Math.max(3, v / mx * 100).toFixed(1)}%;background:${col}"></i></span>
           <span class="num dna-val" ${best ? 'style="color:var(--green);font-weight:700" title="best of all teams in this corner type"' : ""}>${v == null ? "—" : "−" + v.toFixed(1) + " " + unit}${best ? " ★" : ""}</span></div>`).join("")}
       </div>
-      <p class="dna-note hint">speed given up to the best car through each corner type · averaged over ${t.n} dry ${esc(y)} weekends</p>
-      ${ranked.length ? `<div class="dna-fit"><span><b>Should over-perform at:</b> ${best3.map(fmtC).join(" · ")}</span>
-      <span><b>Should struggle at:</b> ${worst3.map(fmtC).join(" · ")}</span>
-      <span class="hint">±s vs this car's own average circuit — its layout sensitivity, not a cross-team ranking</span></div>` : ""}
+      ${ranked.length ? `<div class="dna-fit" title="±s vs this car's own average circuit — layout sensitivity, not a cross-team ranking"><span><b>Best layouts:</b> ${best3.map(fmtC).join(" · ")}</span>
+      <span><b>Worst layouts:</b> ${worst3.map(fmtC).join(" · ")}</span></div>` : ""}
       ${tempNote}`;
   }
-  main.insertAdjacentHTML("beforeend", `<p class="note">◦ = circuit not run yet in ${y}: layout characterised from the most recent archived visit — a genuine prediction.</p>`);
 
   /* circuit predictor: pick any track → full predicted order with margins */
   const ownMed0 = {};
   for (const [tm] of teams) ownMed0[tm] = median(Object.values(rel[tm] || {})) ?? 0;
   {
     const cp = card(main, "Circuit predictor",
-      "pick a circuit — predicted order with margins, before the weekend happens · baseline = measured season pace, circuit swing from the corner-class model");
+      `pick a circuit → likely pecking order before the weekend${S.accMean != null ? ` · reliability ρ = ${S.accMean.toFixed(2)} (checked below)` : ""}`);
     const selEl = document.createElement("select");
     const opts = circuits.filter(c => teams.some(([tm]) => rel[tm]?.[c.slug] != null));
     const firstUp = opts.find(c => !c.done);
@@ -247,13 +234,12 @@ function renderTeams(P, year) {
       if (!rows.length) { holder.innerHTML = `<div class="empty">No prediction possible here.</div>`; return; }
       const qBase = rows[0].q, rBase = Math.min(...rows.map(x => x.r).filter(v => v != null));
       const wrp = document.createElement("div"); wrp.className = "tblwrap"; holder.appendChild(wrp);
-      wrp.innerHTML = `<table class="t"><thead><tr><th class="r">#</th><th>Team</th><th class="r">Predicted quali gap</th><th class="r">Predicted race pace</th><th class="r">Layout swing</th></tr></thead><tbody>` +
+      wrp.innerHTML = `<table class="t"><thead><tr><th class="r">#</th><th>Team</th><th class="r">Predicted quali gap</th><th class="r">Predicted race pace</th><th class="r" title="how much this layout helps (green) or hurts (red) the car vs its own average circuit">Layout swing</th></tr></thead><tbody>` +
         rows.map((x, i) => `<tr><td class="r num">${i + 1}</td>
           <td><span class="drv-cell"><span class="dot" style="background:${teamCol(S.colors[x.tm] || "#888")}"></span>${esc(x.tm)}</span></td>
           <td class="r num ${i === 0 ? "best" : ""}">${i === 0 ? "fastest" : "+" + (x.q - qBase).toFixed(2) + "s"}</td>
           <td class="r num">${x.r == null ? "—" : x.r - rBase < 0.005 ? "fastest" : "+" + (x.r - rBase).toFixed(2) + " s/lap"}</td>
           <td class="r num" style="color:${x.swing < -0.03 ? "var(--green)" : x.swing > 0.03 ? "var(--red)" : "var(--ink3)"}">${x.swing >= 0 ? "+" : "−"}${Math.abs(x.swing).toFixed(2)}s</td></tr>`).join("") + "</tbody></table>";
-      holder.insertAdjacentHTML("beforeend", `<p class="note">Layout swing = how much this track's corner mix helps (green) or hurts (red) each car vs its own average circuit — that's the model's contribution; the rest is measured ${y} pace. Quali gaps on a nominal 90 s lap; race pace in s/lap. Reliability of the ordering: ρ = ${S.accMean != null ? S.accMean.toFixed(2) : "—"} (leave-one-out, see bottom).</p>`);
     };
     selEl.addEventListener("change", () => { renderTeams._pick = selEl.value; drawPick(); });
     drawPick();
@@ -262,7 +248,7 @@ function renderTeams(P, year) {
   /* prediction matrix: each car anchored to its measured season quali pace,
      the model contributes only circuit-to-circuit variation */
   const cm = card(main, "Circuit fit — every team at every circuit",
-    `estimated quali gap (s) to the strongest car · baseline = measured ${y} quali pace (nominal 90 s lap), circuit swing from the corner-class model · ✓ raced in ${y} · ◦ prediction`);
+    `estimated gap (s) to the best car · ✓ raced in ${y} · ◦ predicted`);
   const w = document.createElement("div"); w.className = "tblwrap"; cm.appendChild(w);
   const ownMed = {};
   for (const [tm] of teams) ownMed[tm] = median(Object.values(rel[tm] || {})) ?? 0;
@@ -295,13 +281,13 @@ function renderTeams(P, year) {
 
   /* honesty table */
   if (S.acc && S.acc.length) {
-    const ca = card(main, "How honest is this model?",
-      "leave-one-out: each weekend is predicted by a model rebuilt WITHOUT that weekend's data, then compared with the real qualifying order");
+    const ca = card(main, "Prediction accuracy, checked",
+      "each weekend predicted by a model that never saw it (leave-one-out), then compared with the real quali order");
     const wa = document.createElement("div"); wa.className = "tblwrap"; ca.appendChild(wa);
     wa.innerHTML = `<table class="t"><thead><tr><th>Round</th><th>Grand Prix</th><th class="r">ρ predicted vs actual</th><th style="min-width:130px"></th></tr></thead><tbody>` +
       S.acc.map(a => `<tr><td class="num">R${a.round}</td><td>${esc(a.event)}</td><td class="r num">${a.rho.toFixed(2)}</td>
         <td><div style="height:6px;border-radius:3px;background:var(--surface3);overflow:hidden"><div style="height:100%;width:${Math.max(0, a.rho * 100).toFixed(0)}%;background:${a.rho > 0.6 ? "var(--green)" : a.rho > 0.3 ? "var(--yellow)" : "var(--red)"}"></div></div></td></tr>`).join("") +
       `</tbody></table>`;
-    ca.insertAdjacentHTML("beforeend", `<p class="note">Average ρ = <b class="num">${S.accMean.toFixed(2)}</b>. The model only knows corner speeds, speed traps and lap geometry from <i>other</i> weekends — it never sees the lap times or results of the weekend it predicts.</p>`);
+    ca.insertAdjacentHTML("beforeend", `<p class="note">average ρ = <b class="num">${S.accMean.toFixed(2)}</b> · 1 = exact order, 0 = random</p>`);
   }
 }

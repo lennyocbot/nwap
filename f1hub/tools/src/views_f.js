@@ -145,7 +145,7 @@ function replayCard(root, s) {
           <td><span class="drv-cell" style="gap:5px"><span class="dot" style="background:${teamCol(x.car.d.color)}"></span>${x.car.d.abbr}</span></td>
           <td>${cmp ? `<span class="rp-tyre" style="border-color:${cmpCol(cmp)}"></span>` : ""}</td>
           <td class="r num">${gapTxt}</td></tr>`;
-      }).join("") + `</table><p class="hint" style="margin:6px 0 0">gaps ≈ track-position × leader lap time · tyre ring = current compound · dimmed dot = in the pits</p>`;
+      }).join("") + `</table><p class="hint" style="margin:6px 0 0">tyre ring = compound · dim = in pits · gaps from track position</p>`;
     }
     requestAnimationFrame(draw);
   }
