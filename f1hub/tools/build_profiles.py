@@ -84,7 +84,7 @@ def flat_avg(tel):
     return sum(pts) / len(pts) if len(pts) >= 15 else None
 
 
-ZONE_W = 140.0   # m either side of the apex for zone TIME (entry+apex+exit)
+ZONE_W = 100.0   # m either side of the apex — tested best of 100/140/180 by leave-one-out accuracy
 
 
 def t_at(tel, dist):
