@@ -68,11 +68,15 @@ jobs:
         run: |
           python tools/build_profiles.py || echo "profiles build failed (non-fatal)"
 
+      - name: Fetch new driver faces / team logos
+        run: |
+          python tools/fetch_media.py || echo "media fetch failed (non-fatal)"
+
       - name: Commit & push
         run: |
           git config user.name "f1hub-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data manifest.json
+          git add data manifest.json media
           if git diff --cached --quiet; then
             echo "no new sessions"
           else

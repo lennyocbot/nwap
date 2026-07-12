@@ -124,6 +124,46 @@ function tsFlags(ts) {
   return { yellow: s.includes("2"), sc: s.includes("4"), red: s.includes("5"), vsc: s.includes("6") || s.includes("7"), green: !/[24567]/.test(s) };
 }
 
+/* ---- media: vendored driver faces + team logos (site mode) ---- */
+function mSlug(x) {
+  return String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+const TEAM_MEDIA_ALIAS = { "alfa-romeo-racing": "alfa-romeo", "kick-sauber": "kick-sauber", "sauber": "kick-sauber" };
+function faceURL(d) {
+  if (!HUB.mediaM || !d || !d.name) return null;
+  const sl = mSlug(d.name);
+  return HUB.mediaM.drivers.has(sl) ? "media/drivers/" + sl + ".png" : null;
+}
+/* face on a soft team-tinted chip — reads cleanly on light and dark */
+function faceImg(d, px) {
+  const u = faceURL(d);
+  if (!u) return "";
+  return `<img class="face" src="${u}" width="${px}" height="${px}" alt="" loading="lazy" style="background:linear-gradient(180deg,${teamCol(d.color)}55,${teamCol(d.color)}18)">`;
+}
+function teamMediaSlug(team) {
+  if (!HUB.mediaM || !team) return null;
+  const sl = mSlug(team);
+  if (HUB.mediaM.teams.has(sl)) return sl;
+  const a = TEAM_MEDIA_ALIAS[sl];
+  return a && HUB.mediaM.teams.has(a) ? a : null;
+}
+function teamLogoURL(team) {
+  const sl = teamMediaSlug(team);
+  return sl ? "media/teams/" + sl + ".png" : null;
+}
+/* real logos, not tinted: current teams carry a full-colour variant (shown in
+   light mode) and a white variant (shown in dark mode); historic teams have a
+   single colour logo shown in both. CSS toggles by data-theme. */
+function teamLogoImg(team, px) {
+  const sl = teamMediaSlug(team);
+  if (!sl) return "";
+  const hasW = HUB.mediaM.teamsWhite && HUB.mediaM.teamsWhite.has(sl);
+  const c = `<img class="lc" src="media/teams/${sl}.png" width="${px}" height="${px}" alt="" loading="lazy">`;
+  const w = hasW ? `<img class="lw" src="media/teams/${sl}-white.png" width="${px}" height="${px}" alt="" loading="lazy">` : "";
+  return `<span class="tlogo${hasW ? " dual" : ""}" style="width:${px}px;height:${px}px">${c}${w}</span>`;
+}
+
 /* ---- session helpers ---- */
 const SNAMES = { FP1: "FP1", FP2: "FP2", FP3: "FP3", SQ: "Sprint Quali", S: "Sprint", Q: "Qualifying", R: "Race" };
 HUB.session = id => HUB.data.sessions.find(s => s.id === (id ?? HUB.S.sid));

@@ -103,7 +103,7 @@ function viewTel(root) {
     const open = S.telDrv === d.abbr;
     const cell = document.createElement("div"); cell.className = "tp-cell" + (open ? " open" : ""); list.appendChild(cell);
     const row = document.createElement("div"); row.className = "tp-drow"; cell.appendChild(row);
-    row.innerHTML = `<span class="dot" style="background:${teamCol(d.color)}"></span><b class="num tp-abbr">${d.abbr}</b>
+    row.innerHTML = `${faceImg(d, 20) || `<span class="dot" style="background:${teamCol(d.color)}"></span>`}<b class="num tp-abbr">${d.abbr}</b>
       <span class="num tp-best">${best ? fmtLap(best.t) : "—"}</span>
       <span class="num hint">${best && sesBest != null ? (best.t === sesBest ? "fastest" : "+" + ((best.t - sesBest) / 1000).toFixed(3)) : ""}</span>
       <span class="tp-n hint">${drvLaps.length} lap${drvLaps.length === 1 ? "" : "s"} ${open ? "▴" : "▾"}</span>`;

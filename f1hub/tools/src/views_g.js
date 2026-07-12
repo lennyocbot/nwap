@@ -116,7 +116,7 @@ function renderTeams(P, year) {
     const wr = document.createElement("div"); wr.className = "tblwrap"; cr.appendChild(wr);
     wr.innerHTML = `<table class="t"><thead><tr><th class="r">#</th><th>Team</th><th class="r" title="median dry qualifying gap, on the season\u2019s average pole lap">Quali gap (s)</th><th class="r">Race pace (s/lap)</th><th class="r" title="extra degradation vs the kindest car · clean race stints, same compound, fuel-corrected">Tyre deg</th><th class="r">Weekends</th></tr></thead><tbody>` +
       teams.map(([tm, t], i) => `<tr><td class="r num">${i + 1}</td>
-        <td><span class="drv-cell"><span class="dot" style="background:${teamCol(S.colors[tm] || "#888")}"></span>${esc(tm)}</span></td>
+        <td><span class="drv-cell">${teamLogoImg(tm, 22) || `<span class="dot" style="background:${teamCol(S.colors[tm] || "#888")}"></span>`}${esc(tm)}</span></td>
         <td class="r num ${relQ(t) < 1e-9 ? "best" : ""}" style="background:${heatBg(qSec(t), Math.max(...teams.map(([, x]) => qSec(x))))}">${fmtQ(t)}</td>
         <td class="r num ${relR(t) != null && relR(t) < 1e-9 ? "best" : ""}" style="background:${relR(t) == null ? "none" : heatBg(relR(t), Math.max(...teams.map(([, x]) => relR(x) ?? 0)))}">${fmtR(t) ?? "—"}</td>
         <td class="r num" style="background:${t.deg == null ? "none" : heatBg(t.deg / 1000 - minEl.deg, Math.max(maxEl.deg - minEl.deg, 0.001))}">${t.deg == null ? "\u2014" : (t.deg / 1000 - minEl.deg) < 1e-9 ? "kindest" : "+" + (t.deg - minEl.deg * 1000).toFixed(0) + " ms/lap"}</td>
@@ -221,7 +221,7 @@ function renderTeams(P, year) {
     }
 
     el.innerHTML = `
-      <div class="dna-head"><span class="dot" style="background:${col};width:12px;height:12px"></span><b>${esc(tm)}</b>
+      <div class="dna-head">${teamLogoImg(tm, 24) || `<span class="dot" style="background:${col};width:12px;height:12px"></span>`}<b>${esc(tm)}</b>
         <span class="dna-gaps num">Quali ${fmtQ(t)}${fmtR(t) != null ? ` · Race ${fmtR(t)}` : ""}</span></div>
       <div class="dna-bars">${rows.map(r => `
         <div class="dna-row" title="${r.tip}"><span class="dna-lab">${r.lab}${r.rk ? ` <b class="num" style="color:${r.rk === 1 ? "var(--green)" : "var(--ink3)"}">P${r.rk}</b>` : ""}</span>

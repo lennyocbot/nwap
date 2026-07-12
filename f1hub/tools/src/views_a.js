@@ -23,7 +23,8 @@ function driverRail(root, sess) {
     const on = HUB.S.sel.has(d.abbr);
     const c = document.createElement("button");
     c.className = "chip " + (on ? "on" : "off");
-    c.innerHTML = `<span class="dot" style="background:${teamCol(d.color)}"></span>${d.abbr}`;
+    const f = faceImg(d, 18);
+    c.innerHTML = `${f || `<span class="dot" style="background:${teamCol(d.color)}"></span>`}${d.abbr}`;
     c.title = `${d.name} — ${d.team} (double-click to solo)`;
     c.addEventListener("click", () => { HUB._selCustom = true; HUB.S.sel.has(d.abbr) ? HUB.S.sel.delete(d.abbr) : HUB.S.sel.add(d.abbr); HUB.render(); });
     c.addEventListener("dblclick", () => { HUB._selCustom = true; HUB.S.sel = new Set([d.abbr]); HUB.render(); });
@@ -74,7 +75,8 @@ function card(root, title, subtitle) {
   return c;
 }
 function drvCell(d) {
-  return `<span class="drv-cell"><span class="dot" style="background:${teamCol(d.color)}"></span>${esc(d.abbr)} <span class="team">${esc(d.team)}</span></span>`;
+  const f = faceImg(d, 22);
+  return `<span class="drv-cell">${f || `<span class="dot" style="background:${teamCol(d.color)}"></span>`}${esc(d.abbr)} <span class="team">${esc(d.team)}</span></span>`;
 }
 function insights(root, arr) {
   if (!arr.length) return;
@@ -416,10 +418,11 @@ function viewPace(root) {
       svgEl("line", { x1: x - bw / 2, x2: x + bw / 2, y1: yP(r.med), y2: yP(r.med), stroke: col, "stroke-width": 2.4 }, svg);
       svgEl("line", { x1: x - bw / 2, x2: x + bw / 2, y1: yP(r.mean), y2: yP(r.mean), stroke: col, "stroke-width": 1.6, "stroke-dasharray": "3 2" }, svg);
       for (const o of r.outliers) svgEl("circle", { cx: x, cy: yP(o), r: 2.2, fill: "none", stroke: col, "stroke-width": 1.1 }, svg);
-      // helmet + stacked labels below plot
-      const hy = mt + plotH + 12;
-      drawHelmet(svg, x, hy, col, dark);
-      const tx = mt + plotH + 34;
+      // face (or helmet fallback) + stacked labels below plot — labels start
+      // below the face (top plotH+11, ø20) so the abbr never overlaps it
+      const hy = mt + plotH + 11;
+      drawFaceOrHelmet(svg, x, hy, r.d, col, dark, 10);
+      const tx = mt + plotH + 46;
       svgEl("text", { x, y: tx, "text-anchor": "middle", "font-size": 10.5, "font-weight": 800, fill: "var(--ink)" }, svg).textContent = r.d.abbr;
       svgEl("text", { x, y: tx + 13, "text-anchor": "middle", "font-size": 9.5, fill: "var(--ink2)", class: "num" }, svg).textContent = (r.mean / 1000).toFixed(2);
       svgEl("text", { x, y: tx + 25, "text-anchor": "middle", "font-size": 9, fill: i === 0 ? "var(--green)" : "var(--ink3)", class: "num" }, svg).textContent = i === 0 ? "+0.00" : "+" + ((r.mean - p1) / 1000).toFixed(2);

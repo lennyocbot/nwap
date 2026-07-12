@@ -411,6 +411,10 @@ function themeToggleBtn() {
       manifest = await r.json();
     } catch (err) { showError(err.message); return; }
     HUB.manifest = manifest;
+    // vendored faces/logos: optional, everything falls back cleanly without it
+    fetch("media/manifest.json").then(r => r.ok ? r.json() : null).then(m => {
+      if (m) { HUB.mediaM = { drivers: new Set(m.drivers), teams: new Set(m.teams), teamsWhite: new Set(m.teamsWhite || []) }; if (HUB.data) HUB.render(true); }
+    }).catch(() => { });
     const years = Object.keys(manifest.years).sort();
     if (!years.length) { showError("No weekends in the data set yet — run the data updater."); return; }
     // deep link #year/round or #teams goes straight in; otherwise the chooser

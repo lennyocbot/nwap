@@ -24,6 +24,21 @@ function drawHelmet(svg, cx, yTop, col, dark) {
   return g;
 }
 
+/* driver face as an SVG image (rounded, team-tinted ring); falls back to the
+   drawn helmet when the archive has no vendored headshot for this driver.
+   (cx, yTop) = top-centre, matching drawHelmet. */
+function drawFaceOrHelmet(svg, cx, yTop, d, col, dark, radius) {
+  const u = typeof faceURL === "function" ? faceURL(d) : null;
+  if (!u) { drawHelmet(svg, cx, yTop, col, dark); return; }
+  const r = radius || 11, g = svgEl("g", {}, svg);
+  const cid = "fc" + (++CLIP_ID);
+  const defs = svgEl("defs", {}, g);
+  svgEl("clipPath", { id: cid }, defs).appendChild(svgEl("circle", { cx, cy: yTop + r, r }));
+  svgEl("circle", { cx, cy: yTop + r, r: r + 1.2, fill: col, opacity: 0.9 }, g);
+  svgEl("image", { href: u, x: cx - r, y: yTop, width: r * 2, height: r * 2, "clip-path": `url(#${cid})`, preserveAspectRatio: "xMidYMid slice" }, g);
+  return g;
+}
+
 function niceTicks(lo, hi, n = 6) {
   if (!(hi > lo)) return [lo];
   const span = hi - lo, step0 = span / n, mag = 10 ** Math.floor(Math.log10(step0));

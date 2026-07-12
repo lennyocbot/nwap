@@ -129,6 +129,16 @@ main { max-width:1440px; margin:0 auto; padding:16px 20px 80px; }
 .chip.sm { padding:2px 7px; font-size:11px; }
 .rail-btn { font-size:11px; color:var(--ink3); padding:3px 6px; font-weight:600; }
 .rail-btn:hover { color:var(--ink); }
+/* vendored driver faces + team logos */
+img.face { border-radius:50%; object-fit:cover; flex:none; vertical-align:middle;
+  box-shadow:0 0 0 1.5px var(--line2); }
+.drv-cell img.face { margin-right:1px; }
+.chip img.face { width:18px; height:18px; }
+.tlogo { display:inline-flex; align-items:center; justify-content:center; flex:none; vertical-align:middle; }
+.tlogo img { object-fit:contain; max-width:100%; max-height:100%; }
+.tlogo .lw { display:none; }
+[data-theme="dark"] .tlogo.dual .lc { display:none; }
+[data-theme="dark"] .tlogo.dual .lw { display:inline-block; }
 
 /* ---------- cards & layout ---------- */
 .card { background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); padding:14px 16px; margin-bottom:14px; overflow:hidden; }
@@ -471,6 +481,46 @@ function tsFlags(ts) {
   return { yellow: s.includes("2"), sc: s.includes("4"), red: s.includes("5"), vsc: s.includes("6") || s.includes("7"), green: !/[24567]/.test(s) };
 }
 
+/* ---- media: vendored driver faces + team logos (site mode) ---- */
+function mSlug(x) {
+  return String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+const TEAM_MEDIA_ALIAS = { "alfa-romeo-racing": "alfa-romeo", "kick-sauber": "kick-sauber", "sauber": "kick-sauber" };
+function faceURL(d) {
+  if (!HUB.mediaM || !d || !d.name) return null;
+  const sl = mSlug(d.name);
+  return HUB.mediaM.drivers.has(sl) ? "media/drivers/" + sl + ".png" : null;
+}
+/* face on a soft team-tinted chip — reads cleanly on light and dark */
+function faceImg(d, px) {
+  const u = faceURL(d);
+  if (!u) return "";
+  return `<img class="face" src="${u}" width="${px}" height="${px}" alt="" loading="lazy" style="background:linear-gradient(180deg,${teamCol(d.color)}55,${teamCol(d.color)}18)">`;
+}
+function teamMediaSlug(team) {
+  if (!HUB.mediaM || !team) return null;
+  const sl = mSlug(team);
+  if (HUB.mediaM.teams.has(sl)) return sl;
+  const a = TEAM_MEDIA_ALIAS[sl];
+  return a && HUB.mediaM.teams.has(a) ? a : null;
+}
+function teamLogoURL(team) {
+  const sl = teamMediaSlug(team);
+  return sl ? "media/teams/" + sl + ".png" : null;
+}
+/* real logos, not tinted: current teams carry a full-colour variant (shown in
+   light mode) and a white variant (shown in dark mode); historic teams have a
+   single colour logo shown in both. CSS toggles by data-theme. */
+function teamLogoImg(team, px) {
+  const sl = teamMediaSlug(team);
+  if (!sl) return "";
+  const hasW = HUB.mediaM.teamsWhite && HUB.mediaM.teamsWhite.has(sl);
+  const c = `<img class="lc" src="media/teams/${sl}.png" width="${px}" height="${px}" alt="" loading="lazy">`;
+  const w = hasW ? `<img class="lw" src="media/teams/${sl}-white.png" width="${px}" height="${px}" alt="" loading="lazy">` : "";
+  return `<span class="tlogo${hasW ? " dual" : ""}" style="width:${px}px;height:${px}px">${c}${w}</span>`;
+}
+
 /* ---- session helpers ---- */
 const SNAMES = { FP1: "FP1", FP2: "FP2", FP3: "FP3", SQ: "Sprint Quali", S: "Sprint", Q: "Qualifying", R: "Race" };
 HUB.session = id => HUB.data.sessions.find(s => s.id === (id ?? HUB.S.sid));
@@ -600,6 +650,21 @@ function drawHelmet(svg, cx, yTop, col, dark) {
     fill: col, stroke: "var(--surface)", "stroke-width": 0.6,
   }, g);
   svgEl("path", { d: `M${cx - 3},${yTop + 4} L${cx + 8},${yTop + 5} L${cx + 8},${yTop + 8} L${cx - 3},${yTop + 8} Z`, fill: dark ? "rgba(255,255,255,.82)" : "rgba(18,22,30,.78)" }, g);
+  return g;
+}
+
+/* driver face as an SVG image (rounded, team-tinted ring); falls back to the
+   drawn helmet when the archive has no vendored headshot for this driver.
+   (cx, yTop) = top-centre, matching drawHelmet. */
+function drawFaceOrHelmet(svg, cx, yTop, d, col, dark, radius) {
+  const u = typeof faceURL === "function" ? faceURL(d) : null;
+  if (!u) { drawHelmet(svg, cx, yTop, col, dark); return; }
+  const r = radius || 11, g = svgEl("g", {}, svg);
+  const cid = "fc" + (++CLIP_ID);
+  const defs = svgEl("defs", {}, g);
+  svgEl("clipPath", { id: cid }, defs).appendChild(svgEl("circle", { cx, cy: yTop + r, r }));
+  svgEl("circle", { cx, cy: yTop + r, r: r + 1.2, fill: col, opacity: 0.9 }, g);
+  svgEl("image", { href: u, x: cx - r, y: yTop, width: r * 2, height: r * 2, "clip-path": `url(#${cid})`, preserveAspectRatio: "xMidYMid slice" }, g);
   return g;
 }
 
@@ -812,7 +877,8 @@ function driverRail(root, sess) {
     const on = HUB.S.sel.has(d.abbr);
     const c = document.createElement("button");
     c.className = "chip " + (on ? "on" : "off");
-    c.innerHTML = `<span class="dot" style="background:${teamCol(d.color)}"></span>${d.abbr}`;
+    const f = faceImg(d, 18);
+    c.innerHTML = `${f || `<span class="dot" style="background:${teamCol(d.color)}"></span>`}${d.abbr}`;
     c.title = `${d.name} — ${d.team} (double-click to solo)`;
     c.addEventListener("click", () => { HUB._selCustom = true; HUB.S.sel.has(d.abbr) ? HUB.S.sel.delete(d.abbr) : HUB.S.sel.add(d.abbr); HUB.render(); });
     c.addEventListener("dblclick", () => { HUB._selCustom = true; HUB.S.sel = new Set([d.abbr]); HUB.render(); });
@@ -863,7 +929,8 @@ function card(root, title, subtitle) {
   return c;
 }
 function drvCell(d) {
-  return `<span class="drv-cell"><span class="dot" style="background:${teamCol(d.color)}"></span>${esc(d.abbr)} <span class="team">${esc(d.team)}</span></span>`;
+  const f = faceImg(d, 22);
+  return `<span class="drv-cell">${f || `<span class="dot" style="background:${teamCol(d.color)}"></span>`}${esc(d.abbr)} <span class="team">${esc(d.team)}</span></span>`;
 }
 function insights(root, arr) {
   if (!arr.length) return;
@@ -1205,10 +1272,11 @@ function viewPace(root) {
       svgEl("line", { x1: x - bw / 2, x2: x + bw / 2, y1: yP(r.med), y2: yP(r.med), stroke: col, "stroke-width": 2.4 }, svg);
       svgEl("line", { x1: x - bw / 2, x2: x + bw / 2, y1: yP(r.mean), y2: yP(r.mean), stroke: col, "stroke-width": 1.6, "stroke-dasharray": "3 2" }, svg);
       for (const o of r.outliers) svgEl("circle", { cx: x, cy: yP(o), r: 2.2, fill: "none", stroke: col, "stroke-width": 1.1 }, svg);
-      // helmet + stacked labels below plot
-      const hy = mt + plotH + 12;
-      drawHelmet(svg, x, hy, col, dark);
-      const tx = mt + plotH + 34;
+      // face (or helmet fallback) + stacked labels below plot — labels start
+      // below the face (top plotH+11, ø20) so the abbr never overlaps it
+      const hy = mt + plotH + 11;
+      drawFaceOrHelmet(svg, x, hy, r.d, col, dark, 10);
+      const tx = mt + plotH + 46;
       svgEl("text", { x, y: tx, "text-anchor": "middle", "font-size": 10.5, "font-weight": 800, fill: "var(--ink)" }, svg).textContent = r.d.abbr;
       svgEl("text", { x, y: tx + 13, "text-anchor": "middle", "font-size": 9.5, fill: "var(--ink2)", class: "num" }, svg).textContent = (r.mean / 1000).toFixed(2);
       svgEl("text", { x, y: tx + 25, "text-anchor": "middle", "font-size": 9, fill: i === 0 ? "var(--green)" : "var(--ink3)", class: "num" }, svg).textContent = i === 0 ? "+0.00" : "+" + ((r.mean - p1) / 1000).toFixed(2);
@@ -2185,7 +2253,7 @@ function viewTel(root) {
     const open = S.telDrv === d.abbr;
     const cell = document.createElement("div"); cell.className = "tp-cell" + (open ? " open" : ""); list.appendChild(cell);
     const row = document.createElement("div"); row.className = "tp-drow"; cell.appendChild(row);
-    row.innerHTML = `<span class="dot" style="background:${teamCol(d.color)}"></span><b class="num tp-abbr">${d.abbr}</b>
+    row.innerHTML = `${faceImg(d, 20) || `<span class="dot" style="background:${teamCol(d.color)}"></span>`}<b class="num tp-abbr">${d.abbr}</b>
       <span class="num tp-best">${best ? fmtLap(best.t) : "—"}</span>
       <span class="num hint">${best && sesBest != null ? (best.t === sesBest ? "fastest" : "+" + ((best.t - sesBest) / 1000).toFixed(3)) : ""}</span>
       <span class="tp-n hint">${drvLaps.length} lap${drvLaps.length === 1 ? "" : "s"} ${open ? "▴" : "▾"}</span>`;
@@ -3332,7 +3400,7 @@ function renderTeams(P, year) {
     const wr = document.createElement("div"); wr.className = "tblwrap"; cr.appendChild(wr);
     wr.innerHTML = `<table class="t"><thead><tr><th class="r">#</th><th>Team</th><th class="r" title="median dry qualifying gap, on the season\u2019s average pole lap">Quali gap (s)</th><th class="r">Race pace (s/lap)</th><th class="r" title="extra degradation vs the kindest car · clean race stints, same compound, fuel-corrected">Tyre deg</th><th class="r">Weekends</th></tr></thead><tbody>` +
       teams.map(([tm, t], i) => `<tr><td class="r num">${i + 1}</td>
-        <td><span class="drv-cell"><span class="dot" style="background:${teamCol(S.colors[tm] || "#888")}"></span>${esc(tm)}</span></td>
+        <td><span class="drv-cell">${teamLogoImg(tm, 22) || `<span class="dot" style="background:${teamCol(S.colors[tm] || "#888")}"></span>`}${esc(tm)}</span></td>
         <td class="r num ${relQ(t) < 1e-9 ? "best" : ""}" style="background:${heatBg(qSec(t), Math.max(...teams.map(([, x]) => qSec(x))))}">${fmtQ(t)}</td>
         <td class="r num ${relR(t) != null && relR(t) < 1e-9 ? "best" : ""}" style="background:${relR(t) == null ? "none" : heatBg(relR(t), Math.max(...teams.map(([, x]) => relR(x) ?? 0)))}">${fmtR(t) ?? "—"}</td>
         <td class="r num" style="background:${t.deg == null ? "none" : heatBg(t.deg / 1000 - minEl.deg, Math.max(maxEl.deg - minEl.deg, 0.001))}">${t.deg == null ? "\u2014" : (t.deg / 1000 - minEl.deg) < 1e-9 ? "kindest" : "+" + (t.deg - minEl.deg * 1000).toFixed(0) + " ms/lap"}</td>
@@ -3437,7 +3505,7 @@ function renderTeams(P, year) {
     }
 
     el.innerHTML = `
-      <div class="dna-head"><span class="dot" style="background:${col};width:12px;height:12px"></span><b>${esc(tm)}</b>
+      <div class="dna-head">${teamLogoImg(tm, 24) || `<span class="dot" style="background:${col};width:12px;height:12px"></span>`}<b>${esc(tm)}</b>
         <span class="dna-gaps num">Quali ${fmtQ(t)}${fmtR(t) != null ? ` · Race ${fmtR(t)}` : ""}</span></div>
       <div class="dna-bars">${rows.map(r => `
         <div class="dna-row" title="${r.tip}"><span class="dna-lab">${r.lab}${r.rk ? ` <b class="num" style="color:${r.rk === 1 ? "var(--green)" : "var(--ink3)"}">P${r.rk}</b>` : ""}</span>
@@ -3944,6 +4012,10 @@ function themeToggleBtn() {
       manifest = await r.json();
     } catch (err) { showError(err.message); return; }
     HUB.manifest = manifest;
+    // vendored faces/logos: optional, everything falls back cleanly without it
+    fetch("media/manifest.json").then(r => r.ok ? r.json() : null).then(m => {
+      if (m) { HUB.mediaM = { drivers: new Set(m.drivers), teams: new Set(m.teams), teamsWhite: new Set(m.teamsWhite || []) }; if (HUB.data) HUB.render(true); }
+    }).catch(() => { });
     const years = Object.keys(manifest.years).sort();
     if (!years.length) { showError("No weekends in the data set yet — run the data updater."); return; }
     // deep link #year/round or #teams goes straight in; otherwise the chooser
