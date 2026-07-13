@@ -1686,7 +1686,9 @@ function viewLongRuns(root) {
     rep.find(r => r.fit && r.fit.b < 20) ? `Flattest race sim: <b>${[...rep].filter(r => r.fit).sort((a, b) => a.fit.b - b.fit.b)[0].d.abbr}</b> — barely any drop-off` : "",
   ].filter(Boolean));
 
-  lrSheet(root, s, runs);
+  // the sheet mirrors the runs you've selected in the chips above (same as the
+  // comparison chart); falls back to all runs if nothing is selected
+  lrSheet(root, s, sel.length ? sel : runs);
 }
 
 /* ---- shareable long-run sheet (lap-by-lap grid + PNG export) ---- */
