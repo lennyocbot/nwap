@@ -77,21 +77,22 @@ function Chart(container, o) {
   const plot = svgEl("g", { "clip-path": `url(#${clipId})` }, svg);
   const gAxis = svgEl("g", {}, svg);
 
-  // gridlines + ticks
+  // gridlines + ticks — design rule: HORIZONTAL gridlines only, no vertical
+  // spines; ticks in mono 11 --ink3; vertical grid opt-in via o.xgrid === true
   const yt = o.yticksArr || niceTicks(Math.min(y0, y1), Math.max(y0, y1), o.yticks || 6);
   for (const v of yt) {
     if (v < Math.min(y0, y1) - 1e-9 || v > Math.max(y0, y1) + 1e-9) continue;
     svgEl("line", { x1: ml, x2: ml + iw, y1: y(v), y2: y(v), stroke: cvar("--grid"), "stroke-width": 1 }, gGrid);
-    svgEl("text", { x: ml - 7, y: y(v) + 3.5, "text-anchor": "end", "font-size": 10.5, fill: cvar("--ink3"), class: "num" }, gAxis).textContent = o.yfmt ? o.yfmt(v) : v;
+    svgEl("text", { x: ml - 7, y: y(v) + 3.5, "text-anchor": "end", "font-size": 11, fill: cvar("--ink3"), class: "num" }, gAxis).textContent = o.yfmt ? o.yfmt(v) : v;
   }
   const xt = o.xticksArr || niceTicks(x0, x1, o.xticks || 8);
   for (const v of xt) {
     if (v < x0 - 1e-9 || v > x1 + 1e-9) continue;
-    if (o.xgrid !== false) svgEl("line", { x1: x(v), x2: x(v), y1: mt, y2: mt + ih, stroke: cvar("--grid"), "stroke-width": 1 }, gGrid);
-    svgEl("text", { x: x(v), y: mt + ih + 15, "text-anchor": "middle", "font-size": 10.5, fill: cvar("--ink3"), class: "num" }, gAxis).textContent = o.xfmt ? o.xfmt(v) : v;
+    if (o.xgrid === true) svgEl("line", { x1: x(v), x2: x(v), y1: mt, y2: mt + ih, stroke: cvar("--grid"), "stroke-width": 1 }, gGrid);
+    svgEl("text", { x: x(v), y: mt + ih + 15, "text-anchor": "middle", "font-size": 11, fill: cvar("--ink3"), class: "num" }, gAxis).textContent = o.xfmt ? o.xfmt(v) : v;
   }
-  // frame baseline
-  svgEl("line", { x1: ml, x2: ml + iw, y1: mt + ih, y2: mt + ih, stroke: cvar("--line"), "stroke-width": 1 }, gAxis);
+  // baseline axis
+  svgEl("line", { x1: ml, x2: ml + iw, y1: mt + ih, y2: mt + ih, stroke: cvar("--line2"), "stroke-width": 1 }, gAxis);
   if (o.xlab) svgEl("text", { x: ml + iw / 2, y: H - 6, "text-anchor": "middle", class: "xlab" }, gAxis).textContent = o.xlab;
   if (o.ylab) {
     const t = svgEl("text", { x: 0, y: 0, "text-anchor": "middle", class: "ylab", transform: `translate(12,${mt + ih / 2}) rotate(-90)` }, gAxis);

@@ -48,12 +48,12 @@ function renderTeams(P, year) {
   <header class="top"><div class="top-inner">
     <div class="title-row">
       <span class="picker">
-        <button id="homeBtn" class="btn" title="All weekends" aria-label="All weekends">≡</button>
+        <button id="homeBtn" class="logo-btn" title="All weekends" aria-label="Minisector — all weekends">${logoMark(22)}</button>
         <select id="dnaYear" aria-label="Season">${years.map(yy => `<option ${yy === y ? "selected" : ""}>${yy}</option>`).join("")}</select>
         <span class="gp" style="font-size:16px">Car rankings — ${esc(y)} only</span>
       </span>
       <span class="meta">one season at a time: cars change every year, so no performance data crosses seasons · updates automatically as new weekends land</span>
-      <span class="brand">Mini<b>sector</b> · F1 analysis</span>
+      <span class="brand" style="color:var(--ink3)">${logoWordmark(13)}</span>
       <span id="themeSlot"></span>
     </div>
   </div></header>

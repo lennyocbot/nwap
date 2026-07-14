@@ -6,51 +6,45 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏎️</text></svg>">
 <style>
-/* ---------- tokens ---------- */
-:root {
-  --bg:#f4f5f7; --surface:#ffffff; --surface2:#eef0f3; --surface3:#e4e7eb;
-  --line:#dcdfe4; --line2:#c9cdd4;
-  --ink:#191c21; --ink2:#5b6470; --ink3:#8b939e;
-  --accent:#d60500; --accent-soft:rgba(214,5,0,.09);
-  --purple:#8b2fd6; --green:#0f8a3d; --yellow:#b58900; --red:#c62828;
-  --grid:#e7e9ed; --band-sc:rgba(181,137,0,.14); --band-vsc:rgba(181,137,0,.08); --band-red:rgba(198,40,40,.12);
-  --shadow:0 1px 2px rgba(15,18,24,.06), 0 4px 16px rgba(15,18,24,.05);
-  --cmp-SOFT:#dc2626; --cmp-MEDIUM:#d97706; --cmp-HARD:#6b7280;
-  --cmp-INTERMEDIATE:#16a34a; --cmp-WET:#2563eb; --cmp-UNKNOWN:#9ca3af;
+/* ---------- tokens — Minisector design system (broadcast instrument) ---------- */
+/* Light is the default; chrome is neutral so 11 team colours never clash, and
+   purple (--accent/--purple) is the ONE chromatic brand colour = "fastest". */
+:root, :root[data-theme="light"] {
+  --bg:#EFF1F4; --surface:#FFFFFF; --surface2:#F6F7F9; --surface3:#ECEEF2;
+  --line:#E2E5EA; --line2:#C7CDD6;
+  --ink:#161A22; --ink2:#454E5D; --ink3:#5F6979;
+  --accent:#7E22CE; --accent-soft:color-mix(in srgb, #7E22CE 10%, transparent); --on-acc:#FFFFFF;
+  --purple:#7E22CE; --green:#0E7A46; --yellow:#8F5A00; --red:#C41E3A;
+  --grid:#E8EAEF; --axis:#A9B1BE;
+  --band-sc:color-mix(in srgb, #8F5A00 13%, transparent); --band-vsc:color-mix(in srgb, #8F5A00 7%, transparent); --band-red:color-mix(in srgb, #C41E3A 12%, transparent);
+  --shadow:0 1px 2px rgba(15,18,24,.05), 0 6px 22px rgba(15,18,24,.06);
+  --cmp-SOFT:#D62839; --cmp-MEDIUM:#B98200; --cmp-HARD:#5F6979;
+  --cmp-INTERMEDIATE:#0B8043; --cmp-WET:#1667D9; --cmp-UNKNOWN:#9ca3af;
 }
-@media (prefers-color-scheme: dark) { :root {
-  --bg:#101216; --surface:#171a20; --surface2:#1e2229; --surface3:#262b33;
-  --line:#2a2f38; --line2:#39404b;
-  --ink:#e7eaee; --ink2:#98a1ac; --ink3:#69727e;
-  --accent:#ff3b30; --accent-soft:rgba(255,59,48,.12);
-  --purple:#c084fc; --green:#4ade80; --yellow:#facc15; --red:#f87171;
-  --grid:#20242c; --band-sc:rgba(250,204,21,.10); --band-vsc:rgba(250,204,21,.05); --band-red:rgba(248,113,113,.10);
-  --shadow:0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25);
-  --cmp-SOFT:#ef4444; --cmp-MEDIUM:#fbbf24; --cmp-HARD:#e5e7eb;
-  --cmp-INTERMEDIATE:#22c55e; --cmp-WET:#3b82f6; --cmp-UNKNOWN:#6b7280;
-} }
 :root[data-theme="dark"] {
-  --bg:#101216; --surface:#171a20; --surface2:#1e2229; --surface3:#262b33;
-  --line:#2a2f38; --line2:#39404b;
-  --ink:#e7eaee; --ink2:#98a1ac; --ink3:#69727e;
-  --accent:#ff3b30; --accent-soft:rgba(255,59,48,.12);
-  --purple:#c084fc; --green:#4ade80; --yellow:#facc15; --red:#f87171;
-  --grid:#20242c; --band-sc:rgba(250,204,21,.10); --band-vsc:rgba(250,204,21,.05); --band-red:rgba(248,113,113,.10);
-  --shadow:0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25);
-  --cmp-SOFT:#ef4444; --cmp-MEDIUM:#fbbf24; --cmp-HARD:#e5e7eb;
-  --cmp-INTERMEDIATE:#22c55e; --cmp-WET:#3b82f6; --cmp-UNKNOWN:#6b7280;
+  --bg:#0E1116; --surface:#151920; --surface2:#1B212B; --surface3:#232A34;
+  --line:#252C37; --line2:#39424F;
+  --ink:#EDF0F5; --ink2:#B7C0CC; --ink3:#8A93A3;
+  --accent:#B584F4; --accent-soft:color-mix(in srgb, #B584F4 15%, transparent); --on-acc:#16101F;
+  --purple:#B584F4; --green:#3DBE7B; --yellow:#E3A93C; --red:#F0546A;
+  --grid:#1F2631; --axis:#4A5462;
+  --band-sc:color-mix(in srgb, #E3A93C 12%, transparent); --band-vsc:color-mix(in srgb, #E3A93C 6%, transparent); --band-red:color-mix(in srgb, #F0546A 12%, transparent);
+  --shadow:0 1px 2px rgba(0,0,0,.32), 0 8px 26px rgba(0,0,0,.32);
+  --cmp-SOFT:#F26177; --cmp-MEDIUM:#F0C24A; --cmp-HARD:#C6CFDA;
+  --cmp-INTERMEDIATE:#43C081; --cmp-WET:#5EA0FF; --cmp-UNKNOWN:#6b7280;
 }
-:root[data-theme="light"] {
-  --bg:#f4f5f7; --surface:#ffffff; --surface2:#eef0f3; --surface3:#e4e7eb;
-  --line:#dcdfe4; --line2:#c9cdd4;
-  --ink:#191c21; --ink2:#5b6470; --ink3:#8b939e;
-  --accent:#d60500; --accent-soft:rgba(214,5,0,.09);
-  --purple:#8b2fd6; --green:#0f8a3d; --yellow:#b58900; --red:#c62828;
-  --grid:#e7e9ed; --band-sc:rgba(181,137,0,.14); --band-vsc:rgba(181,137,0,.08); --band-red:rgba(198,40,40,.12);
-  --shadow:0 1px 2px rgba(15,18,24,.06), 0 4px 16px rgba(15,18,24,.05);
-  --cmp-SOFT:#dc2626; --cmp-MEDIUM:#d97706; --cmp-HARD:#6b7280;
-  --cmp-INTERMEDIATE:#16a34a; --cmp-WET:#2563eb; --cmp-UNKNOWN:#9ca3af;
-}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg:#0E1116; --surface:#151920; --surface2:#1B212B; --surface3:#232A34;
+  --line:#252C37; --line2:#39424F;
+  --ink:#EDF0F5; --ink2:#B7C0CC; --ink3:#8A93A3;
+  --accent:#B584F4; --accent-soft:color-mix(in srgb, #B584F4 15%, transparent); --on-acc:#16101F;
+  --purple:#B584F4; --green:#3DBE7B; --yellow:#E3A93C; --red:#F0546A;
+  --grid:#1F2631; --axis:#4A5462;
+  --band-sc:color-mix(in srgb, #E3A93C 12%, transparent); --band-vsc:color-mix(in srgb, #E3A93C 6%, transparent); --band-red:color-mix(in srgb, #F0546A 12%, transparent);
+  --shadow:0 1px 2px rgba(0,0,0,.32), 0 8px 26px rgba(0,0,0,.32);
+  --cmp-SOFT:#F26177; --cmp-MEDIUM:#F0C24A; --cmp-HARD:#C6CFDA;
+  --cmp-INTERMEDIATE:#43C081; --cmp-WET:#5EA0FF; --cmp-UNKNOWN:#6b7280;
+} }
 
 * { box-sizing:border-box; }
 html,body { margin:0; padding:0; }
@@ -59,8 +53,9 @@ body {
   font:14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing:antialiased;
 }
-.mono, .num { font-family:ui-monospace, "SF Mono", "Cascadia Code", Consolas, Menlo, monospace; font-variant-numeric:tabular-nums; }
-svg text.num, svg text.mono { font-family:ui-monospace,"SF Mono","Cascadia Code",Consolas,Menlo,monospace; }
+/* GAUGE — every number is system mono, always tabular */
+.mono, .num { font-family:ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace; font-variant-numeric:tabular-nums; }
+svg text.num, svg text.mono { font-family:ui-monospace,"SF Mono","Cascadia Mono","Roboto Mono",Menlo,Consolas,monospace; }
 h1,h2,h3 { margin:0; text-wrap:balance; }
 button { font:inherit; color:inherit; background:none; border:none; cursor:pointer; padding:0; }
 button:focus-visible, .chip:focus-visible, select:focus-visible, input:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:4px; }
@@ -82,8 +77,9 @@ header.top {
 .title-row .picker { display:inline-flex; gap:7px; flex-wrap:wrap; }
 .title-row .picker select { font-size:15px; font-weight:700; padding:4px 8px; border-radius:7px; max-width:46vw; }
 .title-row .meta { color:var(--ink3); font-size:12.5px; }
-.title-row .brand { margin-left:auto; font-size:11px; letter-spacing:.14em; color:var(--ink3); text-transform:uppercase; font-weight:600; }
-.title-row .brand b { color:var(--accent); }
+.title-row .brand { margin-left:auto; display:inline-flex; align-items:center; opacity:.85; }
+.logo-btn { display:inline-flex; align-items:center; color:var(--ink); padding:2px 2px 0; align-self:center; }
+.logo-btn:hover { opacity:.75; }
 .theme-btn { font-size:14px; padding:2px 9px; line-height:1.2; }
 .pick-brand .theme-btn { float:right; font-size:16px; }
 .ctrl-row { display:flex; align-items:flex-end; gap:18px; margin-top:8px; flex-wrap:wrap; }
@@ -109,7 +105,7 @@ nav.tabs button {
 }
 nav.tabs button:hover { color:var(--ink); }
 nav.tabs button.on { color:var(--ink); border-bottom-color:var(--accent); }
-nav.tabs .cnt { background:var(--accent); color:#fff; border-radius:9px; font-size:9.5px; padding:1px 5px; vertical-align:1.5px; }
+nav.tabs .cnt { background:var(--accent); color:var(--on-acc); border-radius:9px; font-size:9.5px; padding:1px 5px; vertical-align:1.5px; font-weight:700; }
 
 main { max-width:1440px; margin:0 auto; padding:16px 20px 80px; }
 
@@ -141,8 +137,8 @@ img.face { border-radius:50%; object-fit:cover; flex:none; vertical-align:middle
 [data-theme="dark"] .tlogo.dual .lw { display:inline-block; }
 
 /* ---------- cards & layout ---------- */
-.card { background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); padding:14px 16px; margin-bottom:14px; overflow:hidden; }
-.card h3 { font-size:11.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink2); font-weight:700; margin-bottom:10px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.card { background:var(--surface); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); padding:16px 18px; margin-bottom:14px; overflow:hidden; }
+.card h3 { font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink3); font-weight:700; margin-bottom:12px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-family:ui-monospace,"SF Mono","Cascadia Mono","Roboto Mono",Menlo,Consolas,monospace; }
 .card h3 .sub { text-transform:none; letter-spacing:0; font-weight:500; color:var(--ink3); font-size:11.5px; }
 .card h3 .right { margin-left:auto; display:flex; gap:8px; align-items:center; text-transform:none; letter-spacing:0; flex-wrap:wrap; }
 .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
@@ -521,6 +517,41 @@ function teamLogoImg(team, px) {
   return `<span class="tlogo${hasW ? " dual" : ""}" style="width:${px}px;height:${px}px">${c}${w}</span>`;
 }
 
+/* ---- brand: Minisector tile mark + drawn wordmark (design system v1) ----
+   Committed identity: three mini-sector tiles, the last one purple = the
+   fastest split. Ink + one purple tile only, never team colours. */
+const LOGO_DEFS = `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<path id="ms-M" d="M6.5 100 L6.5 6.5 L31 62 L55.5 6.5 L55.5 100"/>
+<path id="ms-I" d="M7 0 L7 100"/>
+<path id="ms-N" d="M6.5 100 L6.5 6.5 L49.5 93.5 L49.5 0"/>
+<path id="ms-S" d="M43.5 6.5 L6.5 6.5 L6.5 50 L43.5 50 L43.5 93.5 L6.5 93.5"/>
+<path id="ms-E" d="M43.5 6.5 L6.5 6.5 L6.5 93.5 L43.5 93.5 M6.5 50 L36 50"/>
+<path id="ms-C" d="M43.5 6.5 L6.5 6.5 L6.5 93.5 L43.5 93.5"/>
+<path id="ms-T" d="M0 6.5 L54 6.5 M27 6.5 L27 100"/>
+<path id="ms-O" d="M6.5 6.5 L49.5 6.5 L49.5 93.5 L6.5 93.5 Z"/>
+<path id="ms-R" d="M6.5 100 L6.5 6.5 L44.5 6.5 L44.5 51.5 L6.5 51.5 M25 51.5 L44.5 100"/>
+<g id="ms-word" fill="none" stroke-width="13">
+<use href="#ms-M" x="0"/><use href="#ms-I" x="75"/><use href="#ms-N" x="102"/><use href="#ms-I" x="171"/>
+<use href="#ms-S" x="214"/><use href="#ms-E" x="277"/><use href="#ms-C" x="337"/><use href="#ms-T" x="400"/><use href="#ms-O" x="467"/><use href="#ms-R" x="536"/></g>
+<g id="ms-mark"><polygon points="19.2,22 36.2,22 27,74 10,74"/><polygon points="45.2,22 62.2,22 53,74 36,74"/><polygon points="71.2,22 88.2,22 79,74 62,74" fill="var(--accent)"/></g>
+<g id="ms-lockup"><g transform="translate(-19.2,-42.3) scale(1.923)"><use href="#ms-mark"/></g><g transform="translate(188,0) skewX(-10)" stroke="currentColor" fill="none"><use href="#ms-word"/></g></g>
+</defs></svg>`;
+function logoMark(h) { return `<svg viewBox="6 18 86 60" style="height:${h}px;display:block" role="img" aria-label="Minisector"><g fill="currentColor"><use href="#ms-mark"/></g></svg>`; }
+function logoWordmark(h) { return `<svg viewBox="-24 -14 616 130" style="height:${h}px;display:block" aria-hidden="true"><g transform="skewX(-10)" stroke="currentColor" fill="none"><use href="#ms-word"/></g></svg>`; }
+function logoLockup(h) { return `<svg viewBox="-24 -14 812 130" style="height:${h}px;display:block" role="img" aria-label="Minisector"><g fill="currentColor"><use href="#ms-lockup"/></g></svg>`; }
+function installBrand() {
+  if (!document.getElementById("ms-logo-defs")) {
+    const d = document.createElement("div"); d.id = "ms-logo-defs"; d.innerHTML = LOGO_DEFS;
+    document.body.appendChild(d);
+  }
+  try {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><rect width="96" height="96" rx="21" fill="#14171E"/><g transform="translate(-1,0)"><polygon points="19.2,22 36.2,22 27,74 10,74" fill="#fff"/><polygon points="45.2,22 62.2,22 53,74 36,74" fill="#fff"/><polygon points="71.2,22 88.2,22 79,74 62,74" fill="#B584F4"/></g></svg>`;
+    let link = document.querySelector('link[rel="icon"]');
+    if (!link) { link = document.createElement("link"); link.rel = "icon"; document.head.appendChild(link); }
+    link.type = "image/svg+xml"; link.href = "data:image/svg+xml," + encodeURIComponent(svg);
+  } catch (e) { }
+}
+
 /* ---- session helpers ---- */
 const SNAMES = { FP1: "FP1", FP2: "FP2", FP3: "FP3", SQ: "Sprint Quali", S: "Sprint", Q: "Qualifying", R: "Race" };
 HUB.session = id => HUB.data.sessions.find(s => s.id === (id ?? HUB.S.sid));
@@ -706,21 +737,22 @@ function Chart(container, o) {
   const plot = svgEl("g", { "clip-path": `url(#${clipId})` }, svg);
   const gAxis = svgEl("g", {}, svg);
 
-  // gridlines + ticks
+  // gridlines + ticks — design rule: HORIZONTAL gridlines only, no vertical
+  // spines; ticks in mono 11 --ink3; vertical grid opt-in via o.xgrid === true
   const yt = o.yticksArr || niceTicks(Math.min(y0, y1), Math.max(y0, y1), o.yticks || 6);
   for (const v of yt) {
     if (v < Math.min(y0, y1) - 1e-9 || v > Math.max(y0, y1) + 1e-9) continue;
     svgEl("line", { x1: ml, x2: ml + iw, y1: y(v), y2: y(v), stroke: cvar("--grid"), "stroke-width": 1 }, gGrid);
-    svgEl("text", { x: ml - 7, y: y(v) + 3.5, "text-anchor": "end", "font-size": 10.5, fill: cvar("--ink3"), class: "num" }, gAxis).textContent = o.yfmt ? o.yfmt(v) : v;
+    svgEl("text", { x: ml - 7, y: y(v) + 3.5, "text-anchor": "end", "font-size": 11, fill: cvar("--ink3"), class: "num" }, gAxis).textContent = o.yfmt ? o.yfmt(v) : v;
   }
   const xt = o.xticksArr || niceTicks(x0, x1, o.xticks || 8);
   for (const v of xt) {
     if (v < x0 - 1e-9 || v > x1 + 1e-9) continue;
-    if (o.xgrid !== false) svgEl("line", { x1: x(v), x2: x(v), y1: mt, y2: mt + ih, stroke: cvar("--grid"), "stroke-width": 1 }, gGrid);
-    svgEl("text", { x: x(v), y: mt + ih + 15, "text-anchor": "middle", "font-size": 10.5, fill: cvar("--ink3"), class: "num" }, gAxis).textContent = o.xfmt ? o.xfmt(v) : v;
+    if (o.xgrid === true) svgEl("line", { x1: x(v), x2: x(v), y1: mt, y2: mt + ih, stroke: cvar("--grid"), "stroke-width": 1 }, gGrid);
+    svgEl("text", { x: x(v), y: mt + ih + 15, "text-anchor": "middle", "font-size": 11, fill: cvar("--ink3"), class: "num" }, gAxis).textContent = o.xfmt ? o.xfmt(v) : v;
   }
-  // frame baseline
-  svgEl("line", { x1: ml, x2: ml + iw, y1: mt + ih, y2: mt + ih, stroke: cvar("--line"), "stroke-width": 1 }, gAxis);
+  // baseline axis
+  svgEl("line", { x1: ml, x2: ml + iw, y1: mt + ih, y2: mt + ih, stroke: cvar("--line2"), "stroke-width": 1 }, gAxis);
   if (o.xlab) svgEl("text", { x: ml + iw / 2, y: H - 6, "text-anchor": "middle", class: "xlab" }, gAxis).textContent = o.xlab;
   if (o.ylab) {
     const t = svgEl("text", { x: 0, y: 0, "text-anchor": "middle", class: "ylab", transform: `translate(12,${mt + ih / 2}) rotate(-90)` }, gAxis);
@@ -3334,12 +3366,12 @@ function renderTeams(P, year) {
   <header class="top"><div class="top-inner">
     <div class="title-row">
       <span class="picker">
-        <button id="homeBtn" class="btn" title="All weekends" aria-label="All weekends">≡</button>
+        <button id="homeBtn" class="logo-btn" title="All weekends" aria-label="Minisector — all weekends">${logoMark(22)}</button>
         <select id="dnaYear" aria-label="Season">${years.map(yy => `<option ${yy === y ? "selected" : ""}>${yy}</option>`).join("")}</select>
         <span class="gp" style="font-size:16px">Car rankings — ${esc(y)} only</span>
       </span>
       <span class="meta">one season at a time: cars change every year, so no performance data crosses seasons · updates automatically as new weekends land</span>
-      <span class="brand">Mini<b>sector</b> · F1 analysis</span>
+      <span class="brand" style="color:var(--ink3)">${logoWordmark(13)}</span>
       <span id="themeSlot"></span>
     </div>
   </div></header>
@@ -3682,7 +3714,7 @@ HUB.render = function render(keepScroll) {
 function showLoading(msg) {
   const canEscape = MODE === "site" && HUB.manifest;
   document.getElementById("app").innerHTML =
-    `<div id="loading"><div style="font-size:15px;font-weight:700;letter-spacing:.12em;text-transform:uppercase">Mini<span style="color:var(--accent)">sector</span></div><div class="bar"><i></i></div><div style="font-size:12px" id="loadmsg">${esc(msg)}</div>${canEscape ? '<button class="btn" id="cancelLoad">← all weekends</button>' : ""}</div>`;
+    `<div id="loading"><div style="color:var(--ink)">${logoLockup(26)}</div><div class="bar"><i></i></div><div style="font-size:12px" id="loadmsg">${esc(msg)}</div>${canEscape ? '<button class="btn" id="cancelLoad">← all weekends</button>' : ""}</div>`;
   const c = document.getElementById("cancelLoad");
   if (c) c.addEventListener("click", showPicker);
 }
@@ -3706,7 +3738,7 @@ function buildShell() {
   if (MODE === "site" && HUB.manifest) {
     const years = Object.keys(HUB.manifest.years).sort();
     titleHtml = `<span class="picker">
-      <button id="homeBtn" class="btn" title="All weekends" aria-label="All weekends">≡</button>
+      <button id="homeBtn" class="logo-btn" title="All weekends" aria-label="Minisector — all weekends">${logoMark(22)}</button>
       <select id="pyear" aria-label="Season">${years.map(y => `<option ${+y === d.year ? "selected" : ""}>${y}</option>`).join("")}</select>
       <select id="pevent" aria-label="Grand Prix">${HUB.manifest.years[String(d.year)].map(e => `<option value="${e.round}" ${e.round === d.round ? "selected" : ""}>R${e.round} · ${esc(e.event)}</option>`).join("")}</select>
       <select id="psess" aria-label="Session"></select>
@@ -3720,7 +3752,7 @@ function buildShell() {
     <div class="title-row">
       ${titleHtml}
       <span class="meta" id="wkMeta"></span>
-      <span class="brand">Mini<b>sector</b> · F1 analysis</span>
+      <span class="brand" style="color:var(--ink3)">${logoWordmark(13)}</span>
       <span id="themeSlot"></span>
     </div>
     <div class="ctrl-row">
@@ -3768,7 +3800,7 @@ function showPicker() {
   const root = document.getElementById("app");
   const years = Object.keys(m.years).sort().reverse();
   root.innerHTML = `<div class="pick-screen">
-    <div class="pick-brand">Mini<b>sector</b><span id="pickTheme"></span></div>
+    <div class="pick-brand"><span style="color:var(--ink)">${logoLockup(34)}</span><span id="pickTheme"></span></div>
     <div class="pick-sub">F1 race-weekend analysis — pick a Grand Prix</div>
     <button class="btn dna-launch" id="dnaLaunch">🏁 Car rankings — who has the fastest car, what it's good at, and which circuits should suit it</button>
     ${years.map(y => `<div class="pick-year">${y} <span>${m.years[y].length} weekend${m.years[y].length > 1 ? "s" : ""}</span></div>
@@ -4001,6 +4033,7 @@ function themeToggleBtn() {
 
 (async function boot() {
   initTheme();
+  installBrand();
   if (typeof DecompressionStream === "undefined") {
     showError("This browser is too old for Minisector (it lacks built-in gzip support). Any browser from 2023 onward works — Chrome 80+, Safari 16.4+, Firefox 113+.");
     return;

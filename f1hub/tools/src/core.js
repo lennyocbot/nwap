@@ -164,6 +164,41 @@ function teamLogoImg(team, px) {
   return `<span class="tlogo${hasW ? " dual" : ""}" style="width:${px}px;height:${px}px">${c}${w}</span>`;
 }
 
+/* ---- brand: Minisector tile mark + drawn wordmark (design system v1) ----
+   Committed identity: three mini-sector tiles, the last one purple = the
+   fastest split. Ink + one purple tile only, never team colours. */
+const LOGO_DEFS = `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<path id="ms-M" d="M6.5 100 L6.5 6.5 L31 62 L55.5 6.5 L55.5 100"/>
+<path id="ms-I" d="M7 0 L7 100"/>
+<path id="ms-N" d="M6.5 100 L6.5 6.5 L49.5 93.5 L49.5 0"/>
+<path id="ms-S" d="M43.5 6.5 L6.5 6.5 L6.5 50 L43.5 50 L43.5 93.5 L6.5 93.5"/>
+<path id="ms-E" d="M43.5 6.5 L6.5 6.5 L6.5 93.5 L43.5 93.5 M6.5 50 L36 50"/>
+<path id="ms-C" d="M43.5 6.5 L6.5 6.5 L6.5 93.5 L43.5 93.5"/>
+<path id="ms-T" d="M0 6.5 L54 6.5 M27 6.5 L27 100"/>
+<path id="ms-O" d="M6.5 6.5 L49.5 6.5 L49.5 93.5 L6.5 93.5 Z"/>
+<path id="ms-R" d="M6.5 100 L6.5 6.5 L44.5 6.5 L44.5 51.5 L6.5 51.5 M25 51.5 L44.5 100"/>
+<g id="ms-word" fill="none" stroke-width="13">
+<use href="#ms-M" x="0"/><use href="#ms-I" x="75"/><use href="#ms-N" x="102"/><use href="#ms-I" x="171"/>
+<use href="#ms-S" x="214"/><use href="#ms-E" x="277"/><use href="#ms-C" x="337"/><use href="#ms-T" x="400"/><use href="#ms-O" x="467"/><use href="#ms-R" x="536"/></g>
+<g id="ms-mark"><polygon points="19.2,22 36.2,22 27,74 10,74"/><polygon points="45.2,22 62.2,22 53,74 36,74"/><polygon points="71.2,22 88.2,22 79,74 62,74" fill="var(--accent)"/></g>
+<g id="ms-lockup"><g transform="translate(-19.2,-42.3) scale(1.923)"><use href="#ms-mark"/></g><g transform="translate(188,0) skewX(-10)" stroke="currentColor" fill="none"><use href="#ms-word"/></g></g>
+</defs></svg>`;
+function logoMark(h) { return `<svg viewBox="6 18 86 60" style="height:${h}px;display:block" role="img" aria-label="Minisector"><g fill="currentColor"><use href="#ms-mark"/></g></svg>`; }
+function logoWordmark(h) { return `<svg viewBox="-24 -14 616 130" style="height:${h}px;display:block" aria-hidden="true"><g transform="skewX(-10)" stroke="currentColor" fill="none"><use href="#ms-word"/></g></svg>`; }
+function logoLockup(h) { return `<svg viewBox="-24 -14 812 130" style="height:${h}px;display:block" role="img" aria-label="Minisector"><g fill="currentColor"><use href="#ms-lockup"/></g></svg>`; }
+function installBrand() {
+  if (!document.getElementById("ms-logo-defs")) {
+    const d = document.createElement("div"); d.id = "ms-logo-defs"; d.innerHTML = LOGO_DEFS;
+    document.body.appendChild(d);
+  }
+  try {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><rect width="96" height="96" rx="21" fill="#14171E"/><g transform="translate(-1,0)"><polygon points="19.2,22 36.2,22 27,74 10,74" fill="#fff"/><polygon points="45.2,22 62.2,22 53,74 36,74" fill="#fff"/><polygon points="71.2,22 88.2,22 79,74 62,74" fill="#B584F4"/></g></svg>`;
+    let link = document.querySelector('link[rel="icon"]');
+    if (!link) { link = document.createElement("link"); link.rel = "icon"; document.head.appendChild(link); }
+    link.type = "image/svg+xml"; link.href = "data:image/svg+xml," + encodeURIComponent(svg);
+  } catch (e) { }
+}
+
 /* ---- session helpers ---- */
 const SNAMES = { FP1: "FP1", FP2: "FP2", FP3: "FP3", SQ: "Sprint Quali", S: "Sprint", Q: "Qualifying", R: "Race" };
 HUB.session = id => HUB.data.sessions.find(s => s.id === (id ?? HUB.S.sid));

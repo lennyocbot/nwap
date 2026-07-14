@@ -79,7 +79,7 @@ HUB.render = function render(keepScroll) {
 function showLoading(msg) {
   const canEscape = MODE === "site" && HUB.manifest;
   document.getElementById("app").innerHTML =
-    `<div id="loading"><div style="font-size:15px;font-weight:700;letter-spacing:.12em;text-transform:uppercase">Mini<span style="color:var(--accent)">sector</span></div><div class="bar"><i></i></div><div style="font-size:12px" id="loadmsg">${esc(msg)}</div>${canEscape ? '<button class="btn" id="cancelLoad">← all weekends</button>' : ""}</div>`;
+    `<div id="loading"><div style="color:var(--ink)">${logoLockup(26)}</div><div class="bar"><i></i></div><div style="font-size:12px" id="loadmsg">${esc(msg)}</div>${canEscape ? '<button class="btn" id="cancelLoad">← all weekends</button>' : ""}</div>`;
   const c = document.getElementById("cancelLoad");
   if (c) c.addEventListener("click", showPicker);
 }
@@ -103,7 +103,7 @@ function buildShell() {
   if (MODE === "site" && HUB.manifest) {
     const years = Object.keys(HUB.manifest.years).sort();
     titleHtml = `<span class="picker">
-      <button id="homeBtn" class="btn" title="All weekends" aria-label="All weekends">≡</button>
+      <button id="homeBtn" class="logo-btn" title="All weekends" aria-label="Minisector — all weekends">${logoMark(22)}</button>
       <select id="pyear" aria-label="Season">${years.map(y => `<option ${+y === d.year ? "selected" : ""}>${y}</option>`).join("")}</select>
       <select id="pevent" aria-label="Grand Prix">${HUB.manifest.years[String(d.year)].map(e => `<option value="${e.round}" ${e.round === d.round ? "selected" : ""}>R${e.round} · ${esc(e.event)}</option>`).join("")}</select>
       <select id="psess" aria-label="Session"></select>
@@ -117,7 +117,7 @@ function buildShell() {
     <div class="title-row">
       ${titleHtml}
       <span class="meta" id="wkMeta"></span>
-      <span class="brand">Mini<b>sector</b> · F1 analysis</span>
+      <span class="brand" style="color:var(--ink3)">${logoWordmark(13)}</span>
       <span id="themeSlot"></span>
     </div>
     <div class="ctrl-row">
@@ -165,7 +165,7 @@ function showPicker() {
   const root = document.getElementById("app");
   const years = Object.keys(m.years).sort().reverse();
   root.innerHTML = `<div class="pick-screen">
-    <div class="pick-brand">Mini<b>sector</b><span id="pickTheme"></span></div>
+    <div class="pick-brand"><span style="color:var(--ink)">${logoLockup(34)}</span><span id="pickTheme"></span></div>
     <div class="pick-sub">F1 race-weekend analysis — pick a Grand Prix</div>
     <button class="btn dna-launch" id="dnaLaunch">🏁 Car rankings — who has the fastest car, what it's good at, and which circuits should suit it</button>
     ${years.map(y => `<div class="pick-year">${y} <span>${m.years[y].length} weekend${m.years[y].length > 1 ? "s" : ""}</span></div>
@@ -398,6 +398,7 @@ function themeToggleBtn() {
 
 (async function boot() {
   initTheme();
+  installBrand();
   if (typeof DecompressionStream === "undefined") {
     showError("This browser is too old for Minisector (it lacks built-in gzip support). Any browser from 2023 onward works — Chrome 80+, Safari 16.4+, Firefox 113+.");
     return;
