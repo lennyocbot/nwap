@@ -116,9 +116,35 @@ def do_weekend(year, ev, force=False):
     return n
 
 
+def live_window(year):
+    """True when a race weekend is live or just-finished: any session whose
+    scheduled end is within the last 6h (data still landing) or the next 3h
+    (about to run). During this window the workflow re-dispatches itself every
+    few minutes instead of trusting GitHub's heavily-throttled cron."""
+    try:
+        sched = fastf1.get_event_schedule(year)
+    except Exception:
+        return False
+    now = pd.Timestamp.now(tz="UTC").tz_localize(None)
+    for _, ev in sched.iterrows():
+        if int(ev["RoundNumber"]) == 0:
+            continue
+        for sid, date in sessions_of(ev):
+            end = date + pd.Timedelta(hours=2)  # treat `date` as start; ~2h session
+            if now - pd.Timedelta(hours=6) <= end <= now + pd.Timedelta(hours=3):
+                have = (weekend_dir(year, ev["RoundNumber"], ev["EventName"]) / f"{sid}.json.gz").exists()
+                if not have or now < date + pd.Timedelta(hours=1):
+                    return True
+    return False
+
+
 def auto(year):
     """Cron mode: only look at sessions from the last two weeks that we don't have."""
-    sched = fastf1.get_event_schedule(year)
+    try:
+        sched = fastf1.get_event_schedule(year)
+    except Exception as e:
+        print(f"auto: schedule {year} failed: {e}")
+        return 0
     now = pd.Timestamp.now(tz="UTC").tz_localize(None)
     n = 0
     for _, ev in sched.iterrows():
@@ -251,17 +277,29 @@ def main():
             n += do_weekend(args.year, ev, args.force)
     else:
         year = datetime.date.today().year
-        n = auto(year)
-        if datetime.date.today().month <= 2:  # season overlap: also check last year's finale
-            n += auto(year - 1)
-        # fresh sessions first, then chip away at the historical queue
-        budget = 1 if n else 2
-        n_bf = backfill_step(budget=budget)
-        n += n_bf
-        if n_bf >= budget:
-            # full budget used -> queue almost certainly has more; the
-            # workflow greps for this marker and re-dispatches itself
-            print("BACKFILL_REMAINING")
+        # a transient FastF1 error in any one phase must not abort the whole
+        # run — otherwise nothing commits and the site sits stale for hours.
+        try:
+            n = auto(year)
+            if datetime.date.today().month <= 2:  # season overlap: also check last year's finale
+                n += auto(year - 1)
+        except Exception as e:
+            print(f"auto phase failed: {e}")
+        try:
+            # fresh sessions first, then chip away at the historical queue
+            budget = 1 if n else 2
+            n_bf = backfill_step(budget=budget)
+            n += n_bf
+            if n_bf >= budget:
+                # full budget used -> queue almost certainly has more; the
+                # workflow greps for this marker and re-dispatches itself
+                print("BACKFILL_REMAINING")
+        except Exception as e:
+            print(f"backfill phase failed: {e}")
+        # during a live race weekend, tell the workflow to keep re-dispatching
+        # itself — GitHub drops most of our scheduled cron runs under load
+        if live_window(year):
+            print("LIVE_WINDOW_ACTIVE")
 
     rebuild_manifest()
     print(f"done: {n} new session file(s)")

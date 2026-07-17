@@ -1563,15 +1563,31 @@ function viewLongRuns(root) {
   const runs = [];
   for (const t of stintsOf(s)) {
     if (!HUB.S.sel.has(t.drv)) continue;
-    const laps = t.laps.filter(l => l.t != null && !l.in && !l.out && !l.del);
-    if (laps.length < 5) continue;
-    const med = median(laps.map(l => l.t));
-    const run = laps.filter(l => l.t < med * 1.035);   // strip cool-down / traffic laps
-    if (run.length < 5) continue;
     const d = HUB.driver(t.drv, sid);
     if (!d) continue;
-    const fit = linfit(run.map((l, i) => [i, l.t]));
-    runs.push({ t, d, run, med: median(run.map(l => l.t)), best: Math.min(...run.map(l => l.t)), fit, key: t.drv + "#" + t.stint });
+    // deleted laps stay in: track-limit deletions are still real race pace
+    const seq = [...t.laps].sort((a, b) => a.lap - b.lap);
+    const valid = seq.filter(l => l.t != null && !l.in && !l.out);
+    if (valid.length < 4) continue;
+    const med = median(valid.map(l => l.t));
+    const keep = l => l.t != null && !l.in && !l.out && l.t < med * 1.035;
+    // a run must be CONSECUTIVE laps — an untimed or off-pace lap ends it, so
+    // quali-sim push laps sharing the stint can't pollute the average; one
+    // timed slow lap (traffic) is bridged when pace both sides agrees to 2%
+    const segs = [];
+    let cur = [];
+    seq.forEach((l, i) => {
+      if (keep(l)) { cur.push(l); return; }
+      const prev = cur.at(-1), next = seq[i + 1];
+      if (prev && next && l.t != null && keep(next) && Math.abs(next.t - prev.t) < Math.min(next.t, prev.t) * 0.02) return;
+      if (cur.length) segs.push(cur);
+      cur = [];
+    });
+    if (cur.length) segs.push(cur);
+    segs.filter(sg => sg.length >= 4).forEach((run, si) => {
+      const fit = linfit(run.map((l, i) => [i, l.t]));
+      runs.push({ t, d, run, med: median(run.map(l => l.t)), best: Math.min(...run.map(l => l.t)), fit, key: t.drv + "#" + t.stint + (si ? "#" + si : "") });
+    });
   }
   runs.sort((a, b) => a.med - b.med);
   // drop junk "runs" (constant-speed running, aero rakes, traffic sims) far off genuine long-run pace
@@ -1579,18 +1595,18 @@ function viewLongRuns(root) {
     const ref = runs[0].med;
     for (let i = runs.length - 1; i >= 0; i--) if (runs[i].med > ref * 1.12) runs.splice(i, 1);
   }
-  if (!runs.length) { root.insertAdjacentHTML("beforeend", `<div class="empty">No stint of 5+ representative laps from the selected drivers — add drivers above, or nobody did race sims here.</div>`); return; }
+  if (!runs.length) { root.insertAdjacentHTML("beforeend", `<div class="empty">No run of 4+ consecutive representative laps from the selected drivers — add drivers above, or nobody did race sims here.</div>`); return; }
 
   // tag how representative each run is: length ≈ fuel ≈ trust. The automatic
   // call can be overridden per run from the ranking table (✓ / ✗)
   const mark = r => (HUB.S.lrMark || {})[r.key];
   for (const r of runs) {
-    const valid = r.t.laps.filter(l => !l.in && !l.out && l.t != null).length;
-    r.pushCool = valid > 0 && r.run.length / valid < 0.62;   // lots of stripped laps = push-cool program
+    const span = r.t.laps.filter(l => l.lap >= r.run[0].lap && l.lap <= r.run.at(-1).lap).length;
+    r.pushCool = span > 0 && r.run.length / span < 0.62;   // lots of stripped laps = push-cool program
     r.tag = mark(r) === "out" ? "excluded" : mark(r) === "in" ? "marked ✓"
       : r.pushCool ? "push-cool?" : r.run.length >= 9 ? "race sim" : r.run.length <= 6 ? "short run" : "";
     r.repr = mark(r) === "out" ? false
-      : mark(r) === "in" ? !!r.fit && r.run.length >= 5
+      : mark(r) === "in" ? !!r.fit && r.run.length >= 4
         : !!r.fit && r.run.length >= 7 && !r.pushCool;
   }
   if (!HUB.S.lrSel) {
@@ -1604,7 +1620,7 @@ function viewLongRuns(root) {
     HUB.S.lrSel = new Set([...perTeam.values()].sort((a, b) => a.med - b.med).slice(0, 4).map(r => r.key));
   }
 
-  const c = card(root, "Long runs", `stints of 5+ laps in ${SNAMES[sid]} · out/in and cool-down laps stripped · fuel loads unknown`);
+  const c = card(root, "Long runs", `runs of 4+ consecutive laps in ${SNAMES[sid]} · out/in, push and cool-down laps stripped · fuel loads unknown`);
   const chips = document.createElement("div"); chips.className = "drv-rail"; c.appendChild(chips);
   for (const r of runs) {
     const on = HUB.S.lrSel.has(r.key);
@@ -1732,7 +1748,7 @@ function lrSheet(root, s, runs) {
   for (const c of cols) {
     const laps = c.t.laps.filter(l => !l.in && !l.out && l.t != null);
     const inRun = new Set(c.run.map(l => l.lap));
-    c.cells = laps.map(l => ({ t: l.t, x: !inRun.has(l.lap) || l.del }));
+    c.cells = laps.map(l => ({ t: l.t, x: !inRun.has(l.lap) }));
     c.avg = c.run.reduce((a, l) => a + l.t, 0) / c.run.length;
   }
   cols.sort((a, b) => a.avg - b.avg);
@@ -1743,7 +1759,7 @@ function lrSheet(root, s, runs) {
   const surname = d => (d.name || d.abbr).split(" ").at(-1);
   const headTxt = c => `${surname(c.d)} (${CMP_LETTER[c.t.cmp] || "?"})`;
 
-  const card2 = card(root, "Long run sheet", "lap-by-lap, X = stripped (traffic / cool-down / deleted) · sorted by average pace");
+  const card2 = card(root, "Long run sheet", "lap-by-lap, X = stripped (push / cool-down / traffic) · sorted by average pace");
   const right = card2.querySelector(".right");
   const dl = document.createElement("button"); dl.className = "btn pri"; dl.textContent = "Download PNG";
   right.appendChild(dl);

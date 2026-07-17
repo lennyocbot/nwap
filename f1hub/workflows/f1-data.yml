@@ -62,7 +62,9 @@ jobs:
             ARGS="--year ${{ inputs.year }} --all"
           fi
           if [ "${{ inputs.force }}" = "true" ]; then ARGS="$ARGS --force"; fi
-          python update_data.py $ARGS | tee /tmp/update.log
+          # never let a transient FastF1 error abort the job: whatever WAS
+          # extracted still needs to reach the commit step below
+          python update_data.py $ARGS | tee /tmp/update.log || echo "update_data exited non-zero (continuing to commit what was extracted)"
 
       - name: Rebuild team profiles
         run: |
@@ -99,4 +101,27 @@ jobs:
               -d '{"ref":"${{ github.ref_name }}"}' || echo "dispatch failed — cron will pick it up"
           else
             echo "backfill queue empty"
+          fi
+
+      # During a live race weekend, GitHub drops most of our 30-min cron slots
+      # (observed real gaps of 80–190 min), so a finished session can sit
+      # unpublished for hours. While the window is active we re-dispatch
+      # ourselves every few minutes — even if the run above failed — so data
+      # lands within minutes of FastF1 publishing it. Runs unlimited-free on
+      # this public repo. The marker clears itself once the weekend is over.
+      - name: Keep the live weekend rolling
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -f /tmp/update.log ] && grep -q LIVE_WINDOW_ACTIVE /tmp/update.log; then
+            echo "live race weekend — re-dispatching in ~4 min"
+            sleep 240
+            curl -sf -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${{ github.repository }}/actions/workflows/f1-data.yml/dispatches" \
+              -d '{"ref":"${{ github.ref_name }}"}' || echo "dispatch failed — cron will pick it up"
+          else
+            echo "no live weekend window"
           fi
